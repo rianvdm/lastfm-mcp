@@ -23,12 +23,12 @@
 - [x] **C1** Implement Discogs OAuth utility (`src/auth/discogs.ts`)
 - [x] **C2** Add `/login` + `/callback` routes for OAuth handshake
 - [x] **C3** Persist user session via signed JWT cookie
-- [ ] **C4** Add auth check to MCP handlers (except initialize)
-- [ ] **C5** Write tests mocking Discogs endpoints
+- [x] **C4** Add auth check to MCP handlers (except initialize)
+- [x] **C5** Write tests mocking Discogs endpoints
 
 ## Chunk D – Infrastructure Utilities
 
-- [ ] **D1** Create `kvLogger` module (Workers KV request logging)
+- [x] **D1** Create `kvLogger` module (Workers KV request logging)
 - [ ] **D2** Implement `rateLimit` middleware (per-user sliding window)
 - [ ] **D3** Wire logger & limiter into main handler
 - [ ] **D4** Add unit tests for logging and rate limiting
