@@ -8,22 +8,23 @@
 
 - [x] **A1** Initialize Git repo & add root `README.md`
 - [x] **A2** Run `wrangler init discogs-mcp --ts` and commit scaffold
-- [ ] **A3** Add ESLint & Prettier configs and npm scripts (`lint`, `format`)
-- [ ] **A4** Create GitHub Actions workflow for `lint`, `test`, and `build`
+- [x] **A3** Add ESLint & Prettier configs and npm scripts (`lint`, `format`)
+- [x] **A4** Create GitHub Actions workflow for `lint`, `test`, and `build`
 
-## Chunk B – Hello MCP
+## Chunk B – MCP Protocol Foundation
 
-- [ ] **B1** Create `src/router.ts` with basic dispatcher (`ping` → `pong`)
-- [ ] **B2** Update `src/index.ts` to call router and return Markdown response
-- [ ] **B3** Add Jest test for `ping` and unknown command cases
+- [x] **B1** Create JSON-RPC message parser and types
+- [x] **B2** Implement MCP initialize/initialized flow
+- [x] **B3** Add SSE transport endpoints
+- [x] **B4** Write tests for protocol handling
 
 ## Chunk C – Authentication Layer
 
 - [ ] **C1** Implement Discogs OAuth utility (`src/auth/discogs.ts`)
 - [ ] **C2** Add `/login` + `/callback` routes for OAuth handshake
 - [ ] **C3** Persist user session via signed JWT cookie
-- [ ] **C4** Add middleware to block unauthenticated MCP commands
-- [ ] **C5** Write Jest tests mocking Discogs endpoints
+- [ ] **C4** Add auth check to MCP handlers (except initialize)
+- [ ] **C5** Write tests mocking Discogs endpoints
 
 ## Chunk D – Infrastructure Utilities
 
@@ -32,38 +33,39 @@
 - [ ] **D3** Wire logger & limiter into main handler
 - [ ] **D4** Add unit tests for logging and rate limiting
 
-## Chunk E – Catalog Basics
+## Chunk E – MCP Resources
 
 - [ ] **E1** Build Discogs REST client (`src/clients/discogs.ts`)
-- [ ] **E2** Add `release <id>` MCP command (basic release lookup)
-- [ ] **E3** Add `search <query>` MCP command (limit 3 results)
-- [ ] **E4** Snapshot-test Markdown outputs for release & search
+- [ ] **E2** Add resources/list handler
+- [ ] **E3** Add resources/read handler for releases and collection
+- [ ] **E4** Test resource responses
 
-## Chunk F – Collection Insights
+## Chunk F – MCP Tools
 
-- [ ] **F1** Fetch user collection and compute aggregate stats
-- [ ] **F2** Implement `stats` command with Markdown sections
-- [ ] **F3** Add unit tests with mocked collection data
+- [ ] **F1** Add tools/list handler
+- [ ] **F2** Implement search_collection tool
+- [ ] **F3** Implement get_release and get_collection_stats tools
+- [ ] **F4** Implement get_recommendations tool
 
-## Chunk G – Recommendations
+## Chunk G – MCP Prompts
 
-- [ ] **G1** Design rule-based recommendation engine (mood/genre/decade)
-- [ ] **G2** Integrate optional Last.fm play-count filtering
-- [ ] **G3** Expose `listen` command returning up to 3 releases
-- [ ] **G4** Snapshot-test recommendation Markdown output
+- [ ] **G1** Add prompts/list handler
+- [ ] **G2** Implement browse_collection prompt
+- [ ] **G3** Implement find_music and collection_insights prompts
+- [ ] **G4** Test prompt responses
 
 ## Chunk H – Polish & Test Coverage
 
-- [ ] **H1** Add global error boundary with friendly Markdown messages
-- [ ] **H2** Implement unknown-command help template
-- [ ] **H3** Increase Jest/MSW coverage to ≥ 80 percent
-- [ ] **H4** Add end-to-end test: OAuth → `release` flow
+- [ ] **H1** Proper JSON-RPC error responses
+- [ ] **H2** MCP protocol compliance validation
+- [ ] **H3** Integration tests with mock MCP client
+- [ ] **H4** End-to-end test: initialize → auth → use tools
 
 ## Chunk I – Deployment
 
 - [ ] **I1** Configure Wrangler environments & secrets (`wrangler.toml`)
 - [ ] **I2** Extend CI workflow to publish to production on `main`
-- [ ] **I3** Verify production deploy & add monitoring/logging alerts
+- [ ] **I3** Verify production deploy & test with Claude Desktop
 
 ---
 
@@ -73,6 +75,6 @@
 - [ ] Unit tests pass (`npm test`)
 - [ ] Build succeeds (`npm run build`)
 - [ ] Code coverage ≥ 80 percent
-- [ ] Markdown response snapshots up-to-date
+- [ ] MCP protocol compliance validated
 
-> **Tip:** re-order or add tasks as the project evolves. This file should always reflect the current development plan.
+> **Tip:** This checklist now reflects building a proper MCP server that will work with Claude Desktop and other MCP clients.
