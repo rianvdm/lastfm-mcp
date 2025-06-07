@@ -1,1 +1,1 @@
-# disccogs-mcp-server
+# Discogs MCP Server
