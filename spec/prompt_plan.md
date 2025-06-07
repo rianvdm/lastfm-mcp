@@ -11,23 +11,23 @@ All prompts are wrapped in triple-back-tick blocks with the language tag `text`.
    1.1 Repository, CI, linting/formatting  
    1.2 Wrangler-based Cloudflare Workers scaffold (TypeScript)
 2. Core Runtime  
-   2.1 HTTP handler + MCP envelope  
-   2.2 Command router & parser
+   2.1 HTTP handler + MCP JSON-RPC envelope  
+   2.2 MCP protocol implementation (initialize, capabilities)
 3. Security & Observability  
    3.1 Discogs OAuth flow  
    3.2 Workers KV request logging  
    3.3 Per-user rate limiting
 4. Core Features  
-   4.1 Basic release lookup  
-   4.2 Detailed release lookup  
-   4.3 Search  
-   4.4 Collection stats  
-   4.5 Recommendations (w/ optional Last.fm)
+   4.1 MCP Resources (release, collection, search)  
+   4.2 MCP Tools (search_collection, get_release, etc.)  
+   4.3 MCP Prompts (browse, find, insights)  
+   4.4 Collection stats tool  
+   4.5 Recommendations tool (w/ optional Last.fm)
 5. UX & Resilience  
-   5.1 Friendly error handling + unknown-command help  
-   5.2 Markdown response templates
+   5.1 Proper JSON-RPC error handling  
+   5.2 MCP-compliant error responses
 6. Quality Gates  
-   6.1 Unit tests, integration tests, snapshot tests  
+   6.1 Unit tests, integration tests, MCP protocol tests  
    6.2 CI workflow, preview deploys on push
 7. Launch & Beyond  
    7.1 Production deploy  
@@ -40,26 +40,26 @@ All prompts are wrapped in triple-back-tick blocks with the language tag `text`.
 Chunk A – Project Skeleton  
 • Create repo → Wrangler init → TypeScript, ESLint & Prettier → GitHub CI
 
-Chunk B – Hello MCP  
-• Minimal Worker handler → Echo MCP messages ("ping" → "pong")
+Chunk B – MCP Protocol Foundation  
+• HTTP SSE transport → JSON-RPC parser → MCP initialize handler
 
 Chunk C – Auth Layer  
-• Discogs OAuth endpoints → Session cookie/JWT → Guard router
+• Discogs OAuth endpoints → Session cookie/JWT → Guard MCP methods
 
 Chunk D – Infra Utilities  
 • KV logging module → Rate limiter middleware
 
-Chunk E – Catalog Basics  
-• Discogs REST client → `/release <id>` & `/search` commands
+Chunk E – MCP Resources  
+• Implement resources/list → resources/read → Release & collection resources
 
-Chunk F – Collection Insights  
-• Stats computation helpers → `stats` command
+Chunk F – MCP Tools  
+• Implement tools/list → tools/call → Search, stats, recommendations
 
-Chunk G – Recommendations  
-• Rule-based recommender → optional Last.fm enrichment
+Chunk G – MCP Prompts  
+• Implement prompts/list → prompts/get → Browse, find, insights prompts
 
 Chunk H – Polish & Tests  
-• Markdown templates → Error fallbacks → Jest & MSW tests → CI green
+• Error handling → MCP compliance tests → Integration tests
 
 Chunk I – Deploy  
 • Prod Wrangler environment → Preview + prod GitHub actions
@@ -76,43 +76,46 @@ A2 Run `wrangler init discogs-mcp --ts` & commit
 A3 Add ESLint + Prettier configs & npm scripts  
 A4 Add GitHub Actions workflow (`test`, `lint`, `build`)
 
-Chunk B – Hello MCP  
-B1 Create `src/router.ts` with simple string-based dispatcher  
-B2 Update `src/index.ts` to call router and return Markdown echo  
-B3 Write first Jest test: "ping" → "pong"
+Chunk B – MCP Protocol Foundation  
+B1 Create JSON-RPC message parser and types  
+B2 Implement MCP initialize/initialized flow  
+B3 Add SSE transport endpoints  
+B4 Write tests for protocol handling
 
 Chunk C – Auth Layer  
 C1 Create `src/auth/discogs.ts` wrapper (request token, callback, access token)  
 C2 Add `/login` and `/callback` routes in Worker  
 C3 Persist user session in cookie (signed JWT)  
-C4 Middleware to reject unauthenticated MCP commands
+C4 Middleware to reject unauthenticated MCP methods
 
 Chunk D – Infra Utilities  
 D1 Write `kvLogger` (put entry + TTL)  
 D2 Create `rateLimit` middleware (KV counter + 429)  
 D3 Wire logger & limiter into main handler and extend tests
 
-Chunk E – Catalog Basics  
-E1 Implement Discogs REST client util (`/releases/{id}`, `/database/search`)  
-E2 Add `/release <id>` MCP command (basic fields)  
-E3 Add `/search <query>` command (limit 3)  
-E4 Snapshot-test Markdown output
+Chunk E – MCP Resources  
+E1 Implement Discogs REST client util  
+E2 Add resources/list handler  
+E3 Add resources/read handler for releases and collection  
+E4 Test resource responses
 
-Chunk F – Collection Insights  
-F1 Add `/collection/stats` API call sequence  
-F2 Compute aggregates (genres, decades, etc.)  
-F3 Expose `stats` command with Markdown sections
+Chunk F – MCP Tools  
+F1 Add tools/list handler  
+F2 Implement search_collection tool  
+F3 Implement get_release and get_collection_stats tools  
+F4 Implement get_recommendations tool
 
-Chunk G – Recommendations  
-G1 Draft rule engine (mood, genre, decade filters)  
-G2 Integrate optional Last.fm playcounts (mock if not linked)  
-G3 `listen` command returns up to 3 releases
+Chunk G – MCP Prompts  
+G1 Add prompts/list handler  
+G2 Implement browse_collection prompt  
+G3 Implement find_music and collection_insights prompts  
+G4 Test prompt responses
 
 Chunk H – Polish & Tests  
-H1 Global error boundary returns friendly Markdown  
-H2 Unknown-command help template  
-H3 Increase Jest coverage (router, auth, utilities)  
-H4 Add end-to-end MSW test: full OAuth → `/release`
+H1 Proper JSON-RPC error responses  
+H2 MCP protocol compliance validation  
+H3 Integration tests with mock MCP client  
+H4 End-to-end test: initialize → auth → use tools
 
 Chunk I – Deploy  
 I1 Add `.dev.vars` & `wrangler.toml` prod vars (KV, secrets)  
@@ -125,7 +128,7 @@ I2 GitHub Action: test → build → `wrangler publish` on `main`
 • Each step touches ≤ 2 files (avg) or adds a new isolated module.  
 • Every new module is imported by the end of its step—no orphans.  
 • Tests or build run green after every step.  
-• No step mixes unrelated concerns (e.g., auth vs. Discogs client).  
+• No step mixes unrelated concerns (e.g., auth vs. MCP protocol).  
 Result: steps are "small enough to be safe, big enough to advance".
 
 ---
@@ -175,23 +178,59 @@ Jobs:
 Assume current scripts: lint, test, build exist.
 ```
 
-### Prompt 04 – Router Skeleton
+### Prompt 04 – JSON-RPC Parser
 
 ```text
-Implement a simple command router.
+Implement JSON-RPC 2.0 message handling for MCP.
 
 Files to create/modify:
-• src/router.ts
-    - export `route(command: string): Promise<string>`
-    - if command === 'ping' → 'pong'
-    - unknown → 'Unknown command'
-• src/index.ts
-    - parse raw text body
-    - call `route()` and return Markdown response
-• Add Jest test router.test.ts covering ping & unknown.
+• src/types/jsonrpc.ts
+    - Define Request, Response, Error, Notification types
+    - Follow JSON-RPC 2.0 spec
+• src/protocol/parser.ts
+    - parseMessage(body: string): validate and parse JSON-RPC
+    - createResponse(id, result): create success response
+    - createError(id, code, message): create error response
+• Add tests for message parsing and creation
 ```
 
-### Prompt 05 – Discogs OAuth (Part 1)
+### Prompt 05 – MCP Initialize Handler
+
+```text
+Implement MCP initialize/initialized protocol flow.
+
+Create src/protocol/handlers.ts:
+• handleInitialize(params): validate protocol version, return capabilities
+• Server capabilities: resources, tools, prompts
+• Protocol version: "2024-11-05"
+
+Update src/index.ts:
+• Route "initialize" method to handler
+• Send capabilities response
+• Handle "initialized" notification
+
+Add tests for initialization flow.
+```
+
+### Prompt 06 – SSE Transport
+
+```text
+Add Server-Sent Events transport for MCP.
+
+Modify src/index.ts:
+• GET /sse → SSE endpoint for server-to-client messages
+• POST / → receive JSON-RPC messages from client
+• Store SSE connections for bidirectional communication
+
+Create src/transport/sse.ts:
+• SSE connection management
+• Message broadcasting
+• Connection cleanup
+
+Test SSE message flow.
+```
+
+### Prompt 07 – Discogs OAuth (Part 1)
 
 ```text
 Add Discogs OAuth utilities.
@@ -206,7 +245,7 @@ Steps:
 Return full code and placeholder env names.
 ```
 
-### Prompt 06 – Discogs OAuth (Part 2)
+### Prompt 08 – Discogs OAuth (Part 2)
 
 ```text
 Wire OAuth routes.
@@ -214,113 +253,124 @@ Wire OAuth routes.
 Modify src/index.ts:
 • GET /login → redirect user to Discogs authorize URL.
 • GET /callback → exchange tokens, set signed JWT cookie, return "Logged in!"
-• All MCP commands after auth must check cookie and 401 if missing.
+• Add auth check to MCP handlers (except initialize)
 
 Add Jest test mocking fetch to Discogs endpoints.
 ```
 
-### Prompt 07 – KV Logger
+### Prompt 09 – KV Logger
 
 ```text
 Create src/utils/kvLogger.ts.
 
-• Export async log(userId, original, intent, meta) → put JSON into KV namespace MCP_LOGS with TTL 30d.
-• Inject logger middleware into main handler (after auth).
+• Export async log(userId, method, params, result) → put JSON into KV namespace MCP_LOGS with TTL 30d.
+• Log all MCP method calls
+• Include timestamp and latency
 • Update tests to assert KV put is called.
 ```
 
-### Prompt 08 – Rate Limiter
+### Prompt 10 – Rate Limiter
 
 ```text
 Implement per-user rate limiting.
 
 • src/utils/rateLimit.ts — sliding window: X/min, Y/hour (env vars).
 • Use KV MCP_RL with atomic increments.
-• Middleware returns 429 with Markdown advice when exceeded.
+• Return JSON-RPC error -32000 with rate limit message when exceeded.
 Add unit tests for limit reset & block.
 ```
 
-### Prompt 09 – Discogs Client
+### Prompt 11 – Discogs Client
 
 ```text
 Add REST wrapper.
 
 File src/clients/discogs.ts:
-• getRelease(id)
-• search(query, opts)
+• getRelease(id, token)
+• searchCollection(query, token, opts)
+• getCollectionStats(token)
 Both include User-Agent header and user OAuth token.
 
-Include type defs for minimal fields needed in spec.
+Include type defs for Discogs API responses.
 ```
 
-### Prompt 10 – `/release` Command
+### Prompt 12 – Resources Implementation
 
 ```text
-Extend router.
+Implement MCP resources.
 
-• Command pattern: `release <id>`
-• Call getRelease(), map fields: title, artist, year, format, genres, url, thumb.
-• Return Markdown table.
+Add to src/protocol/handlers.ts:
+• handleListResources(): return available resources
+• handleReadResource(uri): read specific resource
 
-Add Jest snapshot test.
+Resources:
+• discogs://release/{id}
+• discogs://collection
+• discogs://search?q={query}
+
+Return proper MCP resource format with contents.
 ```
 
-### Prompt 11 – `/search` Command
+### Prompt 13 – Tools Implementation
 
 ```text
-Add `search <terms>` routing.
+Implement MCP tools.
 
-• Limit 3 results.
-• Return bulleted Markdown list with title – artist (year) link.
+Add to src/protocol/handlers.ts:
+• handleListTools(): return tool definitions
+• handleCallTool(name, arguments): execute tool
 
-Update tests & snapshots.
+Tools:
+• search_collection(query, limit?)
+• get_release(release_id)
+• get_collection_stats()
+• get_recommendations(mood?, genre?, decade?)
+
+Include proper schemas and descriptions.
 ```
 
-### Prompt 12 – Collection Stats
+### Prompt 14 – Prompts Implementation
 
 ```text
-Implement `stats` command.
+Implement MCP prompts.
 
-• Hit Discogs collection endpoints (per-user).
-• Compute: total, top genres, top artists, decade histogram.
-• Format as Markdown with subsections.
+Add to src/protocol/handlers.ts:
+• handleListPrompts(): return prompt definitions
+• handleGetPrompt(name, arguments?): return prompt messages
 
-Provide unit test with mocked API response.
+Prompts:
+• browse_collection
+• find_music(query)
+• collection_insights
+
+Return proper MCP prompt format.
 ```
 
-### Prompt 13 – Recommendations
+### Prompt 15 – Error Handling
 
 ```text
-Add `listen [mood|genre|decade]` command.
+Enhance error handling for MCP compliance.
 
-• Filter by params.
-• If Last.fm linked → exclude high play-count releases.
-• Return up to 3 suggestions with cover thumbnails.
-
-Stub Last.fm client (returns empty list if not linked).
+1. Wrap all handlers in try/catch → proper JSON-RPC errors
+2. Map Discogs API errors to MCP error codes
+3. Add request validation
+4. Test error scenarios
 ```
 
-### Prompt 14 – Error & Help
+### Prompt 16 – Integration Tests
 
 ```text
-Global enhancements:
+Add comprehensive MCP protocol tests.
 
-1. Wrap router in try/catch → user-friendly error Markdown.
-2. Unknown command → Markdown help hinting at 'release', 'search', 'stats', 'listen'.
-3. Snapshot tests for error & help responses.
+• Test full initialize flow
+• Test resources/list and resources/read
+• Test tools/list and tools/call
+• Test error handling
+• Mock Discogs API responses
+• Validate JSON-RPC compliance
 ```
 
-### Prompt 15 – Test Suite & Coverage
-
-```text
-Increase coverage to ≥ 80%.
-
-• Add MSW to mock Discogs & Last.fm in integration tests.
-• Add snapshot tests for Markdown outputs.
-• Ensure `npm run test` passes with coverage threshold.
-```
-
-### Prompt 16 – Deploy Workflow
+### Prompt 17 – Deploy Workflow
 
 ```text
 Update `.github/workflows/ci.yml`:

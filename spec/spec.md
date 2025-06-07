@@ -2,17 +2,16 @@
 
 ## Overview
 
-The Discogs MCP Server is a Cloudflare Workers-based service that allows authenticated users to interact with their personal Discogs music collection via natural language commands using the MCP protocol. The server will process plain-text queries and return rich, markdown-formatted responses suitable for display in natural language clients like ChatGPT or Claude.
+The Discogs MCP Server is a Cloudflare Workers-based service that implements the Model Context Protocol (MCP) to allow AI assistants like Claude to interact with users' personal Discogs music collections. The server processes JSON-RPC 2.0 messages according to the MCP specification and returns structured responses with resources, tools, and prompts.
 
 ## Key Features
 
+- Implements standard MCP protocol with JSON-RPC 2.0 messaging
 - Authenticate users via Discogs OAuth
 - Query Discogs API live (no persistent local storage)
-- Respond to natural language commands
-- Return basic and detailed release information
-- Perform collection-based search queries
-- Provide stats about user collections
-- Offer listening recommendations based on mood, genre, and metadata
+- Expose MCP resources (collection data, release information)
+- Provide MCP tools (search, stats, recommendations)
+- Return structured JSON responses following MCP specification
 - Optional Last.fm integration for play history-based recommendations
 - No caching or persistence (except logging)
 - Rate limiting and detailed request logging via Workers KV
@@ -24,7 +23,8 @@ The Discogs MCP Server is a Cloudflare Workers-based service that allows authent
 ### Platform
 
 - **Runtime**: Cloudflare Workers
-- **Protocol**: MCP (text-based command protocol)
+- **Protocol**: Model Context Protocol (MCP) over HTTP with SSE transport
+- **Message Format**: JSON-RPC 2.0
 - **Storage**:
   - Workers KV for request logs
   - No persistent cache or user data
@@ -34,91 +34,130 @@ The Discogs MCP Server is a Cloudflare Workers-based service that allows authent
 - **Discogs API** (OAuth authentication and data access)
 - **Last.fm API** (optional user play history)
 
-### Input & Output
+### MCP Implementation
 
-- **Input**: Natural language text over MCP
-- **Output**: Markdown-formatted text for conversational clients
+- **Transport**: HTTP with Server-Sent Events (SSE) for server-to-client messages
+- **Endpoints**:
+  - POST `/` - Main MCP message endpoint
+  - GET `/sse` - SSE endpoint for server-initiated messages
+- **Protocol Version**: 2024-11-05
 
 ---
 
-## Functional Requirements
+## MCP Features
 
-### Authentication
+### Resources
 
-- OAuth-based login flow via Discogs
-- Access limited to the authenticated user's own collection
-- Each user tracked via their OAuth user ID
+The server exposes the following MCP resources:
 
-### Basic Release Lookup
+1. **Release Resource** (`discogs://release/{id}`)
+   - Provides detailed information about a specific release
+   - Includes: title, artist, year, format, genres, tracklist, etc.
 
-Returns the following fields:
+2. **Collection Resource** (`discogs://collection`)
+   - User's entire collection data
+   - Supports filtering and pagination
 
-- Title
-- Artist(s)
-- Release year
-- Format (e.g. Vinyl, LP)
-- Genres / Styles
-- Discogs release URL
-- Cover image URL
-- Notes or summary
+3. **Search Results Resource** (`discogs://search?q={query}`)
+   - Search results from user's collection
+   - Returns matching releases
 
-### Detailed Release Lookup
+### Tools
 
-Includes everything in basic release plus:
+The server provides these MCP tools:
 
-- Track listing (position, title, duration)
-- Credits (e.g. producers, engineers)
-- External links
-- Summarized and filterable user reviews/comments
+1. **search_collection**
+   - Description: "Search user's Discogs collection"
+   - Parameters: `query` (string), `limit` (number, optional)
+   - Returns: Array of matching releases
 
-### Search
+2. **get_release**
+   - Description: "Get detailed information about a release"
+   - Parameters: `release_id` (string)
+   - Returns: Detailed release object
 
-- Natural language queries (e.g. "search miles davis bitches brew")
-- Defaults to master releases unless user specifies detail (e.g. year, country, format)
-- Returns up to 3 results, expandable
-- Each result includes:
-  - Title
-  - Artist
-  - Release year
-  - Format
-  - Thumbnail URL
-  - Discogs release URL
-  - Optional snippet
+3. **get_collection_stats**
+   - Description: "Get statistics about user's collection"
+   - Parameters: none
+   - Returns: Statistics object with counts, genres, decades, etc.
 
-### Collection Stats
+4. **get_recommendations**
+   - Description: "Get listening recommendations based on collection"
+   - Parameters: `mood` (string, optional), `genre` (string, optional), `decade` (string, optional)
+   - Returns: Array of recommended releases
 
-Returns:
+### Prompts
 
-- Total number of items
-- Most common genres/styles
-- Most collected artists
-- Most frequent formats
-- Oldest / newest releases
-- Recently added items
-- Items per decade
-- Most common labels and countries
-- Duplicate releases or reissues
+The server offers these MCP prompts:
 
-### Recommendations ("What Should I Listen To?")
+1. **browse_collection**
+   - Description: "Browse and explore music collection"
+   - Arguments: none
 
-Inputs:
+2. **find_music**
+   - Description: "Find specific music in collection"
+   - Arguments: `query` (string)
 
-- Mood
-- Genre/style
-- Decade/era
-- Play count (via optional Last.fm)
-- Tags or notes (if available in Discogs)
-- Random draw with filters
+3. **collection_insights**
+   - Description: "Get insights about music collection"
+   - Arguments: none
 
-Returns:
+---
 
-- Up to 3 recommended releases with metadata
+## Protocol Flow
 
-### Last.fm Integration (Optional)
+### 1. Initialization
 
-- User can link Last.fm account
-- Enables filtering/sorting by play count
-- Used in recommendation feature
+Client connects and sends:
+```json
+{
+  "jsonrpc": "2.0",
+  "id": 1,
+  "method": "initialize",
+  "params": {
+    "protocolVersion": "2024-11-05",
+    "capabilities": {},
+    "clientInfo": {
+      "name": "Claude",
+      "version": "1.0.0"
+    }
+  }
+}
+```
+
+Server responds with capabilities:
+```json
+{
+  "jsonrpc": "2.0",
+  "id": 1,
+  "result": {
+    "protocolVersion": "2024-11-05",
+    "capabilities": {
+      "resources": {},
+      "tools": {},
+      "prompts": {}
+    },
+    "serverInfo": {
+      "name": "discogs-mcp",
+      "version": "1.0.0"
+    }
+  }
+}
+```
+
+### 2. Authentication
+
+Before accessing Discogs data, users must authenticate via OAuth flow.
+
+### 3. Resource/Tool Usage
+
+Clients can list and use available resources and tools via standard MCP methods:
+- `resources/list`
+- `resources/read`
+- `tools/list`
+- `tools/call`
+- `prompts/list`
+- `prompts/get`
 
 ---
 
@@ -128,6 +167,7 @@ Returns:
 
 - Enforced per user ID
 - Configurable thresholds (e.g. X requests/min, Y/hour)
+- Returns standard MCP error response when exceeded
 
 ### Logging
 
@@ -135,26 +175,21 @@ Returns:
 - Logged per request:
   - Timestamp
   - User ID
-  - Original query
-  - Parsed intent
-  - Result metadata (status, count, latency)
+  - MCP method
+  - Parameters
+  - Result metadata (status, latency)
 
 ### Error Handling
 
-- Friendly messages on API failure:
-  - e.g. "Sorry, Discogs isn’t responding right now. Please try again in a few minutes."
-- No retries or fallbacks at this stage
+- Returns standard JSON-RPC 2.0 error responses
+- Error codes follow MCP specification
+- User-friendly error messages in `data` field
 
-### Unsupported Queries
+### Security
 
-- Return help-style fallback:
-  - "Sorry, I couldn’t figure that out. Try asking about an album, your stats, or what to listen to."
-
-### Response Formatting
-
-- Markdown-rich output
-- Clear headers, bullet points, labeled sections
-- Optimized for ChatGPT, Claude, and other natural language clients
+- OAuth tokens stored securely
+- All MCP messages validated against schema
+- Resource access scoped to authenticated user
 
 ---
 
@@ -162,45 +197,33 @@ Returns:
 
 ### Unit Tests
 
-- Command parsing logic
-- Response formatting
-- Discogs API response shaping
-- Last.fm API integration fallback
+- MCP message parsing and validation
+- JSON-RPC request/response handling
+- Resource and tool implementations
+- OAuth flow
 
 ### Integration Tests
 
-- Full end-to-end flow:
-  - OAuth login
-  - Search and release lookup
-  - Stats computation
-  - Recommendation flow with/without Last.fm
+- Full MCP protocol flow
+- Initialize → Authenticate → Use tools/resources
+- Error scenarios
+- Rate limiting
 
-### Rate Limiting Tests
+### Protocol Compliance
 
-- Simulate overuse by a single user
-- Validate throttling and error message
-
-### Failure Mode Tests
-
-- Simulate Discogs/Last.fm downtime
-- Check fallback messages
-
-### Linting & QA
-
-- Use TypeScript ESLint or equivalent
-- Response formatting regression tests
-- Markdown output snapshot tests
+- Validate against MCP specification
+- Test with MCP Inspector tool
+- Verify compatibility with Claude Desktop
 
 ---
 
 ## Future Enhancements (Deferred)
 
-- Caching (Workers KV or Durable Objects)
-- Persistent user preferences and command history
-- More advanced NLP query handling
-- Realtime search suggestion support
-- Mobile app or web client front-end
+- WebSocket transport support
+- Caching with Workers KV
+- Additional MCP capabilities (sampling)
+- More sophisticated recommendation algorithms
 
 ---
 
-This document is ready for development.
+This document defines the requirements for a fully compliant MCP server implementation.
