@@ -2,8 +2,6 @@
 /// <reference lib="dom.iterable" />
 /// <reference lib="webworker" />
 
-import OAuth from 'oauth-1.0a'
-
 interface DiscogsTokenResponse {
   oauth_token: string
   oauth_token_secret: string
@@ -25,8 +23,28 @@ function arrayBufferToBase64(buffer: ArrayBuffer): string {
   return btoa(binary)
 }
 
+// Generate a random nonce
+function generateNonce(): string {
+  const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789'
+  let result = ''
+  for (let i = 0; i < 32; i++) {
+    result += chars.charAt(Math.floor(Math.random() * chars.length))
+  }
+  return result
+}
+
+// Get current timestamp
+function getTimestamp(): string {
+  return Math.floor(Date.now() / 1000).toString()
+}
+
+// Percent encode according to RFC 3986
+function percentEncode(str: string): string {
+  return encodeURIComponent(str)
+    .replace(/[!'()*]/g, (c) => '%' + c.charCodeAt(0).toString(16).toUpperCase())
+}
+
 export class DiscogsAuth {
-  private oauth: OAuth
   private consumerKey: string
   private consumerSecret: string
   private requestTokenUrl = 'https://api.discogs.com/oauth/request_token'
@@ -36,21 +54,6 @@ export class DiscogsAuth {
   constructor(consumerKey: string, consumerSecret: string) {
     this.consumerKey = consumerKey
     this.consumerSecret = consumerSecret
-    
-    // Since oauth-1.0a expects a synchronous hash function, we'll use a workaround
-    // by pre-computing the signature in our methods
-    this.oauth = new OAuth({
-      consumer: {
-        key: consumerKey,
-        secret: consumerSecret,
-      },
-      signature_method: 'HMAC-SHA1',
-      hash_function(_base_string: string, _key: string) {
-        // This is a placeholder - we'll compute the actual signature asynchronously
-        // and replace it in the authorization header
-        return 'PLACEHOLDER_SIGNATURE'
-      },
-    })
   }
 
   /**
@@ -74,23 +77,72 @@ export class DiscogsAuth {
   }
 
   /**
-   * Get OAuth authorization header with proper signature
+   * Create OAuth signature base string
    */
-  private async getOAuthHeader(requestData: { url: string; method: string; data?: Record<string, string> }, token?: { key: string; secret: string }): Promise<Record<string, string>> {
-    // Get the OAuth data (with placeholder signature)
-    const oauthData = this.oauth.authorize(requestData, token)
+  private createSignatureBaseString(
+    method: string,
+    url: string,
+    parameters: Record<string, string>
+  ): string {
+    // Sort parameters by key
+    const sortedParams = Object.keys(parameters)
+      .sort()
+      .map(key => `${percentEncode(key)}=${percentEncode(parameters[key])}`)
+      .join('&')
+
+    return `${method}&${percentEncode(url)}&${percentEncode(sortedParams)}`
+  }
+
+  /**
+   * Create OAuth signing key
+   */
+  private createSigningKey(tokenSecret?: string): string {
+    return `${percentEncode(this.consumerSecret)}&${percentEncode(tokenSecret || '')}`
+  }
+
+  /**
+   * Generate OAuth authorization header
+   */
+  private async generateOAuthHeader(
+    method: string,
+    url: string,
+    additionalParams: Record<string, string> = {},
+    token?: { key: string; secret: string }
+  ): Promise<string> {
+    const oauthParams: Record<string, string> = {
+      oauth_consumer_key: this.consumerKey,
+      oauth_nonce: generateNonce(),
+      oauth_signature_method: 'HMAC-SHA1',
+      oauth_timestamp: getTimestamp(),
+      oauth_version: '1.0',
+      ...additionalParams
+    }
+
+    if (token) {
+      oauthParams.oauth_token = token.key
+    }
+
+    // Create signature base string
+    const allParams = { ...oauthParams }
+    const baseString = this.createSignatureBaseString(method, url, allParams)
     
-    // Compute the actual signature
-    const baseString = this.oauth.getBaseString(requestData, oauthData)
-    const signingKey = this.oauth.getSigningKey(token?.secret)
+    // Create signing key
+    const signingKey = this.createSigningKey(token?.secret)
+    
+    // Generate signature
     const signature = await this.computeSignature(baseString, signingKey)
-    
-    // Replace the placeholder signature
-    oauthData.oauth_signature = signature
-    
-    // Convert to header
-    const header = this.oauth.toHeader(oauthData)
-    return header as unknown as Record<string, string>
+    oauthParams.oauth_signature = signature
+
+    console.log('OAuth signature base string:', baseString)
+    console.log('OAuth signing key:', signingKey)
+    console.log('OAuth signature:', signature)
+
+    // Create authorization header
+    const authParams = Object.keys(oauthParams)
+      .map(key => `${percentEncode(key)}="${percentEncode(oauthParams[key])}"`)
+      .join(', ')
+
+    return `OAuth ${authParams}`
   }
 
   /**
@@ -99,29 +151,36 @@ export class DiscogsAuth {
    * @returns Request token and secret
    */
   async getRequestToken(callbackUrl: string): Promise<DiscogsTokenResponse> {
-    const requestData = {
-      url: this.requestTokenUrl,
-      method: 'GET',
-      data: {
-        oauth_callback: callbackUrl,
-      },
-    }
+    console.log('Getting OAuth header for request token...')
+    
+    const authHeader = await this.generateOAuthHeader(
+      'GET',
+      this.requestTokenUrl,
+      { oauth_callback: callbackUrl }
+    )
 
-    const headers = await this.getOAuthHeader(requestData)
+    console.log('Authorization header:', authHeader)
+    console.log('Making request to:', this.requestTokenUrl)
 
-    const response = await fetch(this.requestTokenUrl + '?oauth_callback=' + encodeURIComponent(callbackUrl), {
+    const response = await fetch(this.requestTokenUrl, {
       method: 'GET',
       headers: {
-        ...headers,
+        'Authorization': authHeader,
         'User-Agent': 'discogs-mcp/1.0.0',
       },
     })
 
+    console.log('Response status:', response.status, response.statusText)
+
     if (!response.ok) {
-      throw new Error(`Failed to get request token: ${response.status} ${response.statusText}`)
+      const errorText = await response.text()
+      console.error('Discogs API error response:', errorText)
+      throw new Error(`Failed to get request token: ${response.status} ${response.statusText}. Response: ${errorText}`)
     }
 
     const text = await response.text()
+    console.log('Discogs response:', text)
+    
     const params = new URLSearchParams(text)
     
     const oauthToken = params.get('oauth_token')
@@ -165,20 +224,17 @@ export class DiscogsAuth {
       secret: oauthTokenSecret,
     }
 
-    const requestData = {
-      url: this.accessTokenUrl,
-      method: 'POST',
-      data: {
-        oauth_verifier: oauthVerifier,
-      },
-    }
-
-    const headers = await this.getOAuthHeader(requestData, token)
+    const authHeader = await this.generateOAuthHeader(
+      'POST',
+      this.accessTokenUrl,
+      { oauth_verifier: oauthVerifier },
+      token
+    )
 
     const response = await fetch(this.accessTokenUrl, {
       method: 'POST',
       headers: {
-        ...headers,
+        'Authorization': authHeader,
         'Content-Type': 'application/x-www-form-urlencoded',
         'User-Agent': 'discogs-mcp/1.0.0',
       },
@@ -186,7 +242,9 @@ export class DiscogsAuth {
     })
 
     if (!response.ok) {
-      throw new Error(`Failed to get access token: ${response.status} ${response.statusText}`)
+      const errorText = await response.text()
+      console.error('Discogs API error response:', errorText)
+      throw new Error(`Failed to get access token: ${response.status} ${response.statusText}. Response: ${errorText}`)
     }
 
     const text = await response.text()
@@ -217,11 +275,10 @@ export class DiscogsAuth {
     method: string,
     token: { key: string; secret: string }
   ): Promise<Record<string, string>> {
-    const requestData = {
-      url,
-      method,
+    const authHeader = await this.generateOAuthHeader(method, url, {}, token)
+    
+    return {
+      'Authorization': authHeader
     }
-
-    return await this.getOAuthHeader(requestData, token)
   }
 } 

@@ -68,23 +68,52 @@ export default {
  */
 async function handleLogin(env: Env): Promise<Response> {
 	try {
+		// Debug: Log environment variables (without secrets)
+		console.log('Environment check:', {
+			hasConsumerKey: !!env.DISCOGS_CONSUMER_KEY,
+			hasConsumerSecret: !!env.DISCOGS_CONSUMER_SECRET,
+			consumerKeyLength: env.DISCOGS_CONSUMER_KEY?.length || 0,
+			consumerSecretLength: env.DISCOGS_CONSUMER_SECRET?.length || 0
+		})
+		
+		if (!env.DISCOGS_CONSUMER_KEY || !env.DISCOGS_CONSUMER_SECRET) {
+			console.error('Missing Discogs OAuth credentials')
+			return new Response('OAuth configuration error: Missing credentials', { status: 500 })
+		}
+		
 		const auth = new DiscogsAuth(env.DISCOGS_CONSUMER_KEY, env.DISCOGS_CONSUMER_SECRET)
 		
 		// Get callback URL (in production, use proper domain)
 		const callbackUrl = 'http://localhost:8787/callback'
 		
+		console.log('Requesting OAuth token from Discogs...')
+		
 		// Get request token
 		const { oauth_token, oauth_token_secret } = await auth.getRequestToken(callbackUrl)
+		
+		console.log('Successfully received OAuth token:', { 
+			tokenLength: oauth_token.length,
+			secretLength: oauth_token_secret.length 
+		})
 		
 		// Store token secret temporarily (in production, use KV storage)
 		oauthTokenStore.set(oauth_token, oauth_token_secret)
 		
 		// Redirect to Discogs authorization page
 		const authorizeUrl = auth.getAuthorizeUrl(oauth_token)
+		console.log('Redirecting to:', authorizeUrl)
+		
 		return Response.redirect(authorizeUrl, 302)
 	} catch (error) {
 		console.error('OAuth login error:', error)
-		return new Response('OAuth login failed', { status: 500 })
+		
+		// Provide more detailed error information
+		let errorMessage = 'OAuth login failed'
+		if (error instanceof Error) {
+			errorMessage += `: ${error.message}`
+		}
+		
+		return new Response(errorMessage, { status: 500 })
 	}
 }
 
