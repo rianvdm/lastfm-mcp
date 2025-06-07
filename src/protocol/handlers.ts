@@ -6,9 +6,43 @@
 import { JSONRPCRequest, hasId } from '../types/jsonrpc'
 import { createResponse, createError, createMethodNotFoundError, createInvalidParamsError } from './parser'
 import { InitializeParams, InitializeResult, PROTOCOL_VERSION, SERVER_INFO, DEFAULT_CAPABILITIES } from '../types/mcp'
+import { verifySessionToken, SessionPayload } from '../auth/jwt'
 
 // Track initialization state
 let isInitialized = false
+
+/**
+ * Extract and verify session token from request
+ */
+export async function verifyAuthentication(request: Request, jwtSecret: string): Promise<SessionPayload | null> {
+	try {
+		// Get session cookie
+		const cookieHeader = request.headers.get('Cookie')
+		if (!cookieHeader) {
+			return null
+		}
+
+		// Parse cookies
+		const cookies = cookieHeader.split(';').reduce((acc, cookie) => {
+			const [key, value] = cookie.trim().split('=')
+			if (key && value) {
+				acc[key] = value
+			}
+			return acc
+		}, {} as Record<string, string>)
+
+		const sessionToken = cookies.session
+		if (!sessionToken) {
+			return null
+		}
+
+		// Verify JWT token
+		return await verifySessionToken(sessionToken, jwtSecret)
+	} catch (error) {
+		console.error('Authentication verification error:', error)
+		return null
+	}
+}
 
 /**
  * Handle initialize request
@@ -46,7 +80,7 @@ export function handleInitialized(): void {
 /**
  * Main method router
  */
-export async function handleMethod(request: JSONRPCRequest) {
+export async function handleMethod(request: JSONRPCRequest, httpRequest?: Request, jwtSecret?: string) {
 	const { method, params, id } = request
 
 	// Special case: initialize can be called before initialization
@@ -65,6 +99,22 @@ export async function handleMethod(request: JSONRPCRequest) {
 	if (!isInitialized) {
 		if (hasId(request)) {
 			return createError(id!, -32002, 'Server not initialized')
+		}
+		return null
+	}
+
+	// All other methods require authentication
+	if (!httpRequest || !jwtSecret) {
+		if (hasId(request)) {
+			return createError(id!, -32603, 'Internal error: Missing authentication context')
+		}
+		return null
+	}
+
+	const session = await verifyAuthentication(httpRequest, jwtSecret)
+	if (!session) {
+		if (hasId(request)) {
+			return createError(id!, -32001, 'Authentication required. Please visit /login to authenticate with Discogs.')
 		}
 		return null
 	}

@@ -35,7 +35,7 @@ export default {
 				if (request.method !== 'POST') {
 					return new Response('Method not allowed', { status: 405 })
 				}
-				return handleMCPRequest(request)
+				return handleMCPRequest(request, env)
 
 			case '/sse':
 				// SSE endpoint for bidirectional communication
@@ -193,7 +193,7 @@ function handleSSEConnection(): Response {
 /**
  * Handle MCP JSON-RPC request
  */
-async function handleMCPRequest(request: Request): Promise<Response> {
+async function handleMCPRequest(request: Request, env?: Env): Promise<Response> {
 	try {
 		// Check for connection ID header (for SSE-connected clients)
 		const connectionId = request.headers.get('X-Connection-ID')
@@ -229,7 +229,7 @@ async function handleMCPRequest(request: Request): Promise<Response> {
 		}
 
 		// Handle the method
-		const response = await handleMethod(jsonrpcRequest)
+		const response = await handleMethod(jsonrpcRequest, request, env?.JWT_SECRET)
 
 		// If no response (notification), return 204 No Content
 		if (!response) {

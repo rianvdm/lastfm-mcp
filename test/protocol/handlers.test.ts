@@ -1,6 +1,30 @@
-import { describe, it, expect, beforeEach } from 'vitest'
+import { describe, it, expect, beforeEach, vi } from 'vitest'
 import { handleInitialize, handleMethod, resetInitialization } from '../../src/protocol/handlers'
 import { PROTOCOL_VERSION, SERVER_INFO, DEFAULT_CAPABILITIES } from '../../src/types/mcp'
+
+// Mock authenticated request helper
+function createMockAuthenticatedRequest(): Request {
+	return new Request('http://localhost:8787/', {
+		method: 'POST',
+		headers: {
+			'Cookie': 'session=mock.jwt.token'
+		}
+	})
+}
+
+// Mock JWT secret
+const mockJwtSecret = 'test-secret'
+
+// Mock the JWT verification to always return a valid session
+vi.mock('../../src/auth/jwt', () => ({
+	verifySessionToken: vi.fn().mockResolvedValue({
+		userId: 'test-user',
+		accessToken: 'test-token',
+		accessTokenSecret: 'test-secret',
+		iat: Math.floor(Date.now() / 1000),
+		exp: Math.floor(Date.now() / 1000) + 3600
+	})
+}))
 
 describe('MCP Protocol Handlers', () => {
 	beforeEach(() => {
@@ -122,6 +146,36 @@ describe('MCP Protocol Handlers', () => {
 			})
 		})
 
+		it('should require authentication for non-initialize methods', async () => {
+			// Initialize first
+			await handleMethod({
+				jsonrpc: '2.0',
+				method: 'initialize',
+				params: {
+					protocolVersion: '2024-11-05',
+					capabilities: {},
+					clientInfo: { name: 'Test', version: '1.0' },
+				},
+				id: 1,
+			})
+
+			// Try to call method without authentication
+			const response = await handleMethod({
+				jsonrpc: '2.0',
+				method: 'resources/list',
+				id: 2,
+			})
+
+			expect(response).toMatchObject({
+				jsonrpc: '2.0',
+				id: 2,
+				error: {
+					code: -32603,
+					message: 'Internal error: Missing authentication context',
+				},
+			})
+		})
+
 		it('should handle unknown methods', async () => {
 			// First initialize
 			await handleMethod({
@@ -135,12 +189,12 @@ describe('MCP Protocol Handlers', () => {
 				id: 1,
 			})
 
-			// Then call unknown method
+			// Then call unknown method with authentication
 			const response = await handleMethod({
 				jsonrpc: '2.0',
 				method: 'unknown/method',
 				id: 2,
-			})
+			}, createMockAuthenticatedRequest(), mockJwtSecret)
 
 			expect(response).toMatchObject({
 				jsonrpc: '2.0',
@@ -166,12 +220,14 @@ describe('MCP Protocol Handlers', () => {
 				id: 1,
 			})
 
+			const mockRequest = createMockAuthenticatedRequest()
+
 			// Test resources/list
 			const resourcesResponse = await handleMethod({
 				jsonrpc: '2.0',
 				method: 'resources/list',
 				id: 2,
-			})
+			}, mockRequest, mockJwtSecret)
 
 			expect(resourcesResponse).toMatchObject({
 				jsonrpc: '2.0',
@@ -184,7 +240,7 @@ describe('MCP Protocol Handlers', () => {
 				jsonrpc: '2.0',
 				method: 'tools/list',
 				id: 3,
-			})
+			}, mockRequest, mockJwtSecret)
 
 			expect(toolsResponse).toMatchObject({
 				jsonrpc: '2.0',
@@ -197,7 +253,7 @@ describe('MCP Protocol Handlers', () => {
 				jsonrpc: '2.0',
 				method: 'prompts/list',
 				id: 4,
-			})
+			}, mockRequest, mockJwtSecret)
 
 			expect(promptsResponse).toMatchObject({
 				jsonrpc: '2.0',

@@ -22,7 +22,7 @@
 
 - [x] **C1** Implement Discogs OAuth utility (`src/auth/discogs.ts`)
 - [x] **C2** Add `/login` + `/callback` routes for OAuth handshake
-- [ ] **C3** Persist user session via signed JWT cookie
+- [x] **C3** Persist user session via signed JWT cookie
 - [ ] **C4** Add auth check to MCP handlers (except initialize)
 - [ ] **C5** Write tests mocking Discogs endpoints
 
