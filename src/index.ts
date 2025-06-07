@@ -5,19 +5,16 @@
 
 import { parseMessage, createError, serializeResponse } from './protocol/parser'
 import { handleMethod } from './protocol/handlers'
-import { ErrorCode } from './types/jsonrpc'
+import { ErrorCode, JSONRPCError } from './types/jsonrpc'
 import { createSSEResponse, getConnection } from './transport/sse'
 import { DiscogsAuth } from './auth/discogs'
 import type { Env } from './types/env'
-import type { ExportedHandler, ExecutionContext } from '@cloudflare/workers-types'
+import type { ExecutionContext } from '@cloudflare/workers-types'
 
 // These types are available globally in Workers runtime
 /// <reference lib="dom" />
 /// <reference lib="dom.iterable" />
 /// <reference lib="webworker" />
-
-// Import necessary types from Cloudflare Workers
-import { Request, Response, URL } from '@cloudflare/workers-types'
 
 // Store for temporary OAuth tokens (in production, use KV storage)
 const oauthTokenStore = new Map<string, string>()
@@ -26,7 +23,7 @@ export default {
 	async fetch(
 		request: Request,
 		env: Env,
-		ctx: ExecutionContext
+		_ctx: ExecutionContext
 	): Promise<Response> {
 		const url = new URL(request.url)
 
@@ -64,7 +61,7 @@ export default {
 				return new Response('Not found', { status: 404 })
 		}
 	},
-} satisfies ExportedHandler<Env>
+}
 
 /**
  * Handle OAuth login request
@@ -173,7 +170,8 @@ async function handleMCPRequest(request: Request): Promise<Response> {
 			jsonrpcRequest = parseMessage(body)
 		} catch (error) {
 			// Parse error or invalid request
-			const errorResponse = createError(null, (error as any).code || ErrorCode.ParseError, (error as any).message || 'Parse error')
+			const jsonrpcError = error as JSONRPCError
+			const errorResponse = createError(null, jsonrpcError.code || ErrorCode.ParseError, jsonrpcError.message || 'Parse error')
 			return new Response(serializeResponse(errorResponse), {
 				headers: { 'Content-Type': 'application/json' },
 			})
