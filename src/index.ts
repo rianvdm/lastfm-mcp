@@ -8,6 +8,7 @@ import { handleMethod } from './protocol/handlers'
 import { ErrorCode, JSONRPCError } from './types/jsonrpc'
 import { createSSEResponse, getConnection } from './transport/sse'
 import { DiscogsAuth } from './auth/discogs'
+import { createSessionToken } from './auth/jwt'
 import type { Env } from './types/env'
 import type { ExecutionContext } from '@cloudflare/workers-types'
 
@@ -144,13 +145,34 @@ async function handleCallback(request: Request, env: Env): Promise<Response> {
 		const { oauth_token: accessToken, oauth_token_secret: accessTokenSecret } = 
 			await auth.getAccessToken(oauthToken, oauthTokenSecret, oauthVerifier)
 		
-		// TODO: In C3, we'll create a JWT and set it as a cookie
-		// For now, just return success with the tokens
+		// Create JWT session token
+		const sessionToken = await createSessionToken(
+			{
+				userId: accessToken, // Use access token as user ID for now
+				accessToken,
+				accessTokenSecret
+			},
+			env.JWT_SECRET,
+			24 // expires in 24 hours
+		)
+		
+		// Set secure HTTP-only cookie
+		const cookieOptions = [
+			'HttpOnly',
+			'Secure',
+			'SameSite=Strict',
+			'Path=/',
+			'Max-Age=86400' // 24 hours in seconds
+		].join('; ')
+		
 		return new Response(
-			`Authentication successful!\n\nAccess Token: ${accessToken}\nAccess Token Secret: ${accessTokenSecret}\n\nThese tokens can be used to access your Discogs collection.`,
+			`Authentication successful! You can now use the MCP server to access your Discogs collection.`,
 			{ 
 				status: 200,
-				headers: { 'Content-Type': 'text/plain' }
+				headers: { 
+					'Content-Type': 'text/plain',
+					'Set-Cookie': `session=${sessionToken}; ${cookieOptions}`
+				}
 			}
 		)
 	} catch (error) {
