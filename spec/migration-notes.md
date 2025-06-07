@@ -5,6 +5,7 @@ This document outlines the changes needed to migrate from the current text-based
 ## Current State
 
 We have implemented:
+
 - Basic text command router (`ping` → `pong`)
 - HTTP POST endpoint that accepts plain text
 - Markdown responses
@@ -12,6 +13,7 @@ We have implemented:
 ## Target State
 
 We need to implement:
+
 - JSON-RPC 2.0 message handling
 - MCP protocol with proper initialize/capabilities flow
 - SSE transport for bidirectional communication
@@ -22,12 +24,14 @@ We need to implement:
 ### 1. Replace Text Router with JSON-RPC Handler
 
 **Current:**
+
 ```typescript
 // src/router.ts
 export async function route(command: string): Promise<string>
 ```
 
 **Target:**
+
 ```typescript
 // src/protocol/parser.ts
 export function parseMessage(body: string): JSONRPCRequest
@@ -38,6 +42,7 @@ export function createError(id: string | number, code: number, message: string):
 ### 2. Update Main Handler
 
 **Current:**
+
 ```typescript
 // src/index.ts
 const command = await request.text()
@@ -46,18 +51,20 @@ return new Response(response, { headers: { 'Content-Type': 'text/markdown' } })
 ```
 
 **Target:**
+
 ```typescript
 // src/index.ts
 const message = await parseMessage(await request.text())
 const result = await handleMethod(message.method, message.params)
 return new Response(JSON.stringify(createResponse(message.id, result)), {
-  headers: { 'Content-Type': 'application/json' }
+	headers: { 'Content-Type': 'application/json' },
 })
 ```
 
 ### 3. Add MCP Methods
 
 Replace simple commands with MCP standard methods:
+
 - `initialize` → Capability negotiation
 - `resources/list` → List available resources
 - `resources/read` → Read resource content
@@ -69,6 +76,7 @@ Replace simple commands with MCP standard methods:
 ### 4. Add SSE Transport
 
 Add Server-Sent Events endpoint for server-initiated messages:
+
 - GET `/sse` → SSE connection
 - Bidirectional communication support
 
@@ -90,6 +98,7 @@ Add Server-Sent Events endpoint for server-initiated messages:
 ## Backwards Compatibility
 
 During migration, we can support both protocols:
+
 - Check Content-Type header
 - Route to appropriate handler
-- Remove after full migration 
+- Remove after full migration

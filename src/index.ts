@@ -4,12 +4,12 @@
  */
 
 export default {
-	async fetch(request, _env, _ctx): Promise<Response> {
+	async fetch(_request, _env, _ctx): Promise<Response> {
 		// TODO: Implement JSON-RPC message handling
 		// TODO: Add SSE endpoint for bidirectional communication
 		// TODO: Add OAuth endpoints
-		
-		return new Response('MCP Server - Not yet implemented', { 
+
+		return new Response('MCP Server - Not yet implemented', {
 			status: 501,
 			headers: {
 				'Content-Type': 'text/plain',

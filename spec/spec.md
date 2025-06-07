@@ -51,10 +51,12 @@ The Discogs MCP Server is a Cloudflare Workers-based service that implements the
 The server exposes the following MCP resources:
 
 1. **Release Resource** (`discogs://release/{id}`)
+
    - Provides detailed information about a specific release
    - Includes: title, artist, year, format, genres, tracklist, etc.
 
 2. **Collection Resource** (`discogs://collection`)
+
    - User's entire collection data
    - Supports filtering and pagination
 
@@ -67,16 +69,19 @@ The server exposes the following MCP resources:
 The server provides these MCP tools:
 
 1. **search_collection**
+
    - Description: "Search user's Discogs collection"
    - Parameters: `query` (string), `limit` (number, optional)
    - Returns: Array of matching releases
 
 2. **get_release**
+
    - Description: "Get detailed information about a release"
    - Parameters: `release_id` (string)
    - Returns: Detailed release object
 
 3. **get_collection_stats**
+
    - Description: "Get statistics about user's collection"
    - Parameters: none
    - Returns: Statistics object with counts, genres, decades, etc.
@@ -91,10 +96,12 @@ The server provides these MCP tools:
 The server offers these MCP prompts:
 
 1. **browse_collection**
+
    - Description: "Browse and explore music collection"
    - Arguments: none
 
 2. **find_music**
+
    - Description: "Find specific music in collection"
    - Arguments: `query` (string)
 
@@ -109,39 +116,41 @@ The server offers these MCP prompts:
 ### 1. Initialization
 
 Client connects and sends:
+
 ```json
 {
-  "jsonrpc": "2.0",
-  "id": 1,
-  "method": "initialize",
-  "params": {
-    "protocolVersion": "2024-11-05",
-    "capabilities": {},
-    "clientInfo": {
-      "name": "Claude",
-      "version": "1.0.0"
-    }
-  }
+	"jsonrpc": "2.0",
+	"id": 1,
+	"method": "initialize",
+	"params": {
+		"protocolVersion": "2024-11-05",
+		"capabilities": {},
+		"clientInfo": {
+			"name": "Claude",
+			"version": "1.0.0"
+		}
+	}
 }
 ```
 
 Server responds with capabilities:
+
 ```json
 {
-  "jsonrpc": "2.0",
-  "id": 1,
-  "result": {
-    "protocolVersion": "2024-11-05",
-    "capabilities": {
-      "resources": {},
-      "tools": {},
-      "prompts": {}
-    },
-    "serverInfo": {
-      "name": "discogs-mcp",
-      "version": "1.0.0"
-    }
-  }
+	"jsonrpc": "2.0",
+	"id": 1,
+	"result": {
+		"protocolVersion": "2024-11-05",
+		"capabilities": {
+			"resources": {},
+			"tools": {},
+			"prompts": {}
+		},
+		"serverInfo": {
+			"name": "discogs-mcp",
+			"version": "1.0.0"
+		}
+	}
 }
 ```
 
@@ -152,6 +161,7 @@ Before accessing Discogs data, users must authenticate via OAuth flow.
 ### 3. Resource/Tool Usage
 
 Clients can list and use available resources and tools via standard MCP methods:
+
 - `resources/list`
 - `resources/read`
 - `tools/list`

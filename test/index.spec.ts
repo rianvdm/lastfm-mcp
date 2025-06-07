@@ -8,7 +8,7 @@ describe('Discogs MCP Server', () => {
 		const ctx = createExecutionContext()
 		const response = await worker.fetch(request, env, ctx)
 		await waitOnExecutionContext(ctx)
-		
+
 		expect(response.status).toBe(501)
 		expect(await response.text()).toBe('MCP Server - Not yet implemented')
 	})
