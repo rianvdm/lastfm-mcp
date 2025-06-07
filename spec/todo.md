@@ -6,8 +6,8 @@
 
 ## Chunk A – Project Skeleton
 
-- [ ] **A1** Initialize Git repo & add root `README.md`
-- [ ] **A2** Run `wrangler init discogs-mcp --ts` and commit scaffold
+- [x] **A1** Initialize Git repo & add root `README.md`
+- [x] **A2** Run `wrangler init discogs-mcp --ts` and commit scaffold
 - [ ] **A3** Add ESLint & Prettier configs and npm scripts (`lint`, `format`)
 - [ ] **A4** Create GitHub Actions workflow for `lint`, `test`, and `build`
 
