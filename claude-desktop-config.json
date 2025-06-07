@@ -1,0 +1,11 @@
+{
+  "mcpServers": {
+    "discogs-local": {
+      "command": "node",
+      "args": [
+        "-e",
+        "const http = require('http'); const https = require('https'); process.stdin.on('data', async (data) => { const req = http.request('http://localhost:8787/', { method: 'POST', headers: { 'Content-Type': 'application/json', 'Content-Length': data.length } }, (res) => { let body = ''; res.on('data', chunk => body += chunk); res.on('end', () => process.stdout.write(body + '\\n')); }); req.on('error', console.error); req.write(data); req.end(); });"
+      ]
+    }
+  }
+} 
