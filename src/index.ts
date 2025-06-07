@@ -6,6 +6,7 @@
 import { parseMessage, createError, serializeResponse } from './protocol/parser'
 import { handleMethod } from './protocol/handlers'
 import { ErrorCode } from './types/jsonrpc'
+import { createSSEResponse, getConnection } from './transport/sse'
 
 export default {
 	async fetch(request, _env, _ctx): Promise<Response> {
@@ -21,8 +22,11 @@ export default {
 				return handleMCPRequest(request)
 
 			case '/sse':
-				// TODO: Implement SSE endpoint in B3
-				return new Response('SSE not implemented yet', { status: 501 })
+				// SSE endpoint for bidirectional communication
+				if (request.method !== 'GET') {
+					return new Response('Method not allowed', { status: 405 })
+				}
+				return handleSSEConnection()
 
 			case '/login':
 				// TODO: Implement OAuth login in C2
@@ -39,10 +43,28 @@ export default {
 } satisfies ExportedHandler<Env>
 
 /**
+ * Handle SSE connection request
+ */
+function handleSSEConnection(): Response {
+	const { response, connectionId } = createSSEResponse()
+	console.log(`New SSE connection established: ${connectionId}`)
+	return response
+}
+
+/**
  * Handle MCP JSON-RPC request
  */
 async function handleMCPRequest(request: Request): Promise<Response> {
 	try {
+		// Check for connection ID header (for SSE-connected clients)
+		const connectionId = request.headers.get('X-Connection-ID')
+		if (connectionId) {
+			const connection = getConnection(connectionId)
+			if (!connection) {
+				console.warn(`Invalid connection ID: ${connectionId}`)
+			}
+		}
+
 		// Parse request body
 		const body = await request.text()
 

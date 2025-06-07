@@ -115,4 +115,28 @@ describe('Discogs MCP Server', () => {
 
 		expect(response.status).toBe(404)
 	})
+
+	describe('SSE endpoint', () => {
+		it('should accept GET requests to /sse', async () => {
+			const request = new Request<unknown, IncomingRequestCfProperties>('http://example.com/sse')
+			const ctx = createExecutionContext()
+			const response = await worker.fetch(request, env, ctx)
+			await waitOnExecutionContext(ctx)
+
+			expect(response.status).toBe(200)
+			expect(response.headers.get('content-type')).toBe('text/event-stream')
+			expect(response.headers.get('cache-control')).toBe('no-cache')
+		})
+
+		it('should reject POST requests to /sse', async () => {
+			const request = new Request<unknown, IncomingRequestCfProperties>('http://example.com/sse', {
+				method: 'POST',
+			})
+			const ctx = createExecutionContext()
+			const response = await worker.fetch(request, env, ctx)
+			await waitOnExecutionContext(ctx)
+
+			expect(response.status).toBe(405)
+		})
+	})
 })
