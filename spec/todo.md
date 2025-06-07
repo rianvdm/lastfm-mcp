@@ -75,4 +75,4 @@
 - [ ] Code coverage ≥ 80 percent
 - [ ] Markdown response snapshots up-to-date
 
-> **Tip:** re-order or add tasks as the project evolves. This file should always reflect the current development plan. 
+> **Tip:** re-order or add tasks as the project evolves. This file should always reflect the current development plan.

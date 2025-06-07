@@ -8,10 +8,19 @@
 		"dev": "wrangler dev",
 		"start": "wrangler dev",
 		"test": "vitest",
-		"cf-typegen": "wrangler types"
+		"cf-typegen": "wrangler types",
+		"lint": "eslint src --ext .ts,.tsx",
+		"format": "prettier --write .",
+		"format:check": "prettier --check .",
+		"build": "wrangler deploy --dry-run --outdir dist"
 	},
 	"devDependencies": {
 		"@cloudflare/vitest-pool-workers": "^0.8.19",
+		"@typescript-eslint/eslint-plugin": "^8.33.1",
+		"@typescript-eslint/parser": "^8.33.1",
+		"eslint": "^8.57.1",
+		"eslint-config-prettier": "^10.1.5",
+		"prettier": "^3.5.3",
 		"typescript": "^5.5.2",
 		"vitest": "~3.0.7",
 		"wrangler": "^4.19.1"

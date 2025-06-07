@@ -9,60 +9,60 @@ All prompts are wrapped in triple-back-tick blocks with the language tag `text`.
 
 1. Foundation & Tooling  
    1.1 Repository, CI, linting/formatting  
-   1.2 Wrangler-based Cloudflare Workers scaffold (TypeScript)  
+   1.2 Wrangler-based Cloudflare Workers scaffold (TypeScript)
 2. Core Runtime  
    2.1 HTTP handler + MCP envelope  
-   2.2 Command router & parser  
+   2.2 Command router & parser
 3. Security & Observability  
    3.1 Discogs OAuth flow  
    3.2 Workers KV request logging  
-   3.3 Per-user rate limiting  
+   3.3 Per-user rate limiting
 4. Core Features  
    4.1 Basic release lookup  
    4.2 Detailed release lookup  
    4.3 Search  
    4.4 Collection stats  
-   4.5 Recommendations (w/ optional Last.fm)  
+   4.5 Recommendations (w/ optional Last.fm)
 5. UX & Resilience  
    5.1 Friendly error handling + unknown-command help  
-   5.2 Markdown response templates  
+   5.2 Markdown response templates
 6. Quality Gates  
    6.1 Unit tests, integration tests, snapshot tests  
-   6.2 CI workflow, preview deploys on push  
+   6.2 CI workflow, preview deploys on push
 7. Launch & Beyond  
    7.1 Production deploy  
-   7.2 Post-launch monitoring, future enhancements  
+   7.2 Post-launch monitoring, future enhancements
 
 ---
 
 ## 2 – First Pass: Iterative Chunks
 
 Chunk A – Project Skeleton  
-• Create repo → Wrangler init → TypeScript, ESLint & Prettier → GitHub CI  
+• Create repo → Wrangler init → TypeScript, ESLint & Prettier → GitHub CI
 
 Chunk B – Hello MCP  
-• Minimal Worker handler → Echo MCP messages ("ping" → "pong")  
+• Minimal Worker handler → Echo MCP messages ("ping" → "pong")
 
 Chunk C – Auth Layer  
-• Discogs OAuth endpoints → Session cookie/JWT → Guard router  
+• Discogs OAuth endpoints → Session cookie/JWT → Guard router
 
 Chunk D – Infra Utilities  
-• KV logging module → Rate limiter middleware  
+• KV logging module → Rate limiter middleware
 
 Chunk E – Catalog Basics  
-• Discogs REST client → `/release <id>` & `/search` commands  
+• Discogs REST client → `/release <id>` & `/search` commands
 
 Chunk F – Collection Insights  
-• Stats computation helpers → `stats` command  
+• Stats computation helpers → `stats` command
 
 Chunk G – Recommendations  
-• Rule-based recommender → optional Last.fm enrichment  
+• Rule-based recommender → optional Last.fm enrichment
 
 Chunk H – Polish & Tests  
-• Markdown templates → Error fallbacks → Jest & MSW tests → CI green  
+• Markdown templates → Error fallbacks → Jest & MSW tests → CI green
 
 Chunk I – Deploy  
-• Prod Wrangler environment → Preview + prod GitHub actions  
+• Prod Wrangler environment → Preview + prod GitHub actions
 
 ---
 
@@ -136,6 +136,7 @@ Copy-paste each prompt (in order) into your favorite code-gen LLM.
 Every prompt assumes all previous code now exists.
 
 ### Prompt 01 – Repo & Wrangler Init
+
 ```text
 You are coding in an empty Git repo called "discogs-mcp".
 
@@ -149,6 +150,7 @@ Return only the created/modified files with full contents.
 ```
 
 ### Prompt 02 – Lint & Format
+
 ```text
 Add ESLint and Prettier support.
 
@@ -161,6 +163,7 @@ Update any existing ts files to satisfy the linter (no unused vars).
 ```
 
 ### Prompt 03 – CI Workflow
+
 ```text
 Create `.github/workflows/ci.yml`.
 
@@ -173,6 +176,7 @@ Assume current scripts: lint, test, build exist.
 ```
 
 ### Prompt 04 – Router Skeleton
+
 ```text
 Implement a simple command router.
 
@@ -188,6 +192,7 @@ Files to create/modify:
 ```
 
 ### Prompt 05 – Discogs OAuth (Part 1)
+
 ```text
 Add Discogs OAuth utilities.
 
@@ -202,6 +207,7 @@ Return full code and placeholder env names.
 ```
 
 ### Prompt 06 – Discogs OAuth (Part 2)
+
 ```text
 Wire OAuth routes.
 
@@ -214,6 +220,7 @@ Add Jest test mocking fetch to Discogs endpoints.
 ```
 
 ### Prompt 07 – KV Logger
+
 ```text
 Create src/utils/kvLogger.ts.
 
@@ -223,6 +230,7 @@ Create src/utils/kvLogger.ts.
 ```
 
 ### Prompt 08 – Rate Limiter
+
 ```text
 Implement per-user rate limiting.
 
@@ -233,6 +241,7 @@ Add unit tests for limit reset & block.
 ```
 
 ### Prompt 09 – Discogs Client
+
 ```text
 Add REST wrapper.
 
@@ -245,6 +254,7 @@ Include type defs for minimal fields needed in spec.
 ```
 
 ### Prompt 10 – `/release` Command
+
 ```text
 Extend router.
 
@@ -256,6 +266,7 @@ Add Jest snapshot test.
 ```
 
 ### Prompt 11 – `/search` Command
+
 ```text
 Add `search <terms>` routing.
 
@@ -266,6 +277,7 @@ Update tests & snapshots.
 ```
 
 ### Prompt 12 – Collection Stats
+
 ```text
 Implement `stats` command.
 
@@ -277,6 +289,7 @@ Provide unit test with mocked API response.
 ```
 
 ### Prompt 13 – Recommendations
+
 ```text
 Add `listen [mood|genre|decade]` command.
 
@@ -288,6 +301,7 @@ Stub Last.fm client (returns empty list if not linked).
 ```
 
 ### Prompt 14 – Error & Help
+
 ```text
 Global enhancements:
 
@@ -297,6 +311,7 @@ Global enhancements:
 ```
 
 ### Prompt 15 – Test Suite & Coverage
+
 ```text
 Increase coverage to ≥ 80%.
 
@@ -306,6 +321,7 @@ Increase coverage to ≥ 80%.
 ```
 
 ### Prompt 16 – Deploy Workflow
+
 ```text
 Update `.github/workflows/ci.yml`:
 
@@ -317,4 +333,4 @@ Add a "Deploy succeeded" comment to PRs on success.
 
 ---
 
-You now have an actionable, incremental build plan and a corresponding set of self-contained LLM prompts that progressively assemble the Discogs MCP Server without large leaps in complexity or unintegrated code. 
+You now have an actionable, incremental build plan and a corresponding set of self-contained LLM prompts that progressively assemble the Discogs MCP Server without large leaps in complexity or unintegrated code.

@@ -12,7 +12,7 @@ I want to create a Discogs MCP server that can be used to search for and retriev
 - Giving me stats about my collection
 - Helping me with ideas of what to listen to based on mood, genre, etc.
 
-The server should be able to authenticate a user with Discogs so that I can make this server open to use for anyone with a Discogs account. 
+The server should be able to authenticate a user with Discogs so that I can make this server open to use for anyone with a Discogs account.
 
 The server should be built using the MCP protocol, which allows it to be integrated with other applications that support MCP. It should be able to handle requests from both the command line and from other MCP clients. MCP is a fairly new protocol, so some web searching will be required to ensure information is accurate.
 
@@ -20,11 +20,11 @@ The server should be built using the MCP protocol, which allows it to be integra
 
 1. Open **@prompt_plan.md** and identify any prompts not marked as completed.
 2. For each incomplete prompt:
-    - Double-check if it's truly unfinished (if uncertain, ask for clarification).
-    - If you confirm it's already done, skip it.
-    - Otherwise, implement it as described.
-    - Make sure the tests pass, and the program builds/runs
-    - Commit the changes to your repository with a clear commit message.
-    - Update **@prompt_plan.md** to mark this prompt as completed.
+   - Double-check if it's truly unfinished (if uncertain, ask for clarification).
+   - If you confirm it's already done, skip it.
+   - Otherwise, implement it as described.
+   - Make sure the tests pass, and the program builds/runs
+   - Commit the changes to your repository with a clear commit message.
+   - Update **@prompt_plan.md** to mark this prompt as completed.
 3. After you finish each prompt, pause and wait for user review or feedback.
 4. Repeat with the next unfinished prompt as directed by the user.

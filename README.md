@@ -25,6 +25,7 @@ This server processes plain-text queries and returns rich, markdown-formatted re
 ## Architecture
 
 Built on Cloudflare Workers with:
+
 - Workers KV for request logging and rate limiting
 - Discogs API for collection data
 - Optional Last.fm API for play history
