@@ -1,3 +1,7 @@
+/// <reference lib="dom" />
+/// <reference lib="dom.iterable" />
+/// <reference lib="webworker" />
+
 import OAuth from 'oauth-1.0a'
 
 interface DiscogsTokenResponse {

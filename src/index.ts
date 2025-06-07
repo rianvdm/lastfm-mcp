@@ -9,12 +9,25 @@ import { ErrorCode } from './types/jsonrpc'
 import { createSSEResponse, getConnection } from './transport/sse'
 import { DiscogsAuth } from './auth/discogs'
 import type { Env } from './types/env'
+import type { ExportedHandler, ExecutionContext } from '@cloudflare/workers-types'
+
+// These types are available globally in Workers runtime
+/// <reference lib="dom" />
+/// <reference lib="dom.iterable" />
+/// <reference lib="webworker" />
+
+// Import necessary types from Cloudflare Workers
+import { Request, Response, URL } from '@cloudflare/workers-types'
 
 // Store for temporary OAuth tokens (in production, use KV storage)
 const oauthTokenStore = new Map<string, string>()
 
 export default {
-	async fetch(request, env, _ctx): Promise<Response> {
+	async fetch(
+		request: Request,
+		env: Env,
+		ctx: ExecutionContext
+	): Promise<Response> {
 		const url = new URL(request.url)
 
 		// Handle different endpoints
@@ -126,7 +139,7 @@ async function handleCallback(request: Request, env: Env): Promise<Response> {
 function handleSSEConnection(): Response {
 	const { response, connectionId } = createSSEResponse()
 	console.log(`New SSE connection established: ${connectionId}`)
-	return response
+	return response as unknown as Response
 }
 
 /**
