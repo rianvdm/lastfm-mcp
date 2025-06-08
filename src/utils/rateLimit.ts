@@ -43,8 +43,7 @@ export class RateLimiter {
         userId,
         'minute',
         minuteWindow,
-        this.config.requestsPerMinute,
-        60 // TTL in seconds
+        this.config.requestsPerMinute
       )
 
       if (!minuteResult.allowed) {
@@ -56,8 +55,7 @@ export class RateLimiter {
         userId,
         'hour',
         hourWindow,
-        this.config.requestsPerHour,
-        3600 // TTL in seconds
+        this.config.requestsPerHour
       )
 
       if (!hourResult.allowed) {
@@ -88,8 +86,7 @@ export class RateLimiter {
     userId: string,
     window: 'minute' | 'hour',
     windowId: number,
-    limit: number,
-    ttl: number
+    limit: number
   ): Promise<RateLimitResult> {
     const key = `rl:${userId}:${window}:${windowId}`
     const countStr = await this.kv.get(key)
