@@ -6,6 +6,44 @@ A Cloudflare Workers-based service that allows authenticated users to interact w
 
 This server processes plain-text queries and returns rich, markdown-formatted responses suitable for display in natural language clients like ChatGPT or Claude.
 
+## Quick Start
+
+### Adding to Claude Desktop
+
+1. Open Claude Desktop settings and find the MCP configuration (Settings / Developer / Edit Config)
+2. Add this server configuration:
+
+```json
+{
+  "mcpServers": {
+    "discogs": {
+      "command": "npx",
+      "args": ["mcp-remote", "https://discogs-mcp-prod.rian-db8.workers.dev/sse"]
+    }
+  }
+}
+```
+
+3. Restart Claude Desktop
+4. Ask something like "What can you tell me about my Discogs collection?"
+5. Visit the provided login URL to connect your Discogs account
+6. Come back and enjoy! See below for things you can ask about
+
+### Adding to Other MCP Clients
+
+For other MCP-compatible clients, use the server endpoint:
+```
+https://discogs-mcp-prod.rian-db8.workers.dev/sse
+```
+
+### Available Tools
+
+Once connected and authenticated, you can:
+- **Search your collection**: "Find all my Beatles albums"
+- **Get release details**: "Tell me about this specific album" 
+- **View collection stats**: "What genres do I have the most of?"
+- **Get recommendations**: "Suggest some jazz albums from my collection"
+
 ## Key Features
 
 - **OAuth Authentication**: Secure login via Discogs OAuth

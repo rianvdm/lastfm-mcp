@@ -133,7 +133,7 @@ describe('MCP Tools', () => {
 			})
 		})
 
-		it('should handle auth_status tool', async () => {
+		it('should require authentication for auth_status tool', async () => {
 			// Initialize first
 			await handleMethod({
 				jsonrpc: '2.0',
@@ -152,6 +152,7 @@ describe('MCP Tools', () => {
 				method: 'initialized',
 			})
 
+			// auth_status now requires authentication context
 			const response = await handleMethod({
 				jsonrpc: '2.0',
 				method: 'tools/call',
@@ -162,6 +163,55 @@ describe('MCP Tools', () => {
 				id: 2,
 			})
 
+			// Should return an internal error since no authentication context provided for testing
+			expect(response).toMatchObject({
+				jsonrpc: '2.0',
+				id: 2,
+				error: {
+					code: -32603,
+					message: 'Internal error: Missing authentication context for authenticated tool',
+				},
+			})
+		})
+	})
+
+	describe('Authenticated tools', () => {
+		it('should handle auth_status tool when authenticated', async () => {
+			const mockUserProfile = { username: 'testuser', id: 123 }
+			mockDiscogsClient.getUserProfile.mockResolvedValue(mockUserProfile)
+
+			// Initialize first
+			await handleMethod({
+				jsonrpc: '2.0',
+				method: 'initialize',
+				params: {
+					protocolVersion: '2024-11-05',
+					capabilities: {},
+					clientInfo: { name: 'Test', version: '1.0' },
+				},
+				id: 1,
+			})
+
+			// Send initialized notification
+			await handleMethod({
+				jsonrpc: '2.0',
+				method: 'initialized',
+			})
+
+			const response = await handleMethod(
+				{
+					jsonrpc: '2.0',
+					method: 'tools/call',
+					params: {
+						name: 'auth_status',
+						arguments: {},
+					},
+					id: 2,
+				},
+				await createMockAuthenticatedRequest(),
+				mockJwtSecret,
+			)
+
 			expect(response).toMatchObject({
 				jsonrpc: '2.0',
 				id: 2,
@@ -169,22 +219,22 @@ describe('MCP Tools', () => {
 					content: [
 						{
 							type: 'text',
-							text: expect.stringContaining('Authentication Status: Not Authenticated'),
+							text: expect.stringContaining('Authentication Status: Authenticated'),
 						},
 					],
 				},
 			})
 
-			// Verify it contains authentication instructions
+			// Verify it contains the username and user ID
 			const result = response?.result as { content: Array<{ type: string; text: string }> }
 			const responseText = result.content[0].text
-			expect(responseText).toContain('https://discogs-mcp-prod.rian-db8.workers.dev/login')
-			expect(responseText).toContain('Available without authentication')
-			expect(responseText).toContain('Requires authentication')
-		})
-	})
+			expect(responseText).toContain('testuser')
+			expect(responseText).toContain('**User ID:** 123')
+			expect(responseText).toContain('Available Tools')
 
-	describe('Authenticated tools', () => {
+			expect(mockDiscogsClient.getUserProfile).toHaveBeenCalledWith('test-token', 'test-secret', '', '')
+		})
+
 		it('should handle search_collection tool', async () => {
 			const mockUserProfile = { username: 'testuser', id: 123 }
 			const mockSearchResults = {

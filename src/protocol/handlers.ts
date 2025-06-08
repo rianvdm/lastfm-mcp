@@ -422,7 +422,7 @@ async function handleToolsCall(params: unknown): Promise<ToolCallResult> {
 		case 'auth_status': {
 			// This tool needs to check actual authentication status
 			// We need the request context to check for session
-			throw new Error('auth_status tool requires authentication context to check status')
+			throw new Error('Unknown tool: auth_status. This tool may require authentication.')
 		}
 		default:
 			throw new Error(`Unknown tool: ${name}. This tool may require authentication.`)
