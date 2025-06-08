@@ -178,10 +178,25 @@ describe('MCP Tools', () => {
 						{
 							type: 'text',
 							text: expect.stringContaining('Found 2 results for "rock"')
+						},
+						{
+							type: 'text',
+							text: expect.stringContaining('Structured Data')
 						}
 					]
 				}
 			})
+
+			// Verify the response includes release IDs
+			const result = response?.result as { content: Array<{ type: string; text: string }> }
+			const responseText = result.content[0].text
+			expect(responseText).toContain('[ID: 1]')
+			expect(responseText).toContain('Use the release IDs with the get_release tool')
+
+			// Verify structured data is included
+			const structuredDataText = result.content[1].text
+			expect(structuredDataText).toContain('"release_id": 1')
+			expect(structuredDataText).toContain('"instance_id": 1')
 
 			expect(mockDiscogsClient.getUserProfile).toHaveBeenCalledWith('test-token', 'test-secret', '', '')
 			expect(mockDiscogsClient.searchCollection).toHaveBeenCalledWith('testuser', 'test-token', 'test-secret', {
@@ -424,6 +439,95 @@ describe('MCP Tools', () => {
 					message: 'search_collection requires a query parameter'
 				}
 			})
+		})
+
+		it('should search collection by release ID 654321', async () => {
+			const mockUserProfile = { username: 'testuser', id: 123 }
+			const mockSearchResults = {
+				pagination: { pages: 1, page: 1, per_page: 50, items: 1, urls: {} },
+				releases: [
+					{
+						id: 654321,
+						instance_id: 2,
+						date_added: '2023-01-02T00:00:00-08:00',
+						rating: 5,
+						basic_information: {
+							id: 654321,
+							title: "Sgt. Pepper's Lonely Hearts Club Band",
+							year: 1967,
+							artists: [{ name: 'The Beatles', id: 1 }],
+							genres: ['Rock'],
+							styles: ['Psychedelic Rock'],
+							formats: [{ name: 'CD', qty: '1' }],
+							labels: [{ name: 'Parlophone', catno: 'CDP 7 46442 2' }],
+							resource_url: 'https://api.discogs.com/releases/654321',
+							thumb: '',
+							cover_image: '',
+						},
+					},
+				],
+			}
+
+			mockDiscogsClient.getUserProfile.mockResolvedValue(mockUserProfile)
+			mockDiscogsClient.searchCollection.mockResolvedValue(mockSearchResults)
+
+			// Initialize first
+			await handleMethod({
+				jsonrpc: '2.0',
+				method: 'initialize',
+				params: {
+					protocolVersion: '2024-11-05',
+					capabilities: {},
+					clientInfo: { name: 'Test', version: '1.0' },
+				},
+				id: 1,
+			})
+
+			const response = await handleMethod({
+				jsonrpc: '2.0',
+				method: 'tools/call',
+				params: {
+					name: 'search_collection',
+					arguments: { query: '654321', per_page: 25 }
+				},
+				id: 2,
+			}, await createMockAuthenticatedRequest(), mockJwtSecret)
+
+			expect(response).toMatchObject({
+				jsonrpc: '2.0',
+				id: 2,
+				result: {
+					content: [
+						{
+							type: 'text',
+							text: expect.stringContaining('Found 1 results for "654321"')
+						},
+						{
+							type: 'text',
+							text: expect.stringContaining('Structured Data')
+						}
+					]
+				}
+			})
+
+			// Verify the response includes the specific release ID
+			const result = response?.result as { content: Array<{ type: string; text: string }> }
+			const responseText = result.content[0].text
+			expect(responseText).toContain('[ID: 654321]')
+			expect(responseText).toContain("Sgt. Pepper's Lonely Hearts Club Band")
+			expect(responseText).toContain('(1967)')
+
+			// Verify structured data contains the release
+			const structuredDataText = result.content[1].text
+			expect(structuredDataText).toContain('"release_id": 654321')
+			expect(structuredDataText).toContain('"title": "Sgt. Pepper\'s Lonely Hearts Club Band"')
+			expect(structuredDataText).toContain('"year": 1967')
+
+			expect(mockDiscogsClient.getUserProfile).toHaveBeenCalledWith('test-token', 'test-secret', '', '')
+			expect(mockDiscogsClient.searchCollection).toHaveBeenCalledWith('testuser', 'test-token', 'test-secret', {
+				query: '654321',
+				per_page: 25,
+			}, '', '')
 		})
 	})
 }) 

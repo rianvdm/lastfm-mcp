@@ -293,6 +293,10 @@ export class DiscogsClient {
     const filteredReleases = allReleases.filter(item => {
       const release = item.basic_information
       
+      // Search by release ID (exact match or partial)
+      const releaseIdMatch = item.id.toString().includes(query) || 
+                            release.id.toString().includes(query)
+      
       // Search in artist names
       const artistMatch = release.artists.some(artist => 
         artist.name.toLowerCase().includes(query)
@@ -311,17 +315,21 @@ export class DiscogsClient {
         style.toLowerCase().includes(query)
       )
       
-      // Search in label names
+      // Search in label names and catalog numbers
       const labelMatch = release.labels.some(label => 
-        label.name.toLowerCase().includes(query)
+        label.name.toLowerCase().includes(query) ||
+        label.catno.toLowerCase().includes(query)
       )
       
       // Search in formats
       const formatMatch = release.formats.some(format => 
         format.name.toLowerCase().includes(query)
       )
+      
+      // Search by year
+      const yearMatch = release.year && release.year.toString().includes(query)
 
-      return artistMatch || titleMatch || genreMatch || styleMatch || labelMatch || formatMatch
+      return releaseIdMatch || artistMatch || titleMatch || genreMatch || styleMatch || labelMatch || formatMatch || yearMatch
     })
 
     // Implement pagination on filtered results
