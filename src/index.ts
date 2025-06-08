@@ -61,10 +61,14 @@ export default {
 
 			case '/sse':
 				// SSE endpoint for bidirectional communication
-				if (request.method !== 'GET') {
+				if (request.method === 'GET') {
+					return handleSSEConnection()
+				} else if (request.method === 'POST') {
+					// Handle JSON-RPC requests on SSE endpoint for mcp-remote compatibility
+					return handleMCPRequest(request, env)
+				} else {
 					return new Response('Method not allowed', { status: 405 })
 				}
-				return handleSSEConnection()
 
 			case '/login':
 				// OAuth login - redirect to Discogs
