@@ -43,23 +43,23 @@
 ## Chunk F – MCP Tools
 
 - [x] **F1** Add tools/list handler
-- [x] **F2** Implement search_collection tool
+- [x] **F2** Implement search_collection tool (✅ Fixed: Now properly filters collection with client-side search)
 - [x] **F3** Implement get_release and get_collection_stats tools
 - [x] **F4** Implement get_recommendations tool
 
 ## Chunk G – MCP Prompts
 
-- [ ] **G1** Add prompts/list handler
-- [ ] **G2** Implement browse_collection prompt
-- [ ] **G3** Implement find_music and collection_insights prompts
-- [ ] **G4** Test prompt responses
+- [x] **G1** Add prompts/list handler
+- [x] **G2** Implement browse_collection prompt
+- [x] **G3** Implement find_music and collection_insights prompts
+- [x] **G4** Test prompt responses
 
 ## Chunk H – Polish & Test Coverage
 
-- [ ] **H1** Proper JSON-RPC error responses
-- [ ] **H2** MCP protocol compliance validation
-- [ ] **H3** Integration tests with mock MCP client
-- [ ] **H4** End-to-end test: initialize → auth → use tools
+- [x] **H1** Proper JSON-RPC error responses
+- [x] **H2** MCP protocol compliance validation
+- [x] **H3** Integration tests with mock MCP client
+- [x] **H4** End-to-end test: initialize → auth → use tools
 
 ## Chunk I – Deployment
 
@@ -71,10 +71,10 @@
 
 ### Ongoing Quality Gates
 
-- [ ] Lint passes (`npm run lint`)
-- [ ] Unit tests pass (`npm test`)
-- [ ] Build succeeds (`npm run build`)
+- [x] Lint passes (`npm run lint`)
+- [x] Unit tests pass (`npm test`) - 182 tests passing
+- [x] Build succeeds (`npm run build`)
 - [ ] Code coverage ≥ 80 percent
-- [ ] MCP protocol compliance validated
+- [x] MCP protocol compliance validated
 
 > **Tip:** This checklist now reflects building a proper MCP server that will work with Claude Desktop and other MCP clients.
