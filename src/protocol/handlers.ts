@@ -5,8 +5,9 @@
 
 import { JSONRPCRequest, hasId } from '../types/jsonrpc'
 import { createResponse, createError, createMethodNotFoundError, createInvalidParamsError } from './parser'
-import { InitializeParams, InitializeResult, PROTOCOL_VERSION, SERVER_INFO, DEFAULT_CAPABILITIES, Resource, ResourcesListResult } from '../types/mcp'
+import { InitializeParams, InitializeResult, PROTOCOL_VERSION, SERVER_INFO, DEFAULT_CAPABILITIES, Resource, ResourcesListResult, ResourcesReadParams, ResourcesReadResult } from '../types/mcp'
 import { verifySessionToken, SessionPayload } from '../auth/jwt'
+import { discogsClient } from '../clients/discogs'
 
 // Track initialization state
 let isInitialized = false
@@ -106,6 +107,98 @@ export function handleResourcesList(): ResourcesListResult {
 }
 
 /**
+ * Handle resources/read request
+ */
+export async function handleResourcesRead(params: unknown, session: SessionPayload): Promise<ResourcesReadResult> {
+	// Validate params
+	if (!isResourcesReadParams(params)) {
+		throw createInvalidParamsError('Invalid resources/read params - uri is required')
+	}
+
+	const { uri } = params
+
+	try {
+		// Parse the URI to determine what resource is being requested
+		if (uri === 'discogs://collection') {
+			// Get user's complete collection
+			const userProfile = await discogsClient.getUserProfile(session.accessToken)
+			const collection = await discogsClient.searchCollection(userProfile.username, session.accessToken, {
+				per_page: 100, // Start with first 100 items
+			})
+
+			return {
+				contents: [
+					{
+						uri,
+						mimeType: 'application/json',
+						text: JSON.stringify(collection, null, 2),
+					},
+				],
+			}
+		} else if (uri.startsWith('discogs://release/')) {
+			// Get specific release details
+			const releaseId = uri.replace('discogs://release/', '')
+			if (!releaseId || releaseId.includes('{')) {
+				throw new Error('Invalid release URI - must specify a release ID')
+			}
+
+			const release = await discogsClient.getRelease(releaseId, session.accessToken)
+
+			return {
+				contents: [
+					{
+						uri,
+						mimeType: 'application/json',
+						text: JSON.stringify(release, null, 2),
+					},
+				],
+			}
+		} else if (uri.startsWith('discogs://search?q=')) {
+			// Search user's collection
+			const url = new URL(uri.replace('discogs://', 'https://example.com/'))
+			const query = url.searchParams.get('q')
+			
+			if (!query) {
+				throw new Error('Invalid search URI - query parameter is required')
+			}
+
+			const userProfile = await discogsClient.getUserProfile(session.accessToken)
+			const searchResults = await discogsClient.searchCollection(userProfile.username, session.accessToken, {
+				query,
+				per_page: 50,
+			})
+
+			return {
+				contents: [
+					{
+						uri,
+						mimeType: 'application/json',
+						text: JSON.stringify(searchResults, null, 2),
+					},
+				],
+			}
+		} else {
+			throw new Error(`Unsupported resource URI: ${uri}`)
+		}
+	} catch (error) {
+		console.error('Error reading resource:', error)
+		throw new Error(`Failed to read resource: ${error instanceof Error ? error.message : 'Unknown error'}`)
+	}
+}
+
+/**
+ * Type guard for ResourcesReadParams
+ */
+function isResourcesReadParams(params: unknown): params is ResourcesReadParams {
+	return (
+		typeof params === 'object' &&
+		params !== null &&
+		'uri' in params &&
+		typeof (params as ResourcesReadParams).uri === 'string'
+	)
+}
+
+/**
  * Main method router
  */
 export async function handleMethod(request: JSONRPCRequest, httpRequest?: Request, jwtSecret?: string) {
@@ -155,9 +248,15 @@ export async function handleMethod(request: JSONRPCRequest, httpRequest?: Reques
 			return hasId(request) ? createResponse(id!, resourcesResult) : null
 		}
 
-		case 'resources/read':
-			// TODO: Implement in E3
-			return hasId(request) ? createError(id!, -32601, 'Not implemented yet') : null
+		case 'resources/read': {
+			try {
+				const result = await handleResourcesRead(params, session)
+				return hasId(request) ? createResponse(id!, result) : null
+			} catch (error) {
+				const message = error instanceof Error ? error.message : 'Failed to read resource'
+				return hasId(request) ? createError(id!, -32603, message) : null
+			}
+		}
 
 		// Tools
 		case 'tools/list':
