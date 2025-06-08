@@ -53,14 +53,22 @@ describe('Discogs MCP Server', () => {
 		})
 	})
 
-	it('should reject GET requests to main endpoint', async () => {
+	it('should return server info for GET requests to main endpoint', async () => {
 		const request = new Request<unknown, IncomingRequestCfProperties>('http://example.com/')
 		const ctx = createExecutionContext()
 		const response = await worker.fetch(request, env, ctx)
 		await waitOnExecutionContext(ctx)
 
-		expect(response.status).toBe(405)
-		expect(await response.text()).toBe('Method not allowed')
+		expect(response.status).toBe(200)
+		expect(response.headers.get('content-type')).toBe('application/json')
+		
+		const result = await response.json()
+		expect(result).toMatchObject({
+			name: 'Discogs MCP Server',
+			version: '1.0.0',
+			description: 'Model Context Protocol server for Discogs collection access',
+			endpoints: expect.any(Object)
+		})
 	})
 
 	it('should handle parse errors', async () => {

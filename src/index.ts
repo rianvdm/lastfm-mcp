@@ -29,11 +29,35 @@ export default {
 		// Handle different endpoints
 		switch (url.pathname) {
 			case '/':
-				// Main MCP endpoint - accepts JSON-RPC messages
-				if (request.method !== 'POST') {
+				// Main MCP endpoint - accepts JSON-RPC messages for POST, info for GET
+				if (request.method === 'POST') {
+					return handleMCPRequest(request, env)
+				} else if (request.method === 'GET') {
+					return new Response(
+						JSON.stringify({
+							name: 'Discogs MCP Server',
+							version: '1.0.0',
+							description: 'Model Context Protocol server for Discogs collection access',
+							endpoints: {
+								'/': 'POST - MCP JSON-RPC endpoint',
+								'/sse': 'GET - Server-Sent Events endpoint',
+								'/login': 'GET - OAuth login',
+								'/callback': 'GET - OAuth callback',
+								'/mcp-auth': 'GET - MCP authentication',
+								'/health': 'GET - Health check',
+							},
+						}),
+						{
+							status: 200,
+							headers: {
+								'Content-Type': 'application/json',
+								'Access-Control-Allow-Origin': '*',
+							},
+						},
+					)
+				} else {
 					return new Response('Method not allowed', { status: 405 })
 				}
-				return handleMCPRequest(request, env)
 
 			case '/sse':
 				// SSE endpoint for bidirectional communication
@@ -62,6 +86,24 @@ export default {
 					return new Response('Method not allowed', { status: 405 })
 				}
 				return handleMCPAuth(request, env)
+
+			case '/health':
+				// Health check endpoint
+				return new Response(
+					JSON.stringify({
+						status: 'ok',
+						timestamp: new Date().toISOString(),
+						version: '1.0.0',
+						service: 'discogs-mcp',
+					}),
+					{
+						status: 200,
+						headers: {
+							'Content-Type': 'application/json',
+							'Access-Control-Allow-Origin': '*',
+						},
+					},
+				)
 
 			default:
 				return new Response('Not found', { status: 404 })
