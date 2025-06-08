@@ -5,7 +5,7 @@
 
 import { JSONRPCRequest, hasId } from '../types/jsonrpc'
 import { createResponse, createError, createMethodNotFoundError, createInvalidParamsError } from './parser'
-import { InitializeParams, InitializeResult, PROTOCOL_VERSION, SERVER_INFO, DEFAULT_CAPABILITIES, Resource, ResourcesListResult, ResourcesReadParams, ResourcesReadResult } from '../types/mcp'
+import { InitializeParams, InitializeResult, PROTOCOL_VERSION, SERVER_INFO, DEFAULT_CAPABILITIES, Resource, ResourcesListResult, ResourcesReadParams, ResourcesReadResult, Prompt, PromptsListParams, PromptsListResult, PromptsGetParams, PromptsGetResult } from '../types/mcp'
 import { verifySessionToken, SessionPayload } from '../auth/jwt'
 import { discogsClient } from '../clients/discogs'
 
@@ -189,6 +189,103 @@ export async function handleResourcesRead(params: unknown, session: SessionPaylo
 	} catch (error) {
 		console.error('Error reading resource:', error)
 		throw new Error(`Failed to read resource: ${error instanceof Error ? error.message : 'Unknown error'}`)
+	}
+}
+
+/**
+ * Handle prompts/list request
+ */
+export function handlePromptsList(params?: unknown): PromptsListResult {
+	// Validate params if provided
+	if (params && !isPromptsListParams(params)) {
+		throw new Error('Invalid prompts/list params')
+	}
+
+	const prompts: Prompt[] = [
+		{
+			name: 'browse_collection',
+			description: 'Browse and explore your Discogs music collection',
+		},
+		{
+			name: 'find_music',
+			description: 'Find specific music in your collection',
+			arguments: [
+				{
+					name: 'query',
+					description: 'Search query for finding music (artist, album, track, etc.)',
+					required: true,
+				},
+			],
+		},
+		{
+			name: 'collection_insights',
+			description: 'Get insights and statistics about your music collection',
+		},
+	]
+
+	return { prompts }
+}
+
+/**
+ * Handle prompts/get request
+ */
+export function handlePromptsGet(params: unknown): PromptsGetResult {
+	// Validate params
+	if (!isPromptsGetParams(params)) {
+		throw new Error('Invalid prompts/get params - name is required')
+	}
+
+	const { name, arguments: args } = params
+
+	switch (name) {
+		case 'browse_collection':
+			return {
+				description: 'Browse and explore your Discogs music collection',
+				messages: [
+					{
+						role: 'user',
+						content: {
+							type: 'text',
+							text: 'Help me explore my Discogs music collection. Show me interesting insights, recommend albums to listen to, or help me discover patterns in my collection. You can use the available tools to search my collection, get detailed release information, view collection statistics, and get personalized recommendations.',
+						},
+					},
+				],
+			}
+
+		case 'find_music':
+			const query = args?.query as string
+			if (!query) {
+				throw new Error('find_music prompt requires a query argument')
+			}
+			return {
+				description: 'Find specific music in your collection',
+				messages: [
+					{
+						role: 'user',
+						content: {
+							type: 'text',
+							text: `Help me find music in my Discogs collection related to: "${query}". Search through my collection and provide detailed information about any matching releases. If you find multiple matches, help me understand the differences and recommend which ones might be most interesting.`,
+						},
+					},
+				],
+			}
+
+		case 'collection_insights':
+			return {
+				description: 'Get insights about your music collection',
+				messages: [
+					{
+						role: 'user',
+						content: {
+							type: 'text',
+							text: 'Analyze my Discogs music collection and provide interesting insights. Look at my collection statistics, identify patterns in genres, decades, formats, and artists. Help me understand what my collection says about my musical tastes and suggest areas where I might want to expand my collection.',
+						},
+					},
+				],
+			}
+
+		default:
+			throw new Error(`Unknown prompt: ${name}`)
 	}
 }
 
@@ -493,6 +590,29 @@ function isResourcesReadParams(params: unknown): params is ResourcesReadParams {
 }
 
 /**
+ * Type guard for PromptsListParams
+ */
+function isPromptsListParams(params: unknown): params is PromptsListParams {
+	return (
+		typeof params === 'object' &&
+		params !== null &&
+		(!('cursor' in params) || typeof (params as PromptsListParams).cursor === 'string')
+	)
+}
+
+/**
+ * Type guard for PromptsGetParams
+ */
+function isPromptsGetParams(params: unknown): params is PromptsGetParams {
+	return (
+		typeof params === 'object' &&
+		params !== null &&
+		'name' in params &&
+		typeof (params as PromptsGetParams).name === 'string'
+	)
+}
+
+/**
  * Main method router
  */
 export async function handleMethod(request: JSONRPCRequest, httpRequest?: Request, jwtSecret?: string, env?: Record<string, string>) {
@@ -655,9 +775,15 @@ export async function handleMethod(request: JSONRPCRequest, httpRequest?: Reques
 			}
 		}
 
-		case 'prompts/list':
-			// TODO: Implement in G1
-			return hasId(request) ? createResponse(id!, { prompts: [] }) : null
+		case 'prompts/list': {
+			try {
+				const result = handlePromptsList(params)
+				return hasId(request) ? createResponse(id!, result) : null
+			} catch (error) {
+				const message = error instanceof Error ? error.message : 'Failed to list prompts'
+				return hasId(request) ? createError(id!, -32603, message) : null
+			}
+		}
 	}
 
 	// All other methods require authentication
@@ -693,9 +819,15 @@ export async function handleMethod(request: JSONRPCRequest, httpRequest?: Reques
 		// Tools (authenticated tools would go here in the future)
 
 		// Prompts
-		case 'prompts/get':
-			// TODO: Implement in G2-G3
-			return hasId(request) ? createError(id!, -32601, 'Not implemented yet') : null
+		case 'prompts/get': {
+			try {
+				const result = handlePromptsGet(params)
+				return hasId(request) ? createResponse(id!, result) : null
+			} catch (error) {
+				const message = error instanceof Error ? error.message : 'Failed to get prompt'
+				return hasId(request) ? createError(id!, -32603, message) : null
+			}
+		}
 
 		default:
 			if (hasId(request)) {

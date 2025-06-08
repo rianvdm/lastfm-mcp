@@ -78,6 +78,46 @@ export interface ResourcesReadResult {
 	contents: ResourceContents[]
 }
 
+// MCP Prompt types
+export interface PromptArgument {
+	name: string
+	description?: string
+	required?: boolean
+}
+
+export interface Prompt {
+	name: string
+	description?: string
+	arguments?: PromptArgument[]
+}
+
+export interface PromptsListParams {
+	cursor?: string
+}
+
+export interface PromptsListResult {
+	prompts: Prompt[]
+	nextCursor?: string
+}
+
+export interface PromptsGetParams {
+	name: string
+	arguments?: Record<string, unknown>
+}
+
+export interface PromptMessage {
+	role: 'user' | 'assistant'
+	content: {
+		type: 'text'
+		text: string
+	}
+}
+
+export interface PromptsGetResult {
+	description?: string
+	messages: PromptMessage[]
+}
+
 // Server info
 export const SERVER_INFO = {
 	name: 'discogs-mcp',

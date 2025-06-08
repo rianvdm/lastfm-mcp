@@ -216,7 +216,28 @@ describe('MCP Protocol Handlers', () => {
 			expect(promptsResponse).toMatchObject({
 				jsonrpc: '2.0',
 				id: 4,
-				result: { prompts: [] },
+				result: { 
+					prompts: expect.arrayContaining([
+						expect.objectContaining({
+							name: 'browse_collection',
+							description: expect.any(String)
+						}),
+						expect.objectContaining({
+							name: 'find_music',
+							description: expect.any(String),
+							arguments: expect.arrayContaining([
+								expect.objectContaining({
+									name: 'query',
+									required: true
+								})
+							])
+						}),
+						expect.objectContaining({
+							name: 'collection_insights',
+							description: expect.any(String)
+						})
+					])
+				},
 			})
 		})
 
@@ -344,7 +365,7 @@ describe('MCP Protocol Handlers', () => {
 				},
 			})
 
-			// Test prompts/list (still empty for now)
+			// Test prompts/list (now has actual prompts)
 			const promptsResponse = await handleMethod({
 				jsonrpc: '2.0',
 				method: 'prompts/list',
@@ -354,7 +375,28 @@ describe('MCP Protocol Handlers', () => {
 			expect(promptsResponse).toMatchObject({
 				jsonrpc: '2.0',
 				id: 4,
-				result: { prompts: [] },
+				result: { 
+					prompts: expect.arrayContaining([
+						expect.objectContaining({
+							name: 'browse_collection',
+							description: expect.any(String)
+						}),
+						expect.objectContaining({
+							name: 'find_music',
+							description: expect.any(String),
+							arguments: expect.arrayContaining([
+								expect.objectContaining({
+									name: 'query',
+									required: true
+								})
+							])
+						}),
+						expect.objectContaining({
+							name: 'collection_insights',
+							description: expect.any(String)
+						})
+					])
+				},
 			})
 		})
 	})
