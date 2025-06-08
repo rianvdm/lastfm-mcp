@@ -5,6 +5,7 @@
 	"type": "module",
 	"scripts": {
 		"deploy": "wrangler deploy",
+		"deploy:prod": "wrangler deploy --env production",
 		"dev": "wrangler dev --port 8787",
 		"start": "wrangler dev",
 		"test": "vitest",
@@ -12,7 +13,8 @@
 		"lint": "eslint src --ext .ts,.tsx",
 		"format": "prettier --write .",
 		"format:check": "prettier --check .",
-		"build": "wrangler deploy --dry-run --outdir dist"
+		"build": "wrangler deploy --dry-run --outdir dist",
+		"setup:prod": "./scripts/setup-production.sh"
 	},
 	"devDependencies": {
 		"@cloudflare/vitest-pool-workers": "^0.8.19",

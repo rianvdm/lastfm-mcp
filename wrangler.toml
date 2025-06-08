@@ -1,0 +1,41 @@
+name = "discogs-mcp"
+main = "src/index.ts"
+compatibility_date = "2025-06-07"
+compatibility_flags = ["global_fetch_strictly_public"]
+
+[observability]
+enabled = true
+
+# Development environment (default)
+[[kv_namespaces]]
+binding = "MCP_LOGS"
+id = "b0c83f4b63a94c7490a609095e35b84f"
+
+[[kv_namespaces]]
+binding = "MCP_RL"
+id = "b4caaaa688cc45d2a9a85fe67ba53bfc"
+
+[[kv_namespaces]]
+binding = "MCP_SESSIONS"
+id = "a0bc40f523d54a6ab70fa947ac3daeaf"
+
+# Production environment
+[env.production]
+name = "discogs-mcp-prod"
+
+[[env.production.kv_namespaces]]
+binding = "MCP_LOGS"
+id = "prod-logs-namespace-id"  # Replace with actual production KV namespace ID
+
+[[env.production.kv_namespaces]]
+binding = "MCP_RL"
+id = "prod-rl-namespace-id"    # Replace with actual production KV namespace ID
+
+[[env.production.kv_namespaces]]
+binding = "MCP_SESSIONS"
+id = "prod-sessions-namespace-id"  # Replace with actual production KV namespace ID
+
+# Secrets (set via wrangler secret put):
+# - DISCOGS_CONSUMER_KEY
+# - DISCOGS_CONSUMER_SECRET
+# - JWT_SECRET 
