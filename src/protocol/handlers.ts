@@ -470,6 +470,7 @@ async function handleAuthenticatedToolsCall(params: unknown, session: SessionPay
 				decade: { type: 'string' },
 				similar_to: { type: 'string' },
 				query: { type: 'string' },
+				format: { type: 'string' },
 			},
 			required: [],
 		},
@@ -701,6 +702,7 @@ If the problem persists, please check that your Discogs account is accessible.`,
 			const decade = args?.decade as string
 			const similarTo = args?.similar_to as string
 			const query = args?.query as string
+			const format = args?.format as string
 
 			// Type for release with relevance score
 			type ReleaseWithRelevance = DiscogsCollectionItem & { relevanceScore?: number }
@@ -756,6 +758,15 @@ If the problem persists, please check that your Discogs account is accessible.`,
 							return year && year >= decadeNum && year < decadeNum + 10
 						})
 					}
+				}
+
+				// Filter by format
+				if (format) {
+					filteredReleases = filteredReleases.filter((release) => {
+						return release.basic_information.formats?.some((f) => 
+							f.name.toLowerCase().includes(format.toLowerCase())
+						)
+					})
 				}
 
 				// Filter by similarity to artist/album using musical characteristics
@@ -904,10 +915,11 @@ If the problem persists, please check that your Discogs account is accessible.`,
 				// Build response
 				let text = `**Context-Aware Music Recommendations**\n\n`
 
-				if (genre || decade || similarTo || query) {
+				if (genre || decade || similarTo || query || format) {
 					text += `**Filters Applied:**\n`
 					if (genre) text += `• Genre: ${genre}\n`
 					if (decade) text += `• Decade: ${decade}\n`
+					if (format) text += `• Format: ${format}\n`
 					if (similarTo) text += `• Similar to: ${similarTo}\n`
 					if (query) text += `• Query: ${query}\n`
 					text += `\n`
@@ -924,13 +936,14 @@ If the problem persists, please check that your Discogs account is accessible.`,
 					recommendations.forEach((release, index) => {
 						const info = release.basic_information
 						const artists = info.artists.map((a) => a.name).join(', ')
+						const formats = info.formats?.map((f) => f.name).join(', ') || 'Unknown'
 						const genres = info.genres?.join(', ') || 'Unknown'
 						const year = info.year || 'Unknown'
 						const rating = release.rating > 0 ? ` ⭐${release.rating}` : ''
 						const relevance = query && 'relevanceScore' in release ? ` (${Math.round((release as ReleaseWithRelevance).relevanceScore! * 100)}% match)` : ''
 
 						text += `${index + 1}. **${artists} - ${info.title}** (${year})${rating}${relevance}\n`
-						text += `   Genres: ${genres}\n`
+						text += `   Format: ${formats} | Genres: ${genres}\n`
 						if (info.styles && info.styles.length > 0) {
 							text += `   Styles: ${info.styles.join(', ')}\n`
 						}
@@ -1138,6 +1151,10 @@ export async function handleMethod(request: JSONRPCRequest, httpRequest?: Reques
 							query: {
 								type: 'string',
 								description: 'General query for contextual recommendations (e.g., "hard bop albums from the 60s")',
+							},
+							format: {
+								type: 'string',
+								description: 'Filter recommendations by format (e.g., "Vinyl", "CD", "Cassette", "Digital")',
 							},
 						},
 						required: [],
