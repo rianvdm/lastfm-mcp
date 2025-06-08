@@ -36,6 +36,7 @@ Built on Cloudflare Workers with:
 - Discogs API for collection data
 - MCP (Model Context Protocol) for AI assistant integration
 - No persistent storage or caching
+- Automated CI/CD deployment to production
 
 ## Development
 
