@@ -204,9 +204,15 @@ export class DiscogsClient {
     consumerKey: string,
     consumerSecret: string
   ): Promise<DiscogsCollectionResponse> {
+    // If there's a query, we need to fetch all items and filter client-side
+    // because Discogs API doesn't support server-side search within collections
+    if (options.query) {
+      return this.searchCollectionWithQuery(username, accessToken, accessTokenSecret, options, consumerKey, consumerSecret)
+    }
+
+    // No query - use regular collection fetching with API pagination
     const params = new URLSearchParams()
     
-    if (options.query) params.append('q', options.query)
     if (options.page) params.append('page', options.page.toString())
     if (options.per_page) params.append('per_page', options.per_page.toString())
     if (options.sort) params.append('sort', options.sort)
@@ -228,6 +234,116 @@ export class DiscogsClient {
     }
 
     return response.json()
+  }
+
+  /**
+   * Search collection with client-side filtering
+   */
+  private async searchCollectionWithQuery(
+    username: string,
+    accessToken: string,
+    accessTokenSecret: string,
+    options: {
+      query?: string
+      page?: number
+      per_page?: number
+      sort?: 'added' | 'artist' | 'title' | 'year'
+      sort_order?: 'asc' | 'desc'
+    },
+    consumerKey: string,
+    consumerSecret: string
+  ): Promise<DiscogsCollectionResponse> {
+    const query = options.query?.toLowerCase() || ''
+    const requestedPage = options.page || 1
+    const requestedPerPage = options.per_page || 50
+
+    // Fetch all collection items (we need to paginate through all pages)
+    let allReleases: DiscogsCollectionItem[] = []
+    let page = 1
+    let totalPages = 1
+
+    do {
+      const params = new URLSearchParams()
+      params.append('page', page.toString())
+      params.append('per_page', '100') // Max per page to minimize requests
+      if (options.sort) params.append('sort', options.sort)
+      if (options.sort_order) params.append('sort_order', options.sort_order)
+
+      const url = `${this.baseUrl}/users/${username}/collection/folders/0/releases?${params.toString()}`
+      const authHeader = await this.createOAuthHeader(url, 'GET', accessToken, accessTokenSecret, consumerKey, consumerSecret)
+      
+      const response = await fetch(url, {
+        headers: {
+          'Authorization': authHeader,
+          'User-Agent': this.userAgent,
+        },
+      })
+
+      if (!response.ok) {
+        throw new Error(`Failed to fetch collection: ${response.status} ${response.statusText}`)
+      }
+
+      const data: DiscogsCollectionResponse = await response.json()
+      allReleases = allReleases.concat(data.releases)
+      totalPages = data.pagination.pages
+      page++
+    } while (page <= totalPages)
+
+    // Filter releases based on query
+    const filteredReleases = allReleases.filter(item => {
+      const release = item.basic_information
+      
+      // Search in artist names
+      const artistMatch = release.artists.some(artist => 
+        artist.name.toLowerCase().includes(query)
+      )
+      
+      // Search in title
+      const titleMatch = release.title.toLowerCase().includes(query)
+      
+      // Search in genres
+      const genreMatch = release.genres.some(genre => 
+        genre.toLowerCase().includes(query)
+      )
+      
+      // Search in styles
+      const styleMatch = release.styles.some(style => 
+        style.toLowerCase().includes(query)
+      )
+      
+      // Search in label names
+      const labelMatch = release.labels.some(label => 
+        label.name.toLowerCase().includes(query)
+      )
+      
+      // Search in formats
+      const formatMatch = release.formats.some(format => 
+        format.name.toLowerCase().includes(query)
+      )
+
+      return artistMatch || titleMatch || genreMatch || styleMatch || labelMatch || formatMatch
+    })
+
+    // Implement pagination on filtered results
+    const totalItems = filteredReleases.length
+    const totalFilteredPages = Math.ceil(totalItems / requestedPerPage)
+    const startIndex = (requestedPage - 1) * requestedPerPage
+    const endIndex = startIndex + requestedPerPage
+    const paginatedReleases = filteredReleases.slice(startIndex, endIndex)
+
+    return {
+      pagination: {
+        pages: totalFilteredPages,
+        page: requestedPage,
+        per_page: requestedPerPage,
+        items: totalItems,
+        urls: {
+          next: requestedPage < totalFilteredPages ? `page=${requestedPage + 1}` : undefined,
+          last: totalFilteredPages > 1 ? `page=${totalFilteredPages}` : undefined,
+        }
+      },
+      releases: paginatedReleases
+    }
   }
 
   /**
