@@ -4,8 +4,8 @@
  */
 
 import { JSONRPCRequest, hasId, mapErrorToJSONRPC, MCPErrorCode, ErrorCode } from '../types/jsonrpc'
-import { createResponse, createError, createMethodNotFoundError, createInvalidParamsError } from './parser'
-import { InitializeParams, InitializeResult, PROTOCOL_VERSION, SERVER_INFO, DEFAULT_CAPABILITIES, Resource, ResourcesListResult, ResourcesReadParams, ResourcesReadResult, Prompt, PromptsListParams, PromptsListResult, PromptsGetParams, PromptsGetResult } from '../types/mcp'
+import { createResponse, createError, createMethodNotFoundError } from './parser'
+import { InitializeResult, PROTOCOL_VERSION, SERVER_INFO, DEFAULT_CAPABILITIES, Resource, ResourcesListResult, ResourcesReadResult, Prompt, PromptsListParams, PromptsListResult, PromptsGetResult } from '../types/mcp'
 import type { Env } from '../types/env'
 import { 
 	validateJSONRPCMessage, 
@@ -669,14 +669,7 @@ function isToolsCallParams(params: unknown): params is ToolsCallParams {
 /**
  * Type guard for ResourcesReadParams
  */
-function isResourcesReadParams(params: unknown): params is ResourcesReadParams {
-	return (
-		typeof params === 'object' &&
-		params !== null &&
-		'uri' in params &&
-		typeof (params as ResourcesReadParams).uri === 'string'
-	)
-}
+
 
 /**
  * Type guard for PromptsListParams
@@ -692,14 +685,7 @@ function isPromptsListParams(params: unknown): params is PromptsListParams {
 /**
  * Type guard for PromptsGetParams
  */
-function isPromptsGetParams(params: unknown): params is PromptsGetParams {
-	return (
-		typeof params === 'object' &&
-		params !== null &&
-		'name' in params &&
-		typeof (params as PromptsGetParams).name === 'string'
-	)
-}
+
 
 /**
  * Main method router
@@ -946,21 +932,7 @@ export async function handleMethod(request: JSONRPCRequest, httpRequest?: Reques
 	}
 }
 
-/**
- * Type guard for InitializeParams
- */
-function isInitializeParams(params: unknown): params is InitializeParams {
-	return (
-		typeof params === 'object' &&
-		params !== null &&
-		'protocolVersion' in params &&
-		typeof (params as InitializeParams).protocolVersion === 'string' &&
-		'capabilities' in params &&
-		typeof (params as InitializeParams).capabilities === 'object' &&
-		'clientInfo' in params &&
-		typeof (params as InitializeParams).clientInfo === 'object'
-	)
-}
+
 
 /**
  * Reset initialization state (for testing)

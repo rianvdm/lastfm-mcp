@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { handleMethod, resetInitialization } from '../../src/protocol/handlers'
+import { resetProtocolState } from '../../src/protocol/validation'
 import { discogsClient } from '../../src/clients/discogs'
 import { createSessionToken } from '../../src/auth/jwt'
 
@@ -39,6 +40,7 @@ describe('MCP Tools', () => {
 	beforeEach(() => {
 		vi.clearAllMocks()
 		resetInitialization()
+		resetProtocolState()
 	})
 
 	describe('Non-authenticated tools', () => {
@@ -53,6 +55,12 @@ describe('MCP Tools', () => {
 					clientInfo: { name: 'Test', version: '1.0' },
 				},
 				id: 1,
+			})
+
+			// Send initialized notification
+			await handleMethod({
+				jsonrpc: '2.0',
+				method: 'initialized',
 			})
 
 			const response = await handleMethod({
@@ -90,6 +98,12 @@ describe('MCP Tools', () => {
 					clientInfo: { name: 'Test', version: '1.0' },
 				},
 				id: 1,
+			})
+
+			// Send initialized notification
+			await handleMethod({
+				jsonrpc: '2.0',
+				method: 'initialized',
 			})
 
 			const response = await handleMethod({
@@ -158,6 +172,12 @@ describe('MCP Tools', () => {
 					clientInfo: { name: 'Test', version: '1.0' },
 				},
 				id: 1,
+			})
+
+			// Send initialized notification
+			await handleMethod({
+				jsonrpc: '2.0',
+				method: 'initialized',
 			})
 
 			const response = await handleMethod({
@@ -239,6 +259,12 @@ describe('MCP Tools', () => {
 				id: 1,
 			})
 
+			// Send initialized notification
+			await handleMethod({
+				jsonrpc: '2.0',
+				method: 'initialized',
+			})
+
 			const response = await handleMethod({
 				jsonrpc: '2.0',
 				method: 'tools/call',
@@ -293,6 +319,12 @@ describe('MCP Tools', () => {
 				id: 1,
 			})
 
+			// Send initialized notification
+			await handleMethod({
+				jsonrpc: '2.0',
+				method: 'initialized',
+			})
+
 			const response = await handleMethod({
 				jsonrpc: '2.0',
 				method: 'tools/call',
@@ -336,27 +368,33 @@ describe('MCP Tools', () => {
 			mockDiscogsClient.getUserProfile.mockResolvedValue(mockUserProfile)
 			mockDiscogsClient.getCollectionStats.mockResolvedValue(mockStats)
 
-			// Initialize first
-			await handleMethod({
-				jsonrpc: '2.0',
-				method: 'initialize',
-				params: {
-					protocolVersion: '2024-11-05',
-					capabilities: {},
-					clientInfo: { name: 'Test', version: '1.0' },
-				},
-				id: 1,
-			})
+					// Initialize first
+		await handleMethod({
+			jsonrpc: '2.0',
+			method: 'initialize',
+			params: {
+				protocolVersion: '2024-11-05',
+				capabilities: {},
+				clientInfo: { name: 'Test', version: '1.0' },
+			},
+			id: 1,
+		})
 
-			const response = await handleMethod({
-				jsonrpc: '2.0',
-				method: 'tools/call',
-				params: {
-					name: 'get_recommendations',
-					arguments: { limit: 5 }
-				},
-				id: 2,
-			}, await createMockAuthenticatedRequest(), mockJwtSecret)
+		// Send initialized notification
+		await handleMethod({
+			jsonrpc: '2.0',
+			method: 'initialized',
+		})
+
+		const response = await handleMethod({
+			jsonrpc: '2.0',
+			method: 'tools/call',
+			params: {
+				name: 'get_recommendations',
+				arguments: { limit: 5 }
+			},
+			id: 2,
+		}, await createMockAuthenticatedRequest(), mockJwtSecret)
 
 			expect(response).toMatchObject({
 				jsonrpc: '2.0',
@@ -376,27 +414,33 @@ describe('MCP Tools', () => {
 	})
 
 	it('should require authentication for authenticated tools', async () => {
-			// Initialize first
-			await handleMethod({
-				jsonrpc: '2.0',
-				method: 'initialize',
-				params: {
-					protocolVersion: '2024-11-05',
-					capabilities: {},
-					clientInfo: { name: 'Test', version: '1.0' },
-				},
-				id: 1,
-			})
+					// Initialize first
+		await handleMethod({
+			jsonrpc: '2.0',
+			method: 'initialize',
+			params: {
+				protocolVersion: '2024-11-05',
+				capabilities: {},
+				clientInfo: { name: 'Test', version: '1.0' },
+			},
+			id: 1,
+		})
 
-			const response = await handleMethod({
-				jsonrpc: '2.0',
-				method: 'tools/call',
-				params: {
-					name: 'search_collection',
-					arguments: { query: 'rock' }
-				},
-				id: 2,
-			})
+		// Send initialized notification
+		await handleMethod({
+			jsonrpc: '2.0',
+			method: 'initialized',
+		})
+
+		const response = await handleMethod({
+			jsonrpc: '2.0',
+			method: 'tools/call',
+			params: {
+				name: 'search_collection',
+				arguments: { query: 'rock' }
+			},
+			id: 2,
+		})
 
 			expect(response).toMatchObject({
 				jsonrpc: '2.0',
@@ -421,6 +465,12 @@ describe('MCP Tools', () => {
 				id: 1,
 			})
 
+			// Send initialized notification
+			await handleMethod({
+				jsonrpc: '2.0',
+				method: 'initialized',
+			})
+
 			const response = await handleMethod({
 				jsonrpc: '2.0',
 				method: 'tools/call',
@@ -436,7 +486,7 @@ describe('MCP Tools', () => {
 				id: 2,
 				error: {
 					code: -32602,
-					message: 'search_collection requires a query parameter'
+					message: 'Missing required parameter: query'
 				}
 			})
 		})
@@ -481,6 +531,12 @@ describe('MCP Tools', () => {
 					clientInfo: { name: 'Test', version: '1.0' },
 				},
 				id: 1,
+			})
+
+			// Send initialized notification
+			await handleMethod({
+				jsonrpc: '2.0',
+				method: 'initialized',
 			})
 
 			const response = await handleMethod({

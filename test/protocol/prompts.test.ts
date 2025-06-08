@@ -122,9 +122,9 @@ describe('MCP Prompts', () => {
 			expect(() => handlePromptsGet({ name: 'unknown_prompt' })).toThrow('Unknown prompt: unknown_prompt')
 		})
 
-		it('should throw error for invalid params', () => {
-			expect(() => handlePromptsGet({})).toThrow('Invalid prompts/get params - name is required')
-			expect(() => handlePromptsGet('invalid')).toThrow('Invalid prompts/get params - name is required')
-		})
+		  it('should throw error for invalid params', () => {
+    expect(() => handlePromptsGet({})).toThrow('name parameter must be a string')
+    expect(() => handlePromptsGet('invalid')).toThrow('prompts/get params must be an object')
+  })
 	})
 }) 

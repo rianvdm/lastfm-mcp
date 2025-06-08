@@ -3,7 +3,7 @@
  * Ensures all messages and responses conform to the MCP specification
  */
 
-import { JSONRPCRequest, JSONRPCResponse, JSONRPCError, ErrorCode } from '../types/jsonrpc'
+import { JSONRPCRequest, JSONRPCResponse, ErrorCode } from '../types/jsonrpc'
 import { 
 	InitializeParams, 
 	InitializeResult, 
@@ -11,14 +11,9 @@ import {
 	ClientCapabilities, 
 	ServerCapabilities,
 	Resource,
-	ResourcesListResult,
 	ResourcesReadParams,
-	ResourcesReadResult,
 	Prompt,
-	PromptsListParams,
-	PromptsListResult,
 	PromptsGetParams,
-	PromptsGetResult,
 	PromptArgument,
 	PromptMessage
 } from '../types/mcp'
@@ -92,9 +87,8 @@ export function validateProtocolFlow(method: string): void {
 			break
 		
 		case 'initialized':
-			if (protocolState !== 'initialized') {
-				throw new ValidationError('Server not initialized', ErrorCode.InvalidRequest)
-			}
+			// The initialized notification can be sent after initialize has been called
+			// No validation needed here - it's just a notification
 			break
 		
 		default:

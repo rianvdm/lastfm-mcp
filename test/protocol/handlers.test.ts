@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest'
 import { handleInitialize, handleMethod, resetInitialization } from '../../src/protocol/handlers'
+import { resetProtocolState } from '../../src/protocol/validation'
 import { PROTOCOL_VERSION, SERVER_INFO, DEFAULT_CAPABILITIES } from '../../src/types/mcp'
 
 // Mock authenticated request helper
@@ -30,6 +31,7 @@ describe('MCP Protocol Handlers', () => {
 	beforeEach(() => {
 		// Reset initialization state before each test
 		resetInitialization()
+		resetProtocolState()
 	})
 
 	describe('handleInitialize', () => {
@@ -93,7 +95,7 @@ describe('MCP Protocol Handlers', () => {
 
 			const response = await handleMethod(request)
 
-			expect(response).toMatchObject({
+			expect(response).toEqual({
 				jsonrpc: '2.0',
 				id: 1,
 				result: {
@@ -159,6 +161,12 @@ describe('MCP Protocol Handlers', () => {
 				id: 1,
 			})
 
+			// Send initialized notification
+			await handleMethod({
+				jsonrpc: '2.0',
+				method: 'initialized',
+			})
+
 			// resources/list should work without authentication
 			const resourcesResponse = await handleMethod({
 				jsonrpc: '2.0',
@@ -166,7 +174,7 @@ describe('MCP Protocol Handlers', () => {
 				id: 2,
 			})
 
-			expect(resourcesResponse).toMatchObject({
+			expect(resourcesResponse).toEqual({
 				jsonrpc: '2.0',
 				id: 2,
 				result: {
@@ -187,7 +195,7 @@ describe('MCP Protocol Handlers', () => {
 				id: 3,
 			})
 
-			expect(toolsResponse).toMatchObject({
+			expect(toolsResponse).toEqual({
 				jsonrpc: '2.0',
 				id: 3,
 				result: { 
@@ -254,6 +262,12 @@ describe('MCP Protocol Handlers', () => {
 				id: 1,
 			})
 
+			// Send initialized notification
+			await handleMethod({
+				jsonrpc: '2.0',
+				method: 'initialized',
+			})
+
 			// resources/read should require authentication
 			const response = await handleMethod({
 				jsonrpc: '2.0',
@@ -262,7 +276,7 @@ describe('MCP Protocol Handlers', () => {
 				id: 2,
 			})
 
-			expect(response).toMatchObject({
+			expect(response).toEqual({
 				jsonrpc: '2.0',
 				id: 2,
 				error: {
@@ -285,6 +299,12 @@ describe('MCP Protocol Handlers', () => {
 				id: 1,
 			})
 
+			// Send initialized notification
+			await handleMethod({
+				jsonrpc: '2.0',
+				method: 'initialized',
+			})
+
 			// Then call unknown method with authentication
 			const response = await handleMethod({
 				jsonrpc: '2.0',
@@ -292,7 +312,7 @@ describe('MCP Protocol Handlers', () => {
 				id: 2,
 			}, createMockAuthenticatedRequest(), mockJwtSecret)
 
-			expect(response).toMatchObject({
+			expect(response).toEqual({
 				jsonrpc: '2.0',
 				id: 2,
 				error: {
@@ -316,6 +336,12 @@ describe('MCP Protocol Handlers', () => {
 				id: 1,
 			})
 
+			// Send initialized notification
+			await handleMethod({
+				jsonrpc: '2.0',
+				method: 'initialized',
+			})
+
 			const mockRequest = createMockAuthenticatedRequest()
 
 			// Test resources/list
@@ -325,7 +351,7 @@ describe('MCP Protocol Handlers', () => {
 				id: 2,
 			}, mockRequest, mockJwtSecret)
 
-			expect(resourcesResponse).toMatchObject({
+			expect(resourcesResponse).toEqual({
 				jsonrpc: '2.0',
 				id: 2,
 				result: { 
@@ -346,7 +372,7 @@ describe('MCP Protocol Handlers', () => {
 				id: 3,
 			}, mockRequest, mockJwtSecret)
 
-			expect(toolsResponse).toMatchObject({
+			expect(toolsResponse).toEqual({
 				jsonrpc: '2.0',
 				id: 3,
 				result: { 
@@ -372,7 +398,7 @@ describe('MCP Protocol Handlers', () => {
 				id: 4,
 			}, mockRequest, mockJwtSecret)
 
-			expect(promptsResponse).toMatchObject({
+			expect(promptsResponse).toEqual({
 				jsonrpc: '2.0',
 				id: 4,
 				result: { 

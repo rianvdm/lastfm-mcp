@@ -194,8 +194,8 @@ describe('MCP Resources', () => {
 		})
 
 		it('should throw error for invalid params', async () => {
-			await expect(handleResourcesRead({}, mockSession)).rejects.toThrow('Invalid params')
-			await expect(handleResourcesRead({ uri: null }, mockSession)).rejects.toThrow('Invalid params')
+			await expect(handleResourcesRead({}, mockSession)).rejects.toThrow('uri parameter must be a string')
+			await expect(handleResourcesRead({ uri: null }, mockSession)).rejects.toThrow('uri parameter must be a string')
 		})
 
 		it('should throw error for invalid release URI', async () => {
