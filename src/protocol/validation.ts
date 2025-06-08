@@ -84,9 +84,8 @@ export function validateJSONRPCMessage(msg: unknown): asserts msg is JSONRPCRequ
 export function validateProtocolFlow(method: string): void {
 	switch (method) {
 		case 'initialize':
-			if (protocolState === 'initialized') {
-				throw new ValidationError('Server already initialized', ErrorCode.InvalidRequest)
-			}
+			// Allow multiple initialize requests - this is common with proxies and reconnections
+			// The handler will return the same initialization response
 			break
 
 		case 'initialized':

@@ -84,9 +84,14 @@ export function handleInitialize(params: unknown): InitializeResult {
 	console.log(`Client protocol version: ${params.protocolVersion}`)
 	console.log(`Client info: ${params.clientInfo.name} v${params.clientInfo.version}`)
 
-	// Mark as initialized in both places
-	isInitialized = true
-	markInitialized()
+	// Mark as initialized in both places (idempotent operation)
+	if (!isInitialized) {
+		console.log('Initializing server for the first time')
+		isInitialized = true
+		markInitialized()
+	} else {
+		console.log('Server already initialized, returning existing capabilities')
+	}
 
 	// Return server capabilities
 	const result = {

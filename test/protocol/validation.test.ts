@@ -113,9 +113,9 @@ describe('MCP Protocol Validation', () => {
 			expect(() => validateProtocolFlow('initialize')).not.toThrow()
 		})
 
-		it('should reject initialize when already initialized', () => {
+		it('should allow initialize when already initialized', () => {
 			markInitialized()
-			expect(() => validateProtocolFlow('initialize')).toThrow(ValidationError)
+			expect(() => validateProtocolFlow('initialize')).not.toThrow()
 		})
 
 		it('should reject other methods when uninitialized', () => {
