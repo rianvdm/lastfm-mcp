@@ -136,15 +136,53 @@ describe('Discogs MCP Server', () => {
 			expect(response.headers.get('cache-control')).toBe('no-cache')
 		})
 
-		it('should reject POST requests to /sse', async () => {
+		it('should accept POST requests to /sse for JSON-RPC', async () => {
+			const initRequest = {
+				jsonrpc: '2.0',
+				method: 'initialize',
+				params: {
+					protocolVersion: '2024-11-05',
+					capabilities: {},
+					clientInfo: {
+						name: 'TestClient',
+						version: '1.0.0',
+					},
+				},
+				id: 1,
+			}
+
 			const request = new Request<unknown, IncomingRequestCfProperties>('http://example.com/sse', {
 				method: 'POST',
+				body: JSON.stringify(initRequest),
+				headers: {
+					'Content-Type': 'application/json',
+				},
 			})
 			const ctx = createExecutionContext()
 			const response = await worker.fetch(request, env, ctx)
 			await waitOnExecutionContext(ctx)
 
-			expect(response.status).toBe(405)
+			expect(response.status).toBe(200)
+			expect(response.headers.get('content-type')).toBe('application/json')
+
+			const result = await response.json()
+			// The response should be a valid JSON-RPC response (either success or error)
+			expect(result).toHaveProperty('jsonrpc', '2.0')
+			expect(result).toHaveProperty('id', 1)
+			
+			// If it's a success response, it should have the expected structure
+			if (result.result) {
+				expect(result.result).toMatchObject({
+					protocolVersion: '2024-11-05',
+					capabilities: expect.any(Object),
+					serverInfo: expect.any(Object),
+				})
+			} else if (result.error) {
+				// If it's an error response, that's also acceptable for this test
+				// since we're just testing that POST requests are accepted
+				expect(result.error).toHaveProperty('code')
+				expect(result.error).toHaveProperty('message')
+			}
 		})
 	})
 })
