@@ -760,14 +760,22 @@ If the problem persists, please check that your Discogs account is accessible.`,
 
 				// Filter by similarity to artist/album
 				if (similarTo) {
-					const similarLower = similarTo.toLowerCase()
+					const similarTerms = similarTo.toLowerCase().split(/\s+/).filter(term => term.length > 2)
 					filteredReleases = filteredReleases.filter((release) => {
 						const info = release.basic_information
-						const artistMatch = info.artists?.some((artist) => artist.name.toLowerCase().includes(similarLower))
-						const titleMatch = info.title.toLowerCase().includes(similarLower)
-						const genreMatch = info.genres?.some((g) => g.toLowerCase().includes(similarLower))
-						const styleMatch = info.styles?.some((s) => s.toLowerCase().includes(similarLower))
-						return artistMatch || titleMatch || genreMatch || styleMatch
+						
+						// Create searchable text from all release information
+						const searchableText = [
+							...info.artists?.map(artist => artist.name) || [],
+							info.title,
+							...info.genres || [],
+							...info.styles || [],
+							...info.labels?.map(label => label.name) || []
+						].join(' ').toLowerCase()
+						
+						// For similarity, require at least 50% of terms to match
+						const matchingTerms = similarTerms.filter(term => searchableText.includes(term)).length
+						return matchingTerms >= Math.ceil(similarTerms.length * 0.5)
 					})
 				}
 
