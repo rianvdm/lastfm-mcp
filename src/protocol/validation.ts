@@ -93,11 +93,20 @@ export function validateProtocolFlow(method: string): void {
 			// No validation needed here - it's just a notification
 			break
 
+		case 'tools/list':
+		case 'tools/call':
+		case 'resources/list':
+		case 'resources/read':
+		case 'prompts/list':
+		case 'prompts/get':
+			// For HTTP-based MCP servers (stateless), we don't enforce initialization state
+			// The client (mcp-remote) handles the initialization flow properly
+			// These methods can be called directly since each HTTP request is independent
+			break
+
 		default:
-			// All other methods require initialization
-			if (protocolState !== 'initialized' && method !== 'initialize') {
-				throw new ValidationError('Server not initialized', -32010) // MCPErrorCode.ServerNotInitialized
-			}
+			// For unknown methods, we don't enforce initialization state in stateless mode
+			// This allows the server to work with various MCP clients
 			break
 	}
 }
@@ -134,12 +143,13 @@ export function validateInitializeParams(params: unknown): asserts params is Ini
 		throw new ValidationError('clientInfo must have name and version strings')
 	}
 
-	// Validate capabilities
-	if (typeof p.capabilities !== 'object' || p.capabilities === null) {
-		throw new ValidationError('capabilities must be an object')
+	// Validate capabilities - make it optional
+	if ('capabilities' in p && p.capabilities !== undefined) {
+		if (typeof p.capabilities !== 'object' || p.capabilities === null) {
+			throw new ValidationError('capabilities must be an object')
+		}
+		validateClientCapabilities(p.capabilities)
 	}
-
-	validateClientCapabilities(p.capabilities)
 }
 
 /**

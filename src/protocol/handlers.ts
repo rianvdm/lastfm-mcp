@@ -33,9 +33,6 @@ import {
 import { verifySessionToken, SessionPayload } from '../auth/jwt'
 import { discogsClient, type DiscogsCollectionItem } from '../clients/discogs'
 
-// Track initialization state
-let isInitialized = false
-
 /**
  * Extract and verify session token from request
  */
@@ -85,13 +82,7 @@ export function handleInitialize(params: unknown): InitializeResult {
 	console.log(`Client info: ${params.clientInfo.name} v${params.clientInfo.version}`)
 
 	// Mark as initialized in both places (idempotent operation)
-	if (!isInitialized) {
-		console.log('Initializing server for the first time')
-		isInitialized = true
-		markInitialized()
-	} else {
-		console.log('Server already initialized, returning existing capabilities')
-	}
+	markInitialized()
 
 	// Return server capabilities
 	const result = {
@@ -956,13 +947,8 @@ export async function handleMethod(request: JSONRPCRequest, httpRequest?: Reques
 		return null // No response for notifications
 	}
 
-	// All other methods require initialization
-	if (!isInitialized) {
-		if (hasId(request)) {
-			return createError(id!, MCPErrorCode.ServerNotInitialized, 'Server not initialized')
-		}
-		return null
-	}
+	// In stateless HTTP mode, we don't enforce initialization state
+	// The mcp-remote client handles the proper initialization flow
 
 			// Some methods don't require authentication
 		switch (method) {
@@ -1243,5 +1229,6 @@ export async function handleMethod(request: JSONRPCRequest, httpRequest?: Reques
  * Reset initialization state (for testing)
  */
 export function resetInitialization(): void {
-	isInitialized = false
+	// No longer needed in stateless HTTP mode
+	// State is managed per-request
 }

@@ -34,7 +34,7 @@ export interface ServerCapabilities {
 // Initialize request params
 export interface InitializeParams {
 	protocolVersion: string
-	capabilities: ClientCapabilities
+	capabilities?: ClientCapabilities
 	clientInfo: {
 		name: string
 		version: string
