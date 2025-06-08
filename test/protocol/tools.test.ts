@@ -306,24 +306,18 @@ describe('MCP Tools', () => {
 							type: 'text',
 							text: expect.stringContaining('Found 2 results for "rock"'),
 						},
-						{
-							type: 'text',
-							text: expect.stringContaining('Structured Data'),
-						},
 					],
 				},
 			})
 
-			// Verify the response includes release IDs
+			// Verify the response includes release IDs, genres, and styles
 			const result = response?.result as { content: Array<{ type: string; text: string }> }
 			const responseText = result.content[0].text
 			expect(responseText).toContain('[ID: 1]')
 			expect(responseText).toContain('Use the release IDs with the get_release tool')
-
-			// Verify structured data is included
-			const structuredDataText = result.content[1].text
-			expect(structuredDataText).toContain('"release_id": 1')
-			expect(structuredDataText).toContain('"instance_id": 1')
+			expect(responseText).toContain('Genre: Rock')
+			expect(responseText).toContain('Styles: Alternative')
+			expect(responseText).toContain('⭐5')
 
 			expect(mockDiscogsClient.getUserProfile).toHaveBeenCalledWith('test-token', 'test-secret', '', '')
 			expect(mockDiscogsClient.searchCollection).toHaveBeenCalledWith(
@@ -853,26 +847,19 @@ describe('MCP Tools', () => {
 							type: 'text',
 							text: expect.stringContaining('Found 1 results for "654321"'),
 						},
-						{
-							type: 'text',
-							text: expect.stringContaining('Structured Data'),
-						},
 					],
 				},
 			})
 
-			// Verify the response includes the specific release ID
+			// Verify the response includes the specific release ID and genres/styles
 			const result = response?.result as { content: Array<{ type: string; text: string }> }
 			const responseText = result.content[0].text
 			expect(responseText).toContain('[ID: 654321]')
 			expect(responseText).toContain("Sgt. Pepper's Lonely Hearts Club Band")
 			expect(responseText).toContain('(1967)')
-
-			// Verify structured data contains the release
-			const structuredDataText = result.content[1].text
-			expect(structuredDataText).toContain('"release_id": 654321')
-			expect(structuredDataText).toContain('"title": "Sgt. Pepper\'s Lonely Hearts Club Band"')
-			expect(structuredDataText).toContain('"year": 1967')
+			expect(responseText).toContain('Genre: Rock')
+			expect(responseText).toContain('Styles: Psychedelic Rock')
+			expect(responseText).toContain('⭐5')
 
 			expect(mockDiscogsClient.getUserProfile).toHaveBeenCalledWith('test-token', 'test-secret', '', '')
 			expect(mockDiscogsClient.searchCollection).toHaveBeenCalledWith(

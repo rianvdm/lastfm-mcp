@@ -568,48 +568,25 @@ If the problem persists, please check that your Discogs account is accessible.`,
 
 				const summary = `Found ${results.pagination.items} results for "${query}" in your collection (showing ${results.releases.length} items):`
 
-				// Create formatted list with release IDs
+				// Create concise formatted list with genres and styles
 				const releaseList = results.releases
 					.map((release) => {
 						const info = release.basic_information
 						const artists = info.artists.map((a) => a.name).join(', ')
 						const formats = info.formats.map((f) => f.name).join(', ')
-						return `• [ID: ${release.id}] ${artists} - ${info.title} (${info.year}) [${formats}]`
+						const genres = info.genres?.length ? info.genres.join(', ') : 'Unknown'
+						const styles = info.styles?.length ? ` | Styles: ${info.styles.join(', ')}` : ''
+						const rating = release.rating > 0 ? ` ⭐${release.rating}` : ''
+						
+						return `• [ID: ${release.id}] ${artists} - ${info.title} (${info.year})\n  Format: ${formats} | Genre: ${genres}${styles}${rating}`
 					})
-					.join('\n')
-
-				// Create structured data for programmatic use
-				const structuredData = {
-					query,
-					total_results: results.pagination.items,
-					page: results.pagination.page,
-					per_page: results.pagination.per_page,
-					total_pages: results.pagination.pages,
-					releases: results.releases.map((release) => ({
-						release_id: release.id,
-						instance_id: release.instance_id,
-						title: release.basic_information.title,
-						artists: release.basic_information.artists.map((a) => ({ name: a.name, id: a.id })),
-						year: release.basic_information.year,
-						formats: release.basic_information.formats.map((f) => f.name),
-						genres: release.basic_information.genres,
-						styles: release.basic_information.styles,
-						labels: release.basic_information.labels.map((l) => ({ name: l.name, catno: l.catno })),
-						rating: release.rating,
-						date_added: release.date_added,
-						resource_url: release.basic_information.resource_url,
-					})),
-				}
+					.join('\n\n')
 
 				return {
 					content: [
 						{
 							type: 'text',
 							text: `${summary}\n\n${releaseList}\n\n**Tip:** Use the release IDs with the get_release tool for detailed information about specific albums.`,
-						},
-						{
-							type: 'text',
-							text: `\n**Structured Data:**\n\`\`\`json\n${JSON.stringify(structuredData, null, 2)}\n\`\`\``,
 						},
 					],
 				}
