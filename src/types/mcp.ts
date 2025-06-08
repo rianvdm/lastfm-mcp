@@ -51,6 +51,33 @@ export interface InitializeResult {
 	}
 }
 
+// MCP Resource types
+export interface Resource {
+	uri: string
+	name: string
+	description?: string
+	mimeType?: string
+}
+
+export interface ResourcesListResult {
+	resources: Resource[]
+}
+
+export interface ResourceContents {
+	uri: string
+	mimeType?: string
+	text?: string
+	blob?: string
+}
+
+export interface ResourcesReadParams {
+	uri: string
+}
+
+export interface ResourcesReadResult {
+	contents: ResourceContents[]
+}
+
 // Server info
 export const SERVER_INFO = {
 	name: 'discogs-mcp',

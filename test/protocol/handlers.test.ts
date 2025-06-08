@@ -207,7 +207,7 @@ describe('MCP Protocol Handlers', () => {
 			})
 		})
 
-		it('should return empty arrays for list methods', async () => {
+		it('should return list methods with proper structure', async () => {
 			// Initialize first
 			await handleMethod({
 				jsonrpc: '2.0',
@@ -232,10 +232,18 @@ describe('MCP Protocol Handlers', () => {
 			expect(resourcesResponse).toMatchObject({
 				jsonrpc: '2.0',
 				id: 2,
-				result: { resources: [] },
+				result: { 
+					resources: expect.arrayContaining([
+						expect.objectContaining({
+							uri: expect.stringMatching(/^discogs:\/\//),
+							name: expect.any(String),
+							mimeType: 'application/json'
+						})
+					])
+				},
 			})
 
-			// Test tools/list
+			// Test tools/list (still empty for now)
 			const toolsResponse = await handleMethod({
 				jsonrpc: '2.0',
 				method: 'tools/list',
@@ -248,7 +256,7 @@ describe('MCP Protocol Handlers', () => {
 				result: { tools: [] },
 			})
 
-			// Test prompts/list
+			// Test prompts/list (still empty for now)
 			const promptsResponse = await handleMethod({
 				jsonrpc: '2.0',
 				method: 'prompts/list',

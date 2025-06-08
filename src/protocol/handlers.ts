@@ -5,7 +5,7 @@
 
 import { JSONRPCRequest, hasId } from '../types/jsonrpc'
 import { createResponse, createError, createMethodNotFoundError, createInvalidParamsError } from './parser'
-import { InitializeParams, InitializeResult, PROTOCOL_VERSION, SERVER_INFO, DEFAULT_CAPABILITIES } from '../types/mcp'
+import { InitializeParams, InitializeResult, PROTOCOL_VERSION, SERVER_INFO, DEFAULT_CAPABILITIES, Resource, ResourcesListResult } from '../types/mcp'
 import { verifySessionToken, SessionPayload } from '../auth/jwt'
 
 // Track initialization state
@@ -78,6 +78,34 @@ export function handleInitialized(): void {
 }
 
 /**
+ * Handle resources/list request
+ */
+export function handleResourcesList(): ResourcesListResult {
+	const resources: Resource[] = [
+		{
+			uri: 'discogs://collection',
+			name: 'User Collection',
+			description: 'Complete Discogs collection for the authenticated user',
+			mimeType: 'application/json',
+		},
+		{
+			uri: 'discogs://release/{id}',
+			name: 'Release Details',
+			description: 'Detailed information about a specific Discogs release. Replace {id} with the release ID.',
+			mimeType: 'application/json',
+		},
+		{
+			uri: 'discogs://search?q={query}',
+			name: 'Collection Search',
+			description: 'Search results from user\'s collection. Replace {query} with search terms.',
+			mimeType: 'application/json',
+		},
+	]
+
+	return { resources }
+}
+
+/**
  * Main method router
  */
 export async function handleMethod(request: JSONRPCRequest, httpRequest?: Request, jwtSecret?: string) {
@@ -123,8 +151,8 @@ export async function handleMethod(request: JSONRPCRequest, httpRequest?: Reques
 	switch (method) {
 		// Resources
 		case 'resources/list':
-			// TODO: Implement in E2
-			return hasId(request) ? createResponse(id!, { resources: [] }) : null
+			const resourcesResult = handleResourcesList()
+			return hasId(request) ? createResponse(id!, resourcesResult) : null
 
 		case 'resources/read':
 			// TODO: Implement in E3
