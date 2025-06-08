@@ -786,8 +786,9 @@ If the problem persists, please check that your Discogs account is accessible.`,
 							...info.labels?.map(label => label.name) || []
 						].join(' ').toLowerCase()
 						
-						// Check if any query terms match
-						return queryTerms.some(term => searchableText.includes(term))
+						// For recommendations, require at least 50% of terms to match for relevance
+						const matchingTerms = queryTerms.filter(term => searchableText.includes(term)).length
+						return matchingTerms >= Math.ceil(queryTerms.length * 0.5)
 					})
 				}
 
