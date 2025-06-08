@@ -31,7 +31,7 @@ import {
 	ValidationError,
 } from './validation'
 import { verifySessionToken, SessionPayload } from '../auth/jwt'
-import { discogsClient } from '../clients/discogs'
+import { discogsClient, type DiscogsCollectionItem } from '../clients/discogs'
 
 // Track initialization state
 let isInitialized = false
@@ -663,6 +663,9 @@ async function handleAuthenticatedToolsCall(params: unknown, session: SessionPay
 			const similarTo = args?.similar_to as string
 			const query = args?.query as string
 
+			// Type for release with relevance score
+			type ReleaseWithRelevance = DiscogsCollectionItem & { relevanceScore?: number }
+
 			try {
 				const consumerKey = env?.DISCOGS_CONSUMER_KEY || ''
 				const consumerSecret = env?.DISCOGS_CONSUMER_SECRET || ''
@@ -729,27 +732,66 @@ async function handleAuthenticatedToolsCall(params: unknown, session: SessionPay
 					})
 				}
 
-				// Filter by general query
+				// Filter by general query with smart term matching
 				if (query) {
-					const queryLower = query.toLowerCase()
+					const queryTerms = query.toLowerCase().split(/\s+/).filter(term => term.length > 2) // Split into words, ignore short words
 					filteredReleases = filteredReleases.filter((release) => {
 						const info = release.basic_information
-						const artistMatch = info.artists?.some((artist) => artist.name.toLowerCase().includes(queryLower))
-						const titleMatch = info.title.toLowerCase().includes(queryLower)
-						const genreMatch = info.genres?.some((g) => g.toLowerCase().includes(queryLower))
-						const styleMatch = info.styles?.some((s) => s.toLowerCase().includes(queryLower))
-						const labelMatch = info.labels?.some((l) => l.name.toLowerCase().includes(queryLower))
-						return artistMatch || titleMatch || genreMatch || styleMatch || labelMatch
+						
+						// Create searchable text from all release information
+						const searchableText = [
+							...info.artists?.map(artist => artist.name) || [],
+							info.title,
+							...info.genres || [],
+							...info.styles || [],
+							...info.labels?.map(label => label.name) || []
+						].join(' ').toLowerCase()
+						
+						// Check if any query terms match
+						return queryTerms.some(term => searchableText.includes(term))
 					})
 				}
 
-				// Sort by rating (highest first) and then by date added (newest first)
-				filteredReleases.sort((a, b) => {
-					if (a.rating !== b.rating) {
-						return b.rating - a.rating
-					}
-					return new Date(b.date_added).getTime() - new Date(a.date_added).getTime()
-				})
+				// Calculate relevance scores for query-based searches
+				if (query) {
+					const queryTerms = query.toLowerCase().split(/\s+/).filter(term => term.length > 2)
+					
+					filteredReleases = filteredReleases.map((release): ReleaseWithRelevance => {
+						const info = release.basic_information
+						const searchableText = [
+							...info.artists?.map(artist => artist.name) || [],
+							info.title,
+							...info.genres || [],
+							...info.styles || [],
+							...info.labels?.map(label => label.name) || []
+						].join(' ').toLowerCase()
+						
+						// Count matching terms for relevance scoring
+						const matchingTerms = queryTerms.filter(term => searchableText.includes(term)).length
+						const relevanceScore = matchingTerms / queryTerms.length
+						
+						return { ...release, relevanceScore }
+					}).sort((a, b) => {
+						// Sort by relevance first, then rating, then date
+						const aRelevance = a.relevanceScore || 0
+						const bRelevance = b.relevanceScore || 0
+						if (aRelevance !== bRelevance) {
+							return bRelevance - aRelevance
+						}
+						if (a.rating !== b.rating) {
+							return b.rating - a.rating
+						}
+						return new Date(b.date_added).getTime() - new Date(a.date_added).getTime()
+					})
+				} else {
+					// Sort by rating (highest first) and then by date added (newest first)
+					filteredReleases.sort((a, b) => {
+						if (a.rating !== b.rating) {
+							return b.rating - a.rating
+						}
+						return new Date(b.date_added).getTime() - new Date(a.date_added).getTime()
+					})
+				}
 
 				// Limit results
 				const recommendations = filteredReleases.slice(0, limit)
@@ -780,8 +822,9 @@ async function handleAuthenticatedToolsCall(params: unknown, session: SessionPay
 						const genres = info.genres?.join(', ') || 'Unknown'
 						const year = info.year || 'Unknown'
 						const rating = release.rating > 0 ? ` ⭐${release.rating}` : ''
+						const relevance = query && 'relevanceScore' in release ? ` (${Math.round((release as ReleaseWithRelevance).relevanceScore! * 100)}% match)` : ''
 
-						text += `${index + 1}. **${artists} - ${info.title}** (${year})${rating}\n`
+						text += `${index + 1}. **${artists} - ${info.title}** (${year})${rating}${relevance}\n`
 						text += `   Genres: ${genres}\n`
 						if (info.styles && info.styles.length > 0) {
 							text += `   Styles: ${info.styles.join(', ')}\n`
