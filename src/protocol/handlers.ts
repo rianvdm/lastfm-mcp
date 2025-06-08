@@ -460,6 +460,10 @@ async function handleAuthenticatedToolsCall(params: unknown, session: SessionPay
 			type: 'object',
 			properties: {
 				limit: { type: 'number', minimum: 1, maximum: 50 },
+				genre: { type: 'string' },
+				decade: { type: 'string' },
+				similar_to: { type: 'string' },
+				query: { type: 'string' },
 			},
 			required: [],
 		},
@@ -653,38 +657,157 @@ async function handleAuthenticatedToolsCall(params: unknown, session: SessionPay
 		}
 
 		case 'get_recommendations': {
-			const _limit = Math.min(Math.max((args?.limit as number) || 10, 1), 50)
+			const limit = Math.min(Math.max((args?.limit as number) || 10, 1), 50)
+			const genre = args?.genre as string
+			const decade = args?.decade as string
+			const similarTo = args?.similar_to as string
+			const query = args?.query as string
 
 			try {
 				const consumerKey = env?.DISCOGS_CONSUMER_KEY || ''
 				const consumerSecret = env?.DISCOGS_CONSUMER_SECRET || ''
 
 				const userProfile = await discogsClient.getUserProfile(session.accessToken, session.accessTokenSecret, consumerKey, consumerSecret)
-				const stats = await discogsClient.getCollectionStats(
+				
+				// Get full collection for context-aware recommendations
+				const fullCollection = await discogsClient.searchCollection(
 					userProfile.username,
 					session.accessToken,
 					session.accessTokenSecret,
+					{ per_page: 100 }, // Get all items
 					consumerKey,
 					consumerSecret,
 				)
 
-				// Simple recommendation algorithm: suggest releases from top genres that user doesn't have
-				const topGenres = Object.entries(stats.genreBreakdown)
-					.sort(([, a], [, b]) => b - a)
-					.slice(0, 3)
-					.map(([genre]) => genre)
+				// Get all collection items by paginating through all pages
+				let allReleases = fullCollection.releases
+				for (let page = 2; page <= fullCollection.pagination.pages; page++) {
+					const pageResults = await discogsClient.searchCollection(
+						userProfile.username,
+						session.accessToken,
+						session.accessTokenSecret,
+						{ page, per_page: 100 },
+						consumerKey,
+						consumerSecret,
+					)
+					allReleases = allReleases.concat(pageResults.releases)
+				}
 
-				let text = `**Music Recommendations Based on Your Collection**\n\n`
-				text += `Based on your collection of ${stats.totalReleases} releases, here are some recommendations:\n\n`
+				// Filter releases based on context parameters
+				let filteredReleases = allReleases
 
-				text += `**Your Top Genres:** ${topGenres.join(', ')}\n\n`
-				text += `**Recommendations:**\n`
-				text += `• Explore more releases from your favorite genres\n`
-				text += `• Look for releases from the ${Object.keys(stats.decadeBreakdown).sort().reverse()[0]}s era\n`
-				const topFormat = Object.entries(stats.formatBreakdown).sort(([, a], [, b]) => b - a)[0]?.[0] || 'vinyl'
-				text += `• Consider adding more ${topFormat} releases\n`
-				text += `• Search for releases from labels you already collect from\n\n`
-				text += `Use the search_collection tool to find specific artists or albums you might want to add!`
+				// Filter by genre
+				if (genre) {
+					filteredReleases = filteredReleases.filter(release => 
+						release.basic_information.genres?.some(g => 
+							g.toLowerCase().includes(genre.toLowerCase())
+						) || 
+						release.basic_information.styles?.some(s => 
+							s.toLowerCase().includes(genre.toLowerCase())
+						)
+					)
+				}
+
+				// Filter by decade
+				if (decade) {
+					const decadeNum = parseInt(decade.replace(/s$/, ''))
+					if (!isNaN(decadeNum)) {
+						filteredReleases = filteredReleases.filter(release => {
+							const year = release.basic_information.year
+							return year && year >= decadeNum && year < decadeNum + 10
+						})
+					}
+				}
+
+				// Filter by similarity to artist/album
+				if (similarTo) {
+					const similarLower = similarTo.toLowerCase()
+					filteredReleases = filteredReleases.filter(release => {
+						const info = release.basic_information
+						const artistMatch = info.artists?.some(artist => 
+							artist.name.toLowerCase().includes(similarLower)
+						)
+						const titleMatch = info.title.toLowerCase().includes(similarLower)
+						const genreMatch = info.genres?.some(g => 
+							g.toLowerCase().includes(similarLower)
+						)
+						const styleMatch = info.styles?.some(s => 
+							s.toLowerCase().includes(similarLower)
+						)
+						return artistMatch || titleMatch || genreMatch || styleMatch
+					})
+				}
+
+				// Filter by general query
+				if (query) {
+					const queryLower = query.toLowerCase()
+					filteredReleases = filteredReleases.filter(release => {
+						const info = release.basic_information
+						const artistMatch = info.artists?.some(artist => 
+							artist.name.toLowerCase().includes(queryLower)
+						)
+						const titleMatch = info.title.toLowerCase().includes(queryLower)
+						const genreMatch = info.genres?.some(g => 
+							g.toLowerCase().includes(queryLower)
+						)
+						const styleMatch = info.styles?.some(s => 
+							s.toLowerCase().includes(queryLower)
+						)
+						const labelMatch = info.labels?.some(l => 
+							l.name.toLowerCase().includes(queryLower)
+						)
+						return artistMatch || titleMatch || genreMatch || styleMatch || labelMatch
+					})
+				}
+
+				// Sort by rating (highest first) and then by date added (newest first)
+				filteredReleases.sort((a, b) => {
+					if (a.rating !== b.rating) {
+						return b.rating - a.rating
+					}
+					return new Date(b.date_added).getTime() - new Date(a.date_added).getTime()
+				})
+
+				// Limit results
+				const recommendations = filteredReleases.slice(0, limit)
+
+				// Build response
+				let text = `**Context-Aware Music Recommendations**\n\n`
+				
+				if (genre || decade || similarTo || query) {
+					text += `**Filters Applied:**\n`
+					if (genre) text += `• Genre: ${genre}\n`
+					if (decade) text += `• Decade: ${decade}\n`
+					if (similarTo) text += `• Similar to: ${similarTo}\n`
+					if (query) text += `• Query: ${query}\n`
+					text += `\n`
+				}
+
+				text += `Found ${filteredReleases.length} matching releases in your collection (showing top ${recommendations.length}):\n\n`
+
+				if (recommendations.length === 0) {
+					text += `No releases found matching your criteria. Try:\n`
+					text += `• Broadening your search terms\n`
+					text += `• Using different genres or decades\n`
+					text += `• Searching for specific artists you own\n`
+				} else {
+					recommendations.forEach((release, index) => {
+						const info = release.basic_information
+						const artists = info.artists.map(a => a.name).join(', ')
+						const genres = info.genres?.join(', ') || 'Unknown'
+						const year = info.year || 'Unknown'
+						const rating = release.rating > 0 ? ` ⭐${release.rating}` : ''
+						
+						text += `${index + 1}. **${artists} - ${info.title}** (${year})${rating}\n`
+						text += `   Genres: ${genres}\n`
+						if (info.styles && info.styles.length > 0) {
+							text += `   Styles: ${info.styles.join(', ')}\n`
+						}
+						text += `   Release ID: ${release.id}\n\n`
+					})
+
+					text += `**Tip:** Use the get_release tool with any Release ID for detailed information about specific albums.`
+				}
 
 				return {
 					content: [
@@ -854,7 +977,7 @@ export async function handleMethod(request: JSONRPCRequest, httpRequest?: Reques
 				},
 				{
 					name: 'get_recommendations',
-					description: "Get music recommendations based on the user's collection",
+					description: "Get context-aware music recommendations based on the user's collection",
 					inputSchema: {
 						type: 'object',
 						properties: {
@@ -864,6 +987,22 @@ export async function handleMethod(request: JSONRPCRequest, httpRequest?: Reques
 								default: 10,
 								minimum: 1,
 								maximum: 50,
+							},
+							genre: {
+								type: 'string',
+								description: 'Filter recommendations by genre (e.g., "Jazz", "Rock", "Electronic")',
+							},
+							decade: {
+								type: 'string',
+								description: 'Filter recommendations by decade (e.g., "1960s", "1970s", "1980s")',
+							},
+							similar_to: {
+								type: 'string',
+								description: 'Find albums similar to this artist or album name',
+							},
+							query: {
+								type: 'string',
+								description: 'General query for contextual recommendations (e.g., "hard bop albums from the 60s")',
 							},
 						},
 						required: [],

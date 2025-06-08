@@ -376,19 +376,71 @@ describe('MCP Tools', () => {
 
 		it('should handle get_recommendations tool', async () => {
 			const mockUserProfile = { username: 'testuser', id: 123 }
-			const mockStats = {
-				totalReleases: 100,
-				totalValue: 1500.5,
-				genreBreakdown: { Rock: 40, Jazz: 30, Electronic: 20 },
-				decadeBreakdown: { '2000': 30, '1990': 25, '1980': 20 },
-				formatBreakdown: { Vinyl: 60, CD: 30, Cassette: 10 },
-				labelBreakdown: { 'Blue Note': 15, Warp: 10 },
-				averageRating: 4.2,
-				ratedReleases: 75,
+			const mockSearchResults = {
+				pagination: { pages: 1, page: 1, per_page: 100, items: 3, urls: {} },
+				releases: [
+					{
+						id: 1,
+						instance_id: 1,
+						date_added: '2023-01-01T00:00:00-08:00',
+						rating: 5,
+						basic_information: {
+							id: 1,
+							title: 'Kind of Blue',
+							year: 1959,
+							artists: [{ name: 'Miles Davis', id: 1 }],
+							genres: ['Jazz'],
+							styles: ['Hard Bop', 'Modal'],
+							formats: [{ name: 'Vinyl', qty: '1' }],
+							labels: [{ name: 'Columbia', catno: 'CL 1355' }],
+							resource_url: 'https://api.discogs.com/releases/1',
+							thumb: '',
+							cover_image: '',
+						},
+					},
+					{
+						id: 2,
+						instance_id: 2,
+						date_added: '2023-01-02T00:00:00-08:00',
+						rating: 4,
+						basic_information: {
+							id: 2,
+							title: 'A Love Supreme',
+							year: 1965,
+							artists: [{ name: 'John Coltrane', id: 2 }],
+							genres: ['Jazz'],
+							styles: ['Hard Bop', 'Free Jazz'],
+							formats: [{ name: 'Vinyl', qty: '1' }],
+							labels: [{ name: 'Impulse!', catno: 'A-77' }],
+							resource_url: 'https://api.discogs.com/releases/2',
+							thumb: '',
+							cover_image: '',
+						},
+					},
+					{
+						id: 3,
+						instance_id: 3,
+						date_added: '2023-01-03T00:00:00-08:00',
+						rating: 3,
+						basic_information: {
+							id: 3,
+							title: 'Abbey Road',
+							year: 1969,
+							artists: [{ name: 'The Beatles', id: 3 }],
+							genres: ['Rock'],
+							styles: ['Pop Rock'],
+							formats: [{ name: 'CD', qty: '1' }],
+							labels: [{ name: 'Apple Records', catno: 'PCS 7088' }],
+							resource_url: 'https://api.discogs.com/releases/3',
+							thumb: '',
+							cover_image: '',
+						},
+					},
+				],
 			}
 
 			mockDiscogsClient.getUserProfile.mockResolvedValue(mockUserProfile)
-			mockDiscogsClient.getCollectionStats.mockResolvedValue(mockStats)
+			mockDiscogsClient.searchCollection.mockResolvedValue(mockSearchResults)
 
 			// Initialize first
 			await handleMethod({
@@ -429,14 +481,123 @@ describe('MCP Tools', () => {
 					content: [
 						{
 							type: 'text',
-							text: expect.stringContaining('Music Recommendations Based on Your Collection'),
+							text: expect.stringContaining('Context-Aware Music Recommendations'),
 						},
 					],
 				},
 			})
 
 			expect(mockDiscogsClient.getUserProfile).toHaveBeenCalledWith('test-token', 'test-secret', '', '')
-			expect(mockDiscogsClient.getCollectionStats).toHaveBeenCalledWith('testuser', 'test-token', 'test-secret', '', '')
+			expect(mockDiscogsClient.searchCollection).toHaveBeenCalledWith('testuser', 'test-token', 'test-secret', { per_page: 100 }, '', '')
+		})
+
+		it('should handle get_recommendations tool with context filters', async () => {
+			const mockUserProfile = { username: 'testuser', id: 123 }
+			const mockSearchResults = {
+				pagination: { pages: 1, page: 1, per_page: 100, items: 2, urls: {} },
+				releases: [
+					{
+						id: 1,
+						instance_id: 1,
+						date_added: '2023-01-01T00:00:00-08:00',
+						rating: 5,
+						basic_information: {
+							id: 1,
+							title: 'Kind of Blue',
+							year: 1959,
+							artists: [{ name: 'Miles Davis', id: 1 }],
+							genres: ['Jazz'],
+							styles: ['Hard Bop', 'Modal'],
+							formats: [{ name: 'Vinyl', qty: '1' }],
+							labels: [{ name: 'Columbia', catno: 'CL 1355' }],
+							resource_url: 'https://api.discogs.com/releases/1',
+							thumb: '',
+							cover_image: '',
+						},
+					},
+					{
+						id: 2,
+						instance_id: 2,
+						date_added: '2023-01-02T00:00:00-08:00',
+						rating: 4,
+						basic_information: {
+							id: 2,
+							title: 'A Love Supreme',
+							year: 1965,
+							artists: [{ name: 'John Coltrane', id: 2 }],
+							genres: ['Jazz'],
+							styles: ['Hard Bop', 'Free Jazz'],
+							formats: [{ name: 'Vinyl', qty: '1' }],
+							labels: [{ name: 'Impulse!', catno: 'A-77' }],
+							resource_url: 'https://api.discogs.com/releases/2',
+							thumb: '',
+							cover_image: '',
+						},
+					},
+				],
+			}
+
+			mockDiscogsClient.getUserProfile.mockResolvedValue(mockUserProfile)
+			mockDiscogsClient.searchCollection.mockResolvedValue(mockSearchResults)
+
+			// Initialize first
+			await handleMethod({
+				jsonrpc: '2.0',
+				method: 'initialize',
+				params: {
+					protocolVersion: '2024-11-05',
+					capabilities: {},
+					clientInfo: { name: 'Test', version: '1.0' },
+				},
+				id: 1,
+			})
+
+			// Send initialized notification
+			await handleMethod({
+				jsonrpc: '2.0',
+				method: 'initialized',
+			})
+
+			const response = await handleMethod(
+				{
+					jsonrpc: '2.0',
+					method: 'tools/call',
+					params: {
+						name: 'get_recommendations',
+						arguments: { 
+							genre: 'Jazz',
+							decade: '1960s',
+							limit: 3 
+						},
+					},
+					id: 2,
+				},
+				await createMockAuthenticatedRequest(),
+				mockJwtSecret,
+			)
+
+			expect(response).toMatchObject({
+				jsonrpc: '2.0',
+				id: 2,
+				result: {
+					content: [
+						{
+							type: 'text',
+							text: expect.stringContaining('Context-Aware Music Recommendations'),
+						},
+					],
+				},
+			})
+
+			// Check that the response includes filter information
+			const result = response?.result as { content: Array<{ type: string; text: string }> }
+			const responseText = result.content[0].text
+			expect(responseText).toContain('Genre: Jazz')
+			expect(responseText).toContain('Decade: 1960s')
+			expect(responseText).toContain('A Love Supreme') // Should include the 1965 album
+
+			expect(mockDiscogsClient.getUserProfile).toHaveBeenCalledWith('test-token', 'test-secret', '', '')
+			expect(mockDiscogsClient.searchCollection).toHaveBeenCalledWith('testuser', 'test-token', 'test-secret', { per_page: 100 }, '', '')
 		})
 
 		it('should require authentication for authenticated tools', async () => {
