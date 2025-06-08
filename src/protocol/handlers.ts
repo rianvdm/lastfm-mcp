@@ -784,6 +784,16 @@ export async function handleMethod(request: JSONRPCRequest, httpRequest?: Reques
 				return hasId(request) ? createError(id!, -32603, message) : null
 			}
 		}
+
+		case 'prompts/get': {
+			try {
+				const result = handlePromptsGet(params)
+				return hasId(request) ? createResponse(id!, result) : null
+			} catch (error) {
+				const message = error instanceof Error ? error.message : 'Failed to get prompt'
+				return hasId(request) ? createError(id!, -32603, message) : null
+			}
+		}
 	}
 
 	// All other methods require authentication
@@ -817,17 +827,6 @@ export async function handleMethod(request: JSONRPCRequest, httpRequest?: Reques
 		}
 
 		// Tools (authenticated tools would go here in the future)
-
-		// Prompts
-		case 'prompts/get': {
-			try {
-				const result = handlePromptsGet(params)
-				return hasId(request) ? createResponse(id!, result) : null
-			} catch (error) {
-				const message = error instanceof Error ? error.message : 'Failed to get prompt'
-				return hasId(request) ? createError(id!, -32603, message) : null
-			}
-		}
 
 		default:
 			if (hasId(request)) {
