@@ -758,13 +758,12 @@ If the problem persists, please check that your Discogs account is accessible.`,
 					}
 				}
 
-				// Filter by similarity to artist/album
+				// Filter by similarity to artist/album using musical characteristics
 				if (similarTo) {
+					// Step 1: Find reference release(s) that match the similarTo query
 					const similarTerms = similarTo.toLowerCase().split(/\s+/).filter(term => term.length > 2)
-					filteredReleases = filteredReleases.filter((release) => {
+					const referenceReleases = filteredReleases.filter((release) => {
 						const info = release.basic_information
-						
-						// Create searchable text from all release information
 						const searchableText = [
 							...info.artists?.map(artist => artist.name) || [],
 							info.title,
@@ -773,10 +772,68 @@ If the problem persists, please check that your Discogs account is accessible.`,
 							...info.labels?.map(label => label.name) || []
 						].join(' ').toLowerCase()
 						
-						// For similarity, require at least 50% of terms to match
+						// Find releases that match the similarTo terms
 						const matchingTerms = similarTerms.filter(term => searchableText.includes(term)).length
 						return matchingTerms >= Math.ceil(similarTerms.length * 0.5)
 					})
+					
+					if (referenceReleases.length > 0) {
+						// Step 2: Extract musical characteristics from reference releases
+						const refGenres = new Set<string>()
+						const refStyles = new Set<string>()
+						const refArtists = new Set<string>()
+						let refEraStart = Infinity
+						let refEraEnd = 0
+						
+						referenceReleases.forEach(release => {
+							const info = release.basic_information
+							info.genres?.forEach(g => refGenres.add(g.toLowerCase()))
+							info.styles?.forEach(s => refStyles.add(s.toLowerCase()))
+							info.artists?.forEach(a => refArtists.add(a.name.toLowerCase()))
+							if (info.year) {
+								refEraStart = Math.min(refEraStart, info.year)
+								refEraEnd = Math.max(refEraEnd, info.year)
+							}
+						})
+						
+						// Expand era window by ±5 years for similar releases
+						const eraBuffer = 5
+						refEraStart = refEraStart === Infinity ? 0 : refEraStart - eraBuffer
+						refEraEnd = refEraEnd === 0 ? 9999 : refEraEnd + eraBuffer
+						
+						// Step 3: Find releases with similar musical characteristics
+						filteredReleases = filteredReleases.filter((release) => {
+							const info = release.basic_information
+							let similarityScore = 0
+							
+							// Genre matching (highest weight)
+							const releaseGenres = (info.genres || []).map(g => g.toLowerCase())
+							const genreMatches = releaseGenres.filter(g => refGenres.has(g)).length
+							if (genreMatches > 0) similarityScore += genreMatches * 3
+							
+							// Style matching (high weight)
+							const releaseStyles = (info.styles || []).map(s => s.toLowerCase())
+							const styleMatches = releaseStyles.filter(s => refStyles.has(s)).length
+							if (styleMatches > 0) similarityScore += styleMatches * 2
+							
+							// Era matching (medium weight)
+							const releaseYear = info.year || 0
+							if (releaseYear >= refEraStart && releaseYear <= refEraEnd) {
+								similarityScore += 1
+							}
+							
+							// Artist collaboration (bonus points for shared artists)
+							const releaseArtists = (info.artists || []).map(a => a.name.toLowerCase())
+							const artistMatches = releaseArtists.filter(a => refArtists.has(a)).length
+							if (artistMatches > 0) similarityScore += artistMatches * 1
+							
+							// Require minimum similarity score (at least genre or style match)
+							return similarityScore >= 2
+						})
+					} else {
+						// Fallback: if no reference releases found, keep all releases
+						// This prevents returning empty results if similarTo doesn't match anything
+					}
 				}
 
 				// Filter by general query with smart term matching
