@@ -293,32 +293,55 @@ export class DiscogsClient {
 		const filteredReleases = allReleases.filter((item) => {
 			const release = item.basic_information
 
-			// Search by release ID (exact match or partial)
-			const releaseIdMatch = item.id.toString().includes(query) || release.id.toString().includes(query)
+			// For single word queries or exact ID searches, use simple includes
+			if (!query.includes(' ') || /^\d+$/.test(query)) {
+				// Search by release ID (exact match or partial)
+				const releaseIdMatch = item.id.toString().includes(query) || release.id.toString().includes(query)
 
-			// Search in artist names
-			const artistMatch = release.artists?.some((artist) => artist.name.toLowerCase().includes(query)) || false
+				// Search in artist names
+				const artistMatch = release.artists?.some((artist) => artist.name.toLowerCase().includes(query)) || false
 
-			// Search in title
-			const titleMatch = release.title?.toLowerCase().includes(query) || false
+				// Search in title
+				const titleMatch = release.title?.toLowerCase().includes(query) || false
 
-			// Search in genres
-			const genreMatch = release.genres?.some((genre) => genre.toLowerCase().includes(query)) || false
+				// Search in genres
+				const genreMatch = release.genres?.some((genre) => genre.toLowerCase().includes(query)) || false
 
-			// Search in styles
-			const styleMatch = release.styles?.some((style) => style.toLowerCase().includes(query)) || false
+				// Search in styles
+				const styleMatch = release.styles?.some((style) => style.toLowerCase().includes(query)) || false
 
-			// Search in label names and catalog numbers
-			const labelMatch =
-				release.labels?.some((label) => label.name.toLowerCase().includes(query) || label.catno.toLowerCase().includes(query)) || false
+				// Search in label names and catalog numbers
+				const labelMatch =
+					release.labels?.some((label) => label.name.toLowerCase().includes(query) || label.catno.toLowerCase().includes(query)) || false
 
-			// Search in formats
-			const formatMatch = release.formats?.some((format) => format.name.toLowerCase().includes(query)) || false
+				// Search in formats
+				const formatMatch = release.formats?.some((format) => format.name.toLowerCase().includes(query)) || false
 
-			// Search by year
-			const yearMatch = release.year && release.year.toString().includes(query)
+				// Search by year
+				const yearMatch = release.year && release.year.toString().includes(query)
 
-			return releaseIdMatch || artistMatch || titleMatch || genreMatch || styleMatch || labelMatch || formatMatch || yearMatch
+				return releaseIdMatch || artistMatch || titleMatch || genreMatch || styleMatch || labelMatch || formatMatch || yearMatch
+			}
+
+			// For multi-word queries, split into terms and check if any terms match
+			const queryTerms = query.split(/\s+/).filter(term => term.length > 2) // Split into words, ignore short words
+			
+			// Create searchable text from all release information
+			const searchableText = [
+				...release.artists?.map(artist => artist.name) || [],
+				release.title,
+				...release.genres || [],
+				...release.styles || [],
+				...release.labels?.map(label => label.name) || [],
+				...release.labels?.map(label => label.catno) || [],
+				...release.formats?.map(format => format.name) || [],
+				release.year?.toString() || '',
+				item.id.toString(),
+				release.id.toString()
+			].join(' ').toLowerCase()
+			
+			// Check if any query terms match the searchable text
+			return queryTerms.some(term => searchableText.includes(term))
 		})
 
 		// Implement pagination on filtered results

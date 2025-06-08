@@ -366,6 +366,73 @@ describe('Discogs Client', () => {
 			expect(result.releases[0].basic_information.artists[0].name).toBe('The Beatles')
 		})
 
+		it('should find releases with multi-word queries like "Miles Davis Kind of Blue"', async () => {
+			const mockResponse = {
+				pagination: { pages: 1, page: 1, per_page: 100, items: 2, urls: {} },
+				releases: [
+					{
+						id: 1,
+						instance_id: 1,
+						date_added: '2023-01-01T00:00:00-08:00',
+						rating: 5,
+						basic_information: {
+							id: 1,
+							title: 'Kind of Blue',
+							year: 1959,
+							artists: [{ name: 'Miles Davis', id: 1 }],
+							genres: ['Jazz'],
+							styles: ['Modal'],
+							formats: [{ name: 'Vinyl', qty: '1' }],
+							labels: [{ name: 'Columbia', catno: 'CL 1355' }],
+							resource_url: 'https://api.discogs.com/releases/1',
+							thumb: '',
+							cover_image: '',
+						},
+					},
+					{
+						id: 2,
+						instance_id: 2,
+						date_added: '2023-01-02T00:00:00-08:00',
+						rating: 4,
+						basic_information: {
+							id: 2,
+							title: 'Abbey Road',
+							year: 1969,
+							artists: [{ name: 'The Beatles', id: 2 }],
+							genres: ['Rock'],
+							styles: ['Pop Rock'],
+							formats: [{ name: 'CD', qty: '1' }],
+							labels: [{ name: 'Apple Records', catno: 'PCS 7088' }],
+							resource_url: 'https://api.discogs.com/releases/2',
+							thumb: '',
+							cover_image: '',
+						},
+					},
+				],
+			}
+
+			mockFetch.mockResolvedValueOnce({
+				ok: true,
+				json: () => Promise.resolve(mockResponse),
+			})
+
+			// Search for "Miles Davis Kind of Blue" - should match the first release
+			// because "Miles" matches artist and "Kind" matches title
+			const result = await discogsClient.searchCollection(
+				mockAuth.username,
+				mockAuth.accessToken,
+				mockAuth.accessTokenSecret,
+				{ query: 'Miles Davis Kind of Blue', per_page: 50 },
+				mockAuth.consumerKey,
+				mockAuth.consumerSecret,
+			)
+
+			expect(result.releases).toHaveLength(1)
+			expect(result.releases[0].basic_information.artists[0].name).toBe('Miles Davis')
+			expect(result.releases[0].basic_information.title).toBe('Kind of Blue')
+			expect(result.pagination.items).toBe(1)
+		})
+
 		it('should find release by specific ID 654321', async () => {
 			const mockResponse = {
 				pagination: { pages: 1, page: 1, per_page: 100, items: 3, urls: {} },
