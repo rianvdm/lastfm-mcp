@@ -35,14 +35,14 @@
 
 ## Chunk E – MCP Resources
 
-- [ ] **E1** Build Discogs REST client (`src/clients/discogs.ts`)
-- [ ] **E2** Add resources/list handler
-- [ ] **E3** Add resources/read handler for releases and collection
-- [ ] **E4** Test resource responses
+- [x] **E1** Build Discogs REST client (`src/clients/discogs.ts`)
+- [x] **E2** Add resources/list handler
+- [x] **E3** Add resources/read handler for releases and collection
+- [x] **E4** Test resource responses
 
 ## Chunk F – MCP Tools
 
-- [ ] **F1** Add tools/list handler
+- [x] **F1** Add tools/list handler
 - [ ] **F2** Implement search_collection tool
 - [ ] **F3** Implement get_release and get_collection_stats tools
 - [ ] **F4** Implement get_recommendations tool

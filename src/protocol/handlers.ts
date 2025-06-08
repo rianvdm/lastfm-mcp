@@ -205,7 +205,7 @@ interface ToolCallResult {
 }
 
 /**
- * Handle tools/call request
+ * Handle non-authenticated tools
  */
 async function handleToolsCall(params: unknown): Promise<ToolCallResult> {
 	// Validate params
@@ -238,7 +238,189 @@ async function handleToolsCall(params: unknown): Promise<ToolCallResult> {
 			}
 		}
 		default:
-			throw new Error(`Unknown tool: ${name}`)
+			throw new Error(`Unknown tool: ${name}. This tool may require authentication.`)
+	}
+}
+
+/**
+ * Handle authenticated tools
+ */
+async function handleAuthenticatedToolsCall(params: unknown, session: SessionPayload): Promise<ToolCallResult> {
+	// Validate params
+	if (!isToolsCallParams(params)) {
+		throw new Error('Invalid tools/call params - name and arguments are required')
+	}
+
+	const { name, arguments: args } = params
+
+	switch (name) {
+		case 'search_collection': {
+			const query = args?.query as string
+			if (!query) {
+				throw new Error('search_collection requires a query parameter')
+			}
+
+			const perPage = Math.min(Math.max((args?.per_page as number) || 50, 1), 100)
+
+			try {
+				const userProfile = await discogsClient.getUserProfile(session.accessToken)
+				const results = await discogsClient.searchCollection(userProfile.username, session.accessToken, {
+					query,
+					per_page: perPage,
+				})
+
+				const summary = `Found ${results.pagination.items} results for "${query}" in your collection (showing ${results.releases.length} items):`
+				const releaseList = results.releases.map(release => {
+					const info = release.basic_information
+					const artists = info.artists.map(a => a.name).join(', ')
+					const formats = info.formats.map(f => f.name).join(', ')
+					return `• ${artists} - ${info.title} (${info.year}) [${formats}]`
+				}).join('\n')
+
+				return {
+					content: [
+						{
+							type: 'text',
+							text: `${summary}\n\n${releaseList}`
+						}
+					]
+				}
+			} catch (error) {
+				throw new Error(`Failed to search collection: ${error instanceof Error ? error.message : 'Unknown error'}`)
+			}
+		}
+
+		case 'get_release': {
+			const releaseId = args?.release_id as string
+			if (!releaseId) {
+				throw new Error('get_release requires a release_id parameter')
+			}
+
+			try {
+				const release = await discogsClient.getRelease(releaseId, session.accessToken)
+				
+				const artists = release.artists.map(a => a.name).join(', ')
+				const formats = release.formats.map(f => `${f.name} (${f.qty})`).join(', ')
+				const genres = release.genres.join(', ')
+				const styles = release.styles.join(', ')
+				const labels = release.labels.map(l => `${l.name} (${l.catno})`).join(', ')
+				
+				let text = `**${artists} - ${release.title}**\n\n`
+				text += `Year: ${release.year || 'Unknown'}\n`
+				text += `Formats: ${formats}\n`
+				text += `Genres: ${genres}\n`
+				if (styles) text += `Styles: ${styles}\n`
+				text += `Labels: ${labels}\n`
+				if (release.country) text += `Country: ${release.country}\n`
+				
+				if (release.tracklist && release.tracklist.length > 0) {
+					text += `\n**Tracklist:**\n`
+					release.tracklist.forEach(track => {
+						text += `${track.position}. ${track.title}`
+						if (track.duration) text += ` (${track.duration})`
+						text += '\n'
+					})
+				}
+
+				return {
+					content: [
+						{
+							type: 'text',
+							text
+						}
+					]
+				}
+			} catch (error) {
+				throw new Error(`Failed to get release: ${error instanceof Error ? error.message : 'Unknown error'}`)
+			}
+		}
+
+		case 'get_collection_stats': {
+			try {
+				const userProfile = await discogsClient.getUserProfile(session.accessToken)
+				const stats = await discogsClient.getCollectionStats(userProfile.username, session.accessToken)
+
+				let text = `**Collection Statistics for ${userProfile.username}**\n\n`
+				text += `Total Releases: ${stats.totalReleases}\n`
+				text += `Average Rating: ${stats.averageRating.toFixed(1)} (${stats.ratedReleases} rated releases)\n\n`
+
+				text += `**Top Genres:**\n`
+				const topGenres = Object.entries(stats.genreBreakdown)
+					.sort(([,a], [,b]) => b - a)
+					.slice(0, 5)
+				topGenres.forEach(([genre, count]) => {
+					text += `• ${genre}: ${count} releases\n`
+				})
+
+				text += `\n**By Decade:**\n`
+				const topDecades = Object.entries(stats.decadeBreakdown)
+					.sort(([,a], [,b]) => b - a)
+					.slice(0, 5)
+				topDecades.forEach(([decade, count]) => {
+					text += `• ${decade}s: ${count} releases\n`
+				})
+
+				text += `\n**Top Formats:**\n`
+				const topFormats = Object.entries(stats.formatBreakdown)
+					.sort(([,a], [,b]) => b - a)
+					.slice(0, 5)
+				topFormats.forEach(([format, count]) => {
+					text += `• ${format}: ${count} releases\n`
+				})
+
+				return {
+					content: [
+						{
+							type: 'text',
+							text
+						}
+					]
+				}
+			} catch (error) {
+				throw new Error(`Failed to get collection stats: ${error instanceof Error ? error.message : 'Unknown error'}`)
+			}
+		}
+
+		case 'get_recommendations': {
+			const _limit = Math.min(Math.max((args?.limit as number) || 10, 1), 50)
+
+			try {
+				const userProfile = await discogsClient.getUserProfile(session.accessToken)
+				const stats = await discogsClient.getCollectionStats(userProfile.username, session.accessToken)
+
+				// Simple recommendation algorithm: suggest releases from top genres that user doesn't have
+				const topGenres = Object.entries(stats.genreBreakdown)
+					.sort(([,a], [,b]) => b - a)
+					.slice(0, 3)
+					.map(([genre]) => genre)
+
+				let text = `**Music Recommendations Based on Your Collection**\n\n`
+				text += `Based on your collection of ${stats.totalReleases} releases, here are some recommendations:\n\n`
+				
+				text += `**Your Top Genres:** ${topGenres.join(', ')}\n\n`
+				text += `**Recommendations:**\n`
+				text += `• Explore more releases from your favorite genres\n`
+				text += `• Look for releases from the ${Object.keys(stats.decadeBreakdown).sort().reverse()[0]}s era\n`
+				const topFormat = Object.entries(stats.formatBreakdown).sort(([,a], [,b]) => b - a)[0]?.[0] || 'vinyl'
+				text += `• Consider adding more ${topFormat} releases\n`
+				text += `• Search for releases from labels you already collect from\n\n`
+				text += `Use the search_collection tool to find specific artists or albums you might want to add!`
+
+				return {
+					content: [
+						{
+							type: 'text',
+							text
+						}
+					]
+				}
+			} catch (error) {
+				throw new Error(`Failed to get recommendations: ${error instanceof Error ? error.message : 'Unknown error'}`)
+			}
+		}
+
+		default:
+			throw new Error(`Unknown authenticated tool: ${name}`)
 	}
 }
 
@@ -393,9 +575,31 @@ export async function handleMethod(request: JSONRPCRequest, httpRequest?: Reques
 
 		case 'tools/call': {
 			try {
+				// First try non-authenticated tools
 				const result = await handleToolsCall(params)
 				return hasId(request) ? createResponse(id!, result) : null
 			} catch (error) {
+				// If it's an unknown tool error, it might be an authenticated tool
+				if (error instanceof Error && error.message.includes('Unknown tool') && error.message.includes('authentication')) {
+					// Check if we have authentication context
+					if (!httpRequest || !jwtSecret) {
+						return hasId(request) ? createError(id!, -32603, 'Internal error: Missing authentication context for authenticated tool') : null
+					}
+
+					const session = await verifyAuthentication(httpRequest, jwtSecret)
+					if (!session) {
+						return hasId(request) ? createError(id!, -32001, 'Authentication required. Please visit /login to authenticate with Discogs.') : null
+					}
+
+					try {
+						const authenticatedResult = await handleAuthenticatedToolsCall(params, session)
+						return hasId(request) ? createResponse(id!, authenticatedResult) : null
+					} catch (authError) {
+						const message = authError instanceof Error ? authError.message : 'Failed to call authenticated tool'
+						return hasId(request) ? createError(id!, -32603, message) : null
+					}
+				}
+
 				const message = error instanceof Error ? error.message : 'Failed to call tool'
 				return hasId(request) ? createError(id!, -32603, message) : null
 			}
