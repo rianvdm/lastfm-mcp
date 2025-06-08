@@ -3,10 +3,21 @@
  * Implements the core MCP methods
  */
 
-import { JSONRPCRequest, hasId, mapErrorToJSONRPC, MCPErrorCode } from '../types/jsonrpc'
+import { JSONRPCRequest, hasId, mapErrorToJSONRPC, MCPErrorCode, ErrorCode } from '../types/jsonrpc'
 import { createResponse, createError, createMethodNotFoundError, createInvalidParamsError } from './parser'
 import { InitializeParams, InitializeResult, PROTOCOL_VERSION, SERVER_INFO, DEFAULT_CAPABILITIES, Resource, ResourcesListResult, ResourcesReadParams, ResourcesReadResult, Prompt, PromptsListParams, PromptsListResult, PromptsGetParams, PromptsGetResult } from '../types/mcp'
 import type { Env } from '../types/env'
+import { 
+	validateJSONRPCMessage, 
+	validateProtocolFlow, 
+	validateInitializeParams, 
+	validateResourcesReadParams, 
+	validatePromptsGetParams,
+	validateToolArguments,
+	validateJSONRPCResponse,
+	markInitialized,
+	ValidationError
+} from './validation'
 import { verifySessionToken, SessionPayload } from '../auth/jwt'
 import { discogsClient } from '../clients/discogs'
 
@@ -50,25 +61,38 @@ export async function verifyAuthentication(request: Request, jwtSecret: string):
  * Handle initialize request
  */
 export function handleInitialize(params: unknown): InitializeResult {
-	// Validate params
-	if (!isInitializeParams(params)) {
-		throw createInvalidParamsError('Invalid initialize params')
-	}
+	// Validate params using comprehensive validation
+	validateInitializeParams(params)
 
 	// Check protocol version compatibility
 	// For now, we accept any version but return our version
 	console.log(`Client protocol version: ${params.protocolVersion}`)
 	console.log(`Client info: ${params.clientInfo.name} v${params.clientInfo.version}`)
 
-	// Mark as initialized
+	// Mark as initialized in both places
 	isInitialized = true
+	markInitialized()
 
 	// Return server capabilities
-	return {
+	const result = {
 		protocolVersion: PROTOCOL_VERSION,
 		capabilities: DEFAULT_CAPABILITIES,
 		serverInfo: SERVER_INFO,
 	}
+
+	// Validate our own response
+	try {
+		validateJSONRPCResponse({
+			jsonrpc: '2.0',
+			id: 1, // dummy ID for validation
+			result
+		})
+	} catch (error) {
+		console.error('Invalid initialize result:', error)
+		throw new Error('Internal error: Invalid initialize result')
+	}
+
+	return result
 }
 
 /**
@@ -111,10 +135,8 @@ export function handleResourcesList(): ResourcesListResult {
  * Handle resources/read request
  */
 export async function handleResourcesRead(params: unknown, session: SessionPayload, env?: Env): Promise<ResourcesReadResult> {
-	// Validate params
-	if (!isResourcesReadParams(params)) {
-		throw createInvalidParamsError('Invalid resources/read params - uri is required')
-	}
+	// Validate params using comprehensive validation
+	validateResourcesReadParams(params)
 
 	const { uri } = params
 
@@ -231,10 +253,8 @@ export function handlePromptsList(params?: unknown): PromptsListResult {
  * Handle prompts/get request
  */
 export function handlePromptsGet(params: unknown): PromptsGetResult {
-	// Validate params
-	if (!isPromptsGetParams(params)) {
-		throw new Error('Invalid prompts/get params - name is required')
-	}
+	// Validate params using comprehensive validation
+	validatePromptsGetParams(params)
 
 	const { name, arguments: args } = params
 
@@ -322,6 +342,31 @@ async function handleToolsCall(params: unknown): Promise<ToolCallResult> {
 
 	const { name, arguments: args } = params
 
+	// Get tool schema for validation
+	const toolSchemas: Record<string, unknown> = {
+		ping: {
+			type: 'object',
+			properties: {
+				message: { type: 'string' }
+			},
+			required: []
+		},
+		server_info: {
+			type: 'object',
+			properties: {},
+			required: []
+		}
+	}
+
+	// Validate tool arguments against schema
+	if (name in toolSchemas) {
+		try {
+			validateToolArguments(args, toolSchemas[name])
+		} catch (error) {
+			throw new ValidationError(error instanceof Error ? error.message : 'Invalid tool arguments')
+		}
+	}
+
 	switch (name) {
 		case 'ping': {
 			const message = args?.message || 'Hello from Discogs MCP!'
@@ -359,6 +404,46 @@ async function handleAuthenticatedToolsCall(params: unknown, session: SessionPay
 	}
 
 	const { name, arguments: args } = params
+
+	// Get tool schema for validation
+	const toolSchemas: Record<string, unknown> = {
+		search_collection: {
+			type: 'object',
+			properties: {
+				query: { type: 'string' },
+				per_page: { type: 'number', minimum: 1, maximum: 100 }
+			},
+			required: ['query']
+		},
+		get_release: {
+			type: 'object',
+			properties: {
+				release_id: { type: 'string' }
+			},
+			required: ['release_id']
+		},
+		get_collection_stats: {
+			type: 'object',
+			properties: {},
+			required: []
+		},
+		get_recommendations: {
+			type: 'object',
+			properties: {
+				limit: { type: 'number', minimum: 1, maximum: 50 }
+			},
+			required: []
+		}
+	}
+
+	// Validate tool arguments against schema
+	if (name in toolSchemas) {
+		try {
+			validateToolArguments(args, toolSchemas[name])
+		} catch (error) {
+			throw new ValidationError(error instanceof Error ? error.message : 'Invalid tool arguments')
+		}
+	}
 
 	switch (name) {
 		case 'search_collection': {
@@ -620,7 +705,27 @@ function isPromptsGetParams(params: unknown): params is PromptsGetParams {
  * Main method router
  */
 export async function handleMethod(request: JSONRPCRequest, httpRequest?: Request, jwtSecret?: string, env?: Env) {
+	// Validate JSON-RPC message structure
+	try {
+		validateJSONRPCMessage(request)
+	} catch (error) {
+		if (error instanceof ValidationError) {
+			return hasId(request) ? createError(request.id!, error.code, error.message) : null
+		}
+		return hasId(request) ? createError(request.id!, ErrorCode.InvalidRequest, 'Invalid request') : null
+	}
+
 	const { method, params, id } = request
+
+	// Validate protocol flow
+	try {
+		validateProtocolFlow(method)
+	} catch (error) {
+		if (error instanceof ValidationError) {
+			return hasId(request) ? createError(id!, error.code, error.message) : null
+		}
+		return hasId(request) ? createError(id!, MCPErrorCode.ServerNotInitialized, 'Server not initialized') : null
+	}
 
 	// Special case: initialize can be called before initialization
 	if (method === 'initialize') {
