@@ -129,24 +129,24 @@ describe('MCP Protocol Handlers', () => {
 			expect(response).toBeNull()
 		})
 
-		it('should reject methods before initialization', async () => {
-			const request = {
-				jsonrpc: '2.0' as const,
-				method: 'resources/list',
-				id: 1,
-			}
+			it('should allow list methods without initialization (stateless mode)', async () => {
+		const request = {
+			jsonrpc: '2.0' as const,
+			method: 'resources/list',
+			id: 1,
+		}
 
-			const response = await handleMethod(request)
+		const response = await handleMethod(request)
 
-			expect(response).toMatchObject({
-				jsonrpc: '2.0',
-				id: 1,
-				error: {
-					code: -32010,
-					message: 'Server not initialized',
-				},
-			})
+		// In stateless mode, list methods work without initialization
+		expect(response).toMatchObject({
+			jsonrpc: '2.0',
+			id: 1,
+			result: {
+				resources: expect.any(Array),
+			},
 		})
+	})
 
 		it('should allow list methods without authentication', async () => {
 			// Initialize first

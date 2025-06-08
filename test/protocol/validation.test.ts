@@ -118,10 +118,11 @@ describe('MCP Protocol Validation', () => {
 			expect(() => validateProtocolFlow('initialize')).not.toThrow()
 		})
 
-		it('should reject other methods when uninitialized', () => {
-			expect(() => validateProtocolFlow('tools/list')).toThrow(ValidationError)
-			expect(() => validateProtocolFlow('resources/list')).toThrow(ValidationError)
-			expect(() => validateProtocolFlow('prompts/list')).toThrow(ValidationError)
+		it('should allow methods when uninitialized (stateless mode)', () => {
+			// In stateless HTTP mode, the server allows methods without initialization state
+			expect(() => validateProtocolFlow('tools/list')).not.toThrow()
+			expect(() => validateProtocolFlow('resources/list')).not.toThrow()
+			expect(() => validateProtocolFlow('prompts/list')).not.toThrow()
 		})
 
 		it('should allow other methods when initialized', () => {

@@ -601,16 +601,15 @@ describe('MCP Client Integration Tests', () => {
 	})
 
 	describe('Protocol Compliance', () => {
-		it('should reject requests before initialization', async () => {
-			// Try to call method without initializing
+		it('should allow tools/list without initialization (stateless mode)', async () => {
+			// Try to call method without initializing - should work in stateless mode
 			const result = await client.listTools()
 
 			expect(result).toMatchObject({
 				jsonrpc: '2.0',
 				id: 1,
-				error: {
-					code: -32010, // Server not initialized
-					message: 'Server not initialized',
+				result: {
+					tools: expect.any(Array),
 				},
 			})
 		})
