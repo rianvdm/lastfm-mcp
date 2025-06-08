@@ -48,6 +48,55 @@ npm test       # Run tests
 npm run build  # Build for production
 ```
 
+## Deployment
+
+### Development Deployment
+
+```bash
+npm run deploy  # Deploy to development environment
+```
+
+### Production Deployment
+
+1. **First-time setup**: Create production KV namespaces and set secrets:
+   ```bash
+   npm run setup:prod
+   ```
+
+2. **Deploy to production**:
+   ```bash
+   npm run deploy:prod
+   ```
+
+### Automated Deployment
+
+The project includes GitHub Actions for automated deployment:
+
+- **CI Pipeline**: Runs on all pushes and PRs (lint, test, build)
+- **Production Deployment**: Automatically deploys to production when code is pushed to `main` branch
+
+### Required Secrets
+
+For production deployment, set these secrets in your Cloudflare account and GitHub repository:
+
+**Cloudflare Secrets** (set via `wrangler secret put`):
+- `DISCOGS_CONSUMER_KEY` - Your Discogs app consumer key
+- `DISCOGS_CONSUMER_SECRET` - Your Discogs app consumer secret  
+- `JWT_SECRET` - Strong random string for JWT signing
+
+**GitHub Secrets** (for automated deployment):
+- `CLOUDFLARE_API_TOKEN` - Cloudflare API token with Workers:Edit permissions
+- `CLOUDFLARE_ACCOUNT_ID` - Your Cloudflare account ID
+
+### Environment Configuration
+
+The project supports multiple environments via `wrangler.toml`:
+
+- **Development** (default): Uses development KV namespaces
+- **Production** (`--env production`): Uses separate production KV namespaces
+
+Each environment has isolated KV storage for logs, rate limiting, and sessions.
+
 ## Example Queries
 
 With the enhanced recommendations system, you can now ask questions like:
