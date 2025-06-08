@@ -417,7 +417,7 @@ describe('Discogs Client', () => {
 			})
 
 			// Search for "Miles Davis Kind of Blue" - should match the first release
-			// because "Miles" matches artist and "Kind" matches title
+			// because ALL terms ("Miles", "Davis", "Kind", "Blue") are found in the searchable text
 			const result = await discogsClient.searchCollection(
 				mockAuth.username,
 				mockAuth.accessToken,

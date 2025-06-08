@@ -323,7 +323,7 @@ export class DiscogsClient {
 				return releaseIdMatch || artistMatch || titleMatch || genreMatch || styleMatch || labelMatch || formatMatch || yearMatch
 			}
 
-			// For multi-word queries, split into terms and check if any terms match
+			// For multi-word queries, split into terms and require ALL terms to match
 			const queryTerms = query.split(/\s+/).filter(term => term.length > 2) // Split into words, ignore short words
 			
 			// Create searchable text from all release information
@@ -340,8 +340,8 @@ export class DiscogsClient {
 				release.id.toString()
 			].join(' ').toLowerCase()
 			
-			// Check if any query terms match the searchable text
-			return queryTerms.some(term => searchableText.includes(term))
+			// Require ALL query terms to match the searchable text
+			return queryTerms.every(term => searchableText.includes(term))
 		})
 
 		// Implement pagination on filtered results
