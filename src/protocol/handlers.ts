@@ -390,6 +390,11 @@ async function handleToolsCall(params: unknown): Promise<ToolCallResult> {
 			properties: {},
 			required: [],
 		},
+		auth_status: {
+			type: 'object',
+			properties: {},
+			required: [],
+		},
 	}
 
 	// Validate tool arguments against schema
@@ -418,7 +423,38 @@ async function handleToolsCall(params: unknown): Promise<ToolCallResult> {
 				content: [
 					{
 						type: 'text',
-						text: `Discogs MCP Server v1.0.0\n\nStatus: Running\nProtocol: MCP 2024-11-05\nFeatures:\n- Resources: Collection, Releases, Search\n- Authentication: OAuth 1.0a\n- Rate Limiting: Enabled\n\nTo get started, authenticate at http://localhost:8787/login`,
+						text: `Discogs MCP Server v1.0.0\n\nStatus: Running\nProtocol: MCP 2024-11-05\nFeatures:\n- Resources: Collection, Releases, Search\n- Authentication: OAuth 1.0a\n- Rate Limiting: Enabled\n\nTo get started, authenticate at https://discogs-mcp-prod.rian-db8.workers.dev/login`,
+					},
+				],
+			}
+		}
+		case 'auth_status': {
+			return {
+				content: [
+					{
+						type: 'text',
+						text: `🔐 **Authentication Status: Not Authenticated**
+
+To access your Discogs collection, you need to authenticate with Discogs first.
+
+**How to authenticate:**
+1. Visit: https://discogs-mcp-prod.rian-db8.workers.dev/login
+2. Click "Authorize" to allow access to your Discogs collection
+3. You'll be redirected back and your session will be saved
+4. Return here and try your request again
+
+**Available without authentication:**
+- ping: Test server connectivity
+- server_info: Get server information  
+- auth_status: Check authentication status (this tool)
+
+**Requires authentication:**
+- search_collection: Search your Discogs collection
+- get_release: Get detailed release information
+- get_collection_stats: Get collection statistics
+- get_recommendations: Get personalized recommendations
+
+Once authenticated, you can use all the collection tools seamlessly!`,
 					},
 				],
 			}
@@ -928,14 +964,14 @@ export async function handleMethod(request: JSONRPCRequest, httpRequest?: Reques
 		return null
 	}
 
-	// Some methods don't require authentication
-	switch (method) {
-		case 'resources/list': {
-			const resourcesResult = handleResourcesList()
-			return hasId(request) ? createResponse(id!, resourcesResult) : null
-		}
+			// Some methods don't require authentication
+		switch (method) {
+			case 'resources/list': {
+				const resourcesResult = handleResourcesList()
+				return hasId(request) ? createResponse(id!, resourcesResult) : null
+			}
 
-		case 'tools/list': {
+			case 'tools/list': {
 			// Return all available Discogs tools
 			const tools = [
 				{
@@ -956,6 +992,15 @@ export async function handleMethod(request: JSONRPCRequest, httpRequest?: Reques
 				{
 					name: 'server_info',
 					description: 'Get information about the Discogs MCP server',
+					inputSchema: {
+						type: 'object',
+						properties: {},
+						required: [],
+					},
+				},
+				{
+					name: 'auth_status',
+					description: 'Check authentication status and get login instructions if needed',
 					inputSchema: {
 						type: 'object',
 						properties: {},
@@ -1060,12 +1105,38 @@ export async function handleMethod(request: JSONRPCRequest, httpRequest?: Reques
 					}
 
 					console.log('Verifying authentication...')
-					const session = await verifyAuthentication(httpRequest, jwtSecret)
+					let session = await verifyAuthentication(httpRequest, jwtSecret)
 					console.log('Session verification result:', session ? 'SUCCESS' : 'FAILED')
+
+					// If no session from request, try to get the latest session from KV storage
+					if (!session && env?.MCP_SESSIONS) {
+						console.log('No session in request, checking for stored session...')
+						try {
+							const sessionDataStr = await env.MCP_SESSIONS.get('latest-session')
+							if (sessionDataStr) {
+								const sessionData = JSON.parse(sessionDataStr)
+								// Verify the stored session is still valid
+								if (sessionData.expiresAt && new Date(sessionData.expiresAt) > new Date()) {
+									session = {
+										userId: sessionData.userId,
+										accessToken: sessionData.accessToken,
+										accessTokenSecret: sessionData.accessTokenSecret,
+										iat: Math.floor(Date.now() / 1000),
+										exp: Math.floor(new Date(sessionData.expiresAt).getTime() / 1000),
+									}
+									console.log('Using stored session for user:', session.userId)
+								} else {
+									console.log('Stored session has expired')
+								}
+							}
+						} catch (error) {
+							console.error('Error retrieving stored session:', error)
+						}
+					}
 
 					if (!session) {
 						return hasId(request)
-							? createError(id!, MCPErrorCode.Unauthorized, 'Authentication required. Please visit /login to authenticate with Discogs.')
+							? createError(id!, MCPErrorCode.Unauthorized, 'Authentication required. Please use the "auth_status" tool for detailed authentication instructions, or visit https://discogs-mcp-prod.rian-db8.workers.dev/login to authenticate with Discogs.')
 							: null
 					}
 
@@ -1112,10 +1183,33 @@ export async function handleMethod(request: JSONRPCRequest, httpRequest?: Reques
 		return null
 	}
 
-	const session = await verifyAuthentication(httpRequest, jwtSecret)
+	let session = await verifyAuthentication(httpRequest, jwtSecret)
+	
+	// If no session from request, try to get the latest session from KV storage
+	if (!session && env?.MCP_SESSIONS) {
+		try {
+			const sessionDataStr = await env.MCP_SESSIONS.get('latest-session')
+			if (sessionDataStr) {
+				const sessionData = JSON.parse(sessionDataStr)
+				// Verify the stored session is still valid
+				if (sessionData.expiresAt && new Date(sessionData.expiresAt) > new Date()) {
+					session = {
+						userId: sessionData.userId,
+						accessToken: sessionData.accessToken,
+						accessTokenSecret: sessionData.accessTokenSecret,
+						iat: Math.floor(Date.now() / 1000),
+						exp: Math.floor(new Date(sessionData.expiresAt).getTime() / 1000),
+					}
+				}
+			}
+		} catch (error) {
+			console.error('Error retrieving stored session:', error)
+		}
+	}
+	
 	if (!session) {
 		if (hasId(request)) {
-			return createError(id!, MCPErrorCode.Unauthorized, 'Authentication required. Please visit /login to authenticate with Discogs.')
+			return createError(id!, MCPErrorCode.Unauthorized, 'Authentication required. Please use the "auth_status" tool for detailed authentication instructions, or visit https://discogs-mcp-prod.rian-db8.workers.dev/login to authenticate with Discogs.')
 		}
 		return null
 	}

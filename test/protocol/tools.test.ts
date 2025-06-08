@@ -132,6 +132,56 @@ describe('MCP Tools', () => {
 				},
 			})
 		})
+
+		it('should handle auth_status tool', async () => {
+			// Initialize first
+			await handleMethod({
+				jsonrpc: '2.0',
+				method: 'initialize',
+				params: {
+					protocolVersion: '2024-11-05',
+					capabilities: {},
+					clientInfo: { name: 'Test', version: '1.0' },
+				},
+				id: 1,
+			})
+
+			// Send initialized notification
+			await handleMethod({
+				jsonrpc: '2.0',
+				method: 'initialized',
+			})
+
+			const response = await handleMethod({
+				jsonrpc: '2.0',
+				method: 'tools/call',
+				params: {
+					name: 'auth_status',
+					arguments: {},
+				},
+				id: 2,
+			})
+
+			expect(response).toMatchObject({
+				jsonrpc: '2.0',
+				id: 2,
+				result: {
+					content: [
+						{
+							type: 'text',
+							text: expect.stringContaining('Authentication Status: Not Authenticated'),
+						},
+					],
+				},
+			})
+
+			// Verify it contains authentication instructions
+			const result = response?.result as { content: Array<{ type: string; text: string }> }
+			const responseText = result.content[0].text
+			expect(responseText).toContain('https://discogs-mcp-prod.rian-db8.workers.dev/login')
+			expect(responseText).toContain('Available without authentication')
+			expect(responseText).toContain('Requires authentication')
+		})
 	})
 
 	describe('Authenticated tools', () => {
