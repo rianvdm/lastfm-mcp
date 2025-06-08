@@ -238,7 +238,7 @@ export function handlePromptsGet(params: unknown): PromptsGetResult {
 	const { name, arguments: args } = params
 
 	switch (name) {
-		case 'browse_collection':
+		case 'browse_collection': {
 			return {
 				description: 'Browse and explore your Discogs music collection',
 				messages: [
@@ -251,8 +251,9 @@ export function handlePromptsGet(params: unknown): PromptsGetResult {
 					},
 				],
 			}
+		}
 
-		case 'find_music':
+		case 'find_music': {
 			const query = args?.query as string
 			if (!query) {
 				throw new Error('find_music prompt requires a query argument')
@@ -269,8 +270,9 @@ export function handlePromptsGet(params: unknown): PromptsGetResult {
 					},
 				],
 			}
+		}
 
-		case 'collection_insights':
+		case 'collection_insights': {
 			return {
 				description: 'Get insights about your music collection',
 				messages: [
@@ -283,6 +285,7 @@ export function handlePromptsGet(params: unknown): PromptsGetResult {
 					},
 				],
 			}
+		}
 
 		default:
 			throw new Error(`Unknown prompt: ${name}`)
