@@ -187,9 +187,27 @@ export async function handleResourcesRead(params: unknown, session: SessionPaylo
 }
 
 /**
+ * Interface for tools/call parameters
+ */
+interface ToolsCallParams {
+	name: string
+	arguments?: Record<string, unknown>
+}
+
+/**
+ * Interface for tool call result
+ */
+interface ToolCallResult {
+	content: Array<{
+		type: 'text'
+		text: string
+	}>
+}
+
+/**
  * Handle tools/call request
  */
-async function handleToolsCall(params: unknown): Promise<any> {
+async function handleToolsCall(params: unknown): Promise<ToolCallResult> {
 	// Validate params
 	if (!isToolsCallParams(params)) {
 		throw new Error('Invalid tools/call params - name and arguments are required')
@@ -227,12 +245,12 @@ async function handleToolsCall(params: unknown): Promise<any> {
 /**
  * Type guard for ToolsCallParams
  */
-function isToolsCallParams(params: unknown): params is { name: string; arguments?: any } {
+function isToolsCallParams(params: unknown): params is ToolsCallParams {
 	return (
 		typeof params === 'object' &&
 		params !== null &&
 		'name' in params &&
-		typeof (params as any).name === 'string'
+		typeof (params as Record<string, unknown>).name === 'string'
 	)
 }
 
@@ -281,7 +299,7 @@ export async function handleMethod(request: JSONRPCRequest, httpRequest?: Reques
 			return hasId(request) ? createResponse(id!, resourcesResult) : null
 		}
 
-		case 'tools/list':
+		case 'tools/list': {
 			// Return all available Discogs tools
 			const tools = [
 				{
@@ -371,6 +389,7 @@ export async function handleMethod(request: JSONRPCRequest, httpRequest?: Reques
 				}
 			]
 			return hasId(request) ? createResponse(id!, { tools }) : null
+		}
 
 		case 'tools/call': {
 			try {
