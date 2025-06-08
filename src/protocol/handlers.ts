@@ -420,35 +420,9 @@ async function handleToolsCall(params: unknown): Promise<ToolCallResult> {
 			}
 		}
 		case 'auth_status': {
-			return {
-				content: [
-					{
-						type: 'text',
-						text: `🔐 **Authentication Status: Not Authenticated**
-
-To access your Discogs collection, you need to authenticate with Discogs first.
-
-**How to authenticate:**
-1. Visit: https://discogs-mcp-prod.rian-db8.workers.dev/login
-2. Click "Authorize" to allow access to your Discogs collection
-3. You'll be redirected back and your session will be saved
-4. Return here and try your request again
-
-**Available without authentication:**
-- ping: Test server connectivity
-- server_info: Get server information  
-- auth_status: Check authentication status (this tool)
-
-**Requires authentication:**
-- search_collection: Search your Discogs collection
-- get_release: Get detailed release information
-- get_collection_stats: Get collection statistics
-- get_recommendations: Get personalized recommendations
-
-Once authenticated, you can use all the collection tools seamlessly!`,
-					},
-				],
-			}
+			// This tool needs to check actual authentication status
+			// We need the request context to check for session
+			throw new Error('auth_status tool requires authentication context to check status')
 		}
 		default:
 			throw new Error(`Unknown tool: ${name}. This tool may require authentication.`)
@@ -511,6 +485,62 @@ async function handleAuthenticatedToolsCall(params: unknown, session: SessionPay
 	}
 
 	switch (name) {
+		case 'auth_status': {
+			try {
+				const consumerKey = env?.DISCOGS_CONSUMER_KEY || ''
+				const consumerSecret = env?.DISCOGS_CONSUMER_SECRET || ''
+
+				// Try to get user profile to verify authentication
+				const userProfile = await discogsClient.getUserProfile(session.accessToken, session.accessTokenSecret, consumerKey, consumerSecret)
+				
+				return {
+					content: [
+						{
+							type: 'text',
+							text: `✅ **Authentication Status: Authenticated**
+
+🎵 **Connected Discogs Account:** ${userProfile.username}
+🆔 **User ID:** ${userProfile.id}
+
+You're all set! You can now use all collection tools:
+
+**Available Tools:**
+- **search_collection**: Search your Discogs collection
+- **get_release**: Get detailed release information  
+- **get_collection_stats**: Get collection statistics
+- **get_recommendations**: Get personalized recommendations
+- **ping**: Test server connectivity
+- **server_info**: Get server information
+
+Try asking something like:
+- "Search my collection for Beatles albums"
+- "What are my collection stats?"
+- "Recommend some jazz albums from my collection"`,
+						},
+					],
+				}
+			} catch (error) {
+				return {
+					content: [
+						{
+							type: 'text',
+							text: `🔐 **Authentication Status: Authentication Error**
+
+There was an issue verifying your authentication: ${error instanceof Error ? error.message : 'Unknown error'}
+
+**How to re-authenticate:**
+1. Visit: https://discogs-mcp-prod.rian-db8.workers.dev/login
+2. Click "Authorize" to allow access to your Discogs collection
+3. You'll be redirected back and your session will be saved
+4. Try again
+
+If the problem persists, please check that your Discogs account is accessible.`,
+						},
+					],
+				}
+			}
+		}
+		
 		case 'search_collection': {
 			const query = args?.query as string
 			if (!query) {
