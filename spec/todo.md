@@ -29,9 +29,9 @@
 ## Chunk D – Infrastructure Utilities
 
 - [x] **D1** Create `kvLogger` module (Workers KV request logging)
-- [ ] **D2** Implement `rateLimit` middleware (per-user sliding window)
-- [ ] **D3** Wire logger & limiter into main handler
-- [ ] **D4** Add unit tests for logging and rate limiting
+- [x] **D2** Implement `rateLimit` middleware (per-user sliding window)
+- [x] **D3** Wire logger & limiter into main handler
+- [x] **D4** Add unit tests for logging and rate limiting
 
 ## Chunk E – MCP Resources
 
