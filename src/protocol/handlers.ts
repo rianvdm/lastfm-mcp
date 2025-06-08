@@ -150,9 +150,10 @@ export async function handleMethod(request: JSONRPCRequest, httpRequest?: Reques
 	// Route to appropriate handler
 	switch (method) {
 		// Resources
-		case 'resources/list':
+		case 'resources/list': {
 			const resourcesResult = handleResourcesList()
 			return hasId(request) ? createResponse(id!, resourcesResult) : null
+		}
 
 		case 'resources/read':
 			// TODO: Implement in E3
