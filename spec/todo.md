@@ -63,9 +63,9 @@
 
 ## Chunk I – Deployment
 
-- [ ] **I1** Configure Wrangler environments & secrets (`wrangler.toml`)
-- [ ] **I2** Extend CI workflow to publish to production on `main`
-- [ ] **I3** Verify production deploy & test with Claude Desktop
+- [x] **I1** Configure Wrangler environments & secrets (`wrangler.toml`)
+- [x] **I2** Extend CI workflow to publish to production on `main`
+- [x] **I3** Verify production deploy & test with Claude Desktop
 
 ---
 
