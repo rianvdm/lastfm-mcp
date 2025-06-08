@@ -109,7 +109,7 @@ export function handleResourcesList(): ResourcesListResult {
 /**
  * Handle resources/read request
  */
-export async function handleResourcesRead(params: unknown, session: SessionPayload, env?: any): Promise<ResourcesReadResult> {
+export async function handleResourcesRead(params: unknown, session: SessionPayload, env?: Record<string, string>): Promise<ResourcesReadResult> {
 	// Validate params
 	if (!isResourcesReadParams(params)) {
 		throw createInvalidParamsError('Invalid resources/read params - uri is required')
@@ -145,7 +145,7 @@ export async function handleResourcesRead(params: unknown, session: SessionPaylo
 				throw new Error('Invalid release URI - must specify a release ID')
 			}
 
-			const release = await discogsClient.getRelease(releaseId, session.accessToken)
+			const release = await discogsClient.getRelease(releaseId, session.accessToken, session.accessTokenSecret)
 
 			return {
 				contents: [
@@ -251,7 +251,7 @@ async function handleToolsCall(params: unknown): Promise<ToolCallResult> {
 /**
  * Handle authenticated tools
  */
-async function handleAuthenticatedToolsCall(params: unknown, session: SessionPayload, env?: any): Promise<ToolCallResult> {
+async function handleAuthenticatedToolsCall(params: unknown, session: SessionPayload, env?: Record<string, string>): Promise<ToolCallResult> {
 	// Validate params
 	if (!isToolsCallParams(params)) {
 		throw new Error('Invalid tools/call params - name and arguments are required')
@@ -466,7 +466,7 @@ function isResourcesReadParams(params: unknown): params is ResourcesReadParams {
 /**
  * Main method router
  */
-export async function handleMethod(request: JSONRPCRequest, httpRequest?: Request, jwtSecret?: string, env?: any) {
+export async function handleMethod(request: JSONRPCRequest, httpRequest?: Request, jwtSecret?: string, env?: Record<string, string>) {
 	const { method, params, id } = request
 
 	// Special case: initialize can be called before initialization

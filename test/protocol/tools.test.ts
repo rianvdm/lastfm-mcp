@@ -247,7 +247,7 @@ describe('MCP Tools', () => {
 				}
 			})
 
-			expect(mockDiscogsClient.getRelease).toHaveBeenCalledWith('123456', 'test-token')
+			expect(mockDiscogsClient.getRelease).toHaveBeenCalledWith('123456', 'test-token', 'test-secret')
 		})
 
 		it('should handle get_collection_stats tool', async () => {

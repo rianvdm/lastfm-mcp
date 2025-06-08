@@ -144,7 +144,7 @@ describe('MCP Resources', () => {
 			const parsedContent = JSON.parse(result.contents[0].text!)
 			expect(parsedContent).toEqual(mockRelease)
 
-			expect(mockDiscogsClient.getRelease).toHaveBeenCalledWith('123456', 'test-token')
+			expect(mockDiscogsClient.getRelease).toHaveBeenCalledWith('123456', 'test-token', 'test-secret')
 		})
 
 		it('should read search resource', async () => {
