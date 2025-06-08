@@ -8,7 +8,7 @@ import {
 	createMethodNotFoundError,
 	serializeResponse,
 } from '../../src/protocol/parser'
-import { ErrorCode } from '../../src/types/jsonrpc'
+import { ErrorCode, mapErrorToJSONRPC, MCPErrorCode } from '../../src/types/jsonrpc'
 
 describe('JSON-RPC Parser', () => {
 	describe('parseMessage', () => {
@@ -169,6 +169,106 @@ describe('JSON-RPC Parser', () => {
 			const serialized = serializeResponse(response)
 			const parsed = JSON.parse(serialized)
 			expect(parsed).toEqual(response)
+		})
+	})
+
+	describe('mapErrorToJSONRPC', () => {
+		it('should map authentication errors correctly', () => {
+			const error = new Error('Authentication required')
+			const result = mapErrorToJSONRPC(error)
+			
+			expect(result.code).toBe(MCPErrorCode.Unauthorized)
+			expect(result.message).toBe('Authentication required')
+			expect(result.data).toEqual({ originalMessage: 'Authentication required' })
+		})
+
+		it('should map rate limit errors correctly', () => {
+			const error = new Error('Rate limit exceeded')
+			const result = mapErrorToJSONRPC(error)
+			
+			expect(result.code).toBe(MCPErrorCode.RateLimited)
+			expect(result.message).toBe('Rate limit exceeded')
+			expect(result.data).toEqual({ originalMessage: 'Rate limit exceeded' })
+		})
+
+		it('should map Discogs API errors correctly', () => {
+			const error = new Error('Failed to fetch release 123: 404 Not Found')
+			const result = mapErrorToJSONRPC(error)
+			
+			expect(result.code).toBe(MCPErrorCode.DiscogsAPIError)
+			expect(result.message).toBe('Discogs API error')
+			expect(result.data).toEqual({ originalMessage: 'Failed to fetch release 123: 404 Not Found' })
+		})
+
+		it('should map resource not found errors correctly', () => {
+			const error = new Error('Resource not found')
+			const result = mapErrorToJSONRPC(error)
+			
+			expect(result.code).toBe(MCPErrorCode.ResourceNotFound)
+			expect(result.message).toBe('Resource not found')
+			expect(result.data).toEqual({ originalMessage: 'Resource not found' })
+		})
+
+		it('should map tool errors correctly', () => {
+			const error = new Error('Unknown tool: invalid_tool')
+			const result = mapErrorToJSONRPC(error)
+			
+			expect(result.code).toBe(MCPErrorCode.ToolNotFound)
+			expect(result.message).toBe('Tool not found')
+			expect(result.data).toEqual({ originalMessage: 'Unknown tool: invalid_tool' })
+		})
+
+		it('should map tool execution errors correctly', () => {
+			const error = new Error('Tool execution failed: timeout')
+			const result = mapErrorToJSONRPC(error)
+			
+			expect(result.code).toBe(MCPErrorCode.ToolExecutionError)
+			expect(result.message).toBe('Tool execution failed')
+			expect(result.data).toEqual({ originalMessage: 'Tool execution failed: timeout' })
+		})
+
+		it('should map prompt errors correctly', () => {
+			const error = new Error('Prompt not found: invalid_prompt')
+			const result = mapErrorToJSONRPC(error)
+			
+			expect(result.code).toBe(MCPErrorCode.PromptNotFound)
+			expect(result.message).toBe('Prompt not found')
+			expect(result.data).toEqual({ originalMessage: 'Prompt not found: invalid_prompt' })
+		})
+
+		it('should map server initialization errors correctly', () => {
+			const error = new Error('Server not initialized')
+			const result = mapErrorToJSONRPC(error)
+			
+			expect(result.code).toBe(MCPErrorCode.ServerNotInitialized)
+			expect(result.message).toBe('Server not initialized')
+			expect(result.data).toEqual({ originalMessage: 'Server not initialized' })
+		})
+
+		it('should map generic errors to internal error', () => {
+			const error = new Error('Some unexpected error')
+			const result = mapErrorToJSONRPC(error)
+			
+			expect(result.code).toBe(ErrorCode.InternalError)
+			expect(result.message).toBe('Internal error')
+			expect(result.data).toEqual({ originalMessage: 'Some unexpected error' })
+		})
+
+		it('should handle non-Error objects', () => {
+			const error = 'string error'
+			const result = mapErrorToJSONRPC(error)
+			
+			expect(result.code).toBe(ErrorCode.InternalError)
+			expect(result.message).toBe('Internal error')
+			expect(result.data).toEqual({ error: 'string error' })
+		})
+
+		it('should handle null/undefined errors', () => {
+			const result = mapErrorToJSONRPC(null)
+			
+			expect(result.code).toBe(ErrorCode.InternalError)
+			expect(result.message).toBe('Internal error')
+			expect(result.data).toEqual({ error: 'null' })
 		})
 	})
 })

@@ -435,7 +435,7 @@ describe('MCP Tools', () => {
 				jsonrpc: '2.0',
 				id: 2,
 				error: {
-					code: -32603,
+					code: -32602,
 					message: 'search_collection requires a query parameter'
 				}
 			})

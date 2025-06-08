@@ -140,7 +140,7 @@ describe('MCP Protocol Handlers', () => {
 				jsonrpc: '2.0',
 				id: 1,
 				error: {
-					code: -32002,
+					code: -32010,
 					message: 'Server not initialized',
 				},
 			})

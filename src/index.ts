@@ -6,7 +6,7 @@
 import { parseMessage, createError, serializeResponse } from './protocol/parser'
 import { handleMethod, verifyAuthentication } from './protocol/handlers'
 import { createSessionToken } from './auth/jwt'
-import { ErrorCode, JSONRPCError } from './types/jsonrpc'
+import { ErrorCode, JSONRPCError, mapErrorToJSONRPC, MCPErrorCode } from './types/jsonrpc'
 import { createSSEResponse, getConnection } from './transport/sse'
 import { DiscogsAuth } from './auth/discogs'
 import { KVLogger } from './utils/kvLogger'

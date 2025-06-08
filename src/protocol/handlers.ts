@@ -3,9 +3,10 @@
  * Implements the core MCP methods
  */
 
-import { JSONRPCRequest, hasId } from '../types/jsonrpc'
+import { JSONRPCRequest, hasId, mapErrorToJSONRPC, MCPErrorCode } from '../types/jsonrpc'
 import { createResponse, createError, createMethodNotFoundError, createInvalidParamsError } from './parser'
 import { InitializeParams, InitializeResult, PROTOCOL_VERSION, SERVER_INFO, DEFAULT_CAPABILITIES, Resource, ResourcesListResult, ResourcesReadParams, ResourcesReadResult, Prompt, PromptsListParams, PromptsListResult, PromptsGetParams, PromptsGetResult } from '../types/mcp'
+import type { Env } from '../types/env'
 import { verifySessionToken, SessionPayload } from '../auth/jwt'
 import { discogsClient } from '../clients/discogs'
 
@@ -109,7 +110,7 @@ export function handleResourcesList(): ResourcesListResult {
 /**
  * Handle resources/read request
  */
-export async function handleResourcesRead(params: unknown, session: SessionPayload, env?: Record<string, string>): Promise<ResourcesReadResult> {
+export async function handleResourcesRead(params: unknown, session: SessionPayload, env?: Env): Promise<ResourcesReadResult> {
 	// Validate params
 	if (!isResourcesReadParams(params)) {
 		throw createInvalidParamsError('Invalid resources/read params - uri is required')
@@ -351,7 +352,7 @@ async function handleToolsCall(params: unknown): Promise<ToolCallResult> {
 /**
  * Handle authenticated tools
  */
-async function handleAuthenticatedToolsCall(params: unknown, session: SessionPayload, env?: Record<string, string>): Promise<ToolCallResult> {
+async function handleAuthenticatedToolsCall(params: unknown, session: SessionPayload, env?: Env): Promise<ToolCallResult> {
 	// Validate params
 	if (!isToolsCallParams(params)) {
 		throw new Error('Invalid tools/call params - name and arguments are required')
@@ -618,7 +619,7 @@ function isPromptsGetParams(params: unknown): params is PromptsGetParams {
 /**
  * Main method router
  */
-export async function handleMethod(request: JSONRPCRequest, httpRequest?: Request, jwtSecret?: string, env?: Record<string, string>) {
+export async function handleMethod(request: JSONRPCRequest, httpRequest?: Request, jwtSecret?: string, env?: Env) {
 	const { method, params, id } = request
 
 	// Special case: initialize can be called before initialization
@@ -636,7 +637,7 @@ export async function handleMethod(request: JSONRPCRequest, httpRequest?: Reques
 	// All other methods require initialization
 	if (!isInitialized) {
 		if (hasId(request)) {
-			return createError(id!, -32002, 'Server not initialized')
+			return createError(id!, MCPErrorCode.ServerNotInitialized, 'Server not initialized')
 		}
 		return null
 	}
@@ -761,20 +762,20 @@ export async function handleMethod(request: JSONRPCRequest, httpRequest?: Reques
 					console.log('Session verification result:', session ? 'SUCCESS' : 'FAILED')
 					
 					if (!session) {
-						return hasId(request) ? createError(id!, -32001, 'Authentication required. Please visit /login to authenticate with Discogs.') : null
+						return hasId(request) ? createError(id!, MCPErrorCode.Unauthorized, 'Authentication required. Please visit /login to authenticate with Discogs.') : null
 					}
 
 					try {
 						const authenticatedResult = await handleAuthenticatedToolsCall(params, session, env)
 						return hasId(request) ? createResponse(id!, authenticatedResult) : null
 					} catch (authError) {
-						const message = authError instanceof Error ? authError.message : 'Failed to call authenticated tool'
-						return hasId(request) ? createError(id!, -32603, message) : null
+						const errorInfo = mapErrorToJSONRPC(authError)
+						return hasId(request) ? createError(id!, errorInfo.code, errorInfo.message, errorInfo.data) : null
 					}
 				}
 
-				const message = error instanceof Error ? error.message : 'Failed to call tool'
-				return hasId(request) ? createError(id!, -32603, message) : null
+				const errorInfo = mapErrorToJSONRPC(error)
+				return hasId(request) ? createError(id!, errorInfo.code, errorInfo.message, errorInfo.data) : null
 			}
 		}
 
@@ -783,8 +784,8 @@ export async function handleMethod(request: JSONRPCRequest, httpRequest?: Reques
 				const result = handlePromptsList(params)
 				return hasId(request) ? createResponse(id!, result) : null
 			} catch (error) {
-				const message = error instanceof Error ? error.message : 'Failed to list prompts'
-				return hasId(request) ? createError(id!, -32603, message) : null
+				const errorInfo = mapErrorToJSONRPC(error)
+				return hasId(request) ? createError(id!, errorInfo.code, errorInfo.message, errorInfo.data) : null
 			}
 		}
 
@@ -793,8 +794,8 @@ export async function handleMethod(request: JSONRPCRequest, httpRequest?: Reques
 				const result = handlePromptsGet(params)
 				return hasId(request) ? createResponse(id!, result) : null
 			} catch (error) {
-				const message = error instanceof Error ? error.message : 'Failed to get prompt'
-				return hasId(request) ? createError(id!, -32603, message) : null
+				const errorInfo = mapErrorToJSONRPC(error)
+				return hasId(request) ? createError(id!, errorInfo.code, errorInfo.message, errorInfo.data) : null
 			}
 		}
 	}
@@ -810,7 +811,7 @@ export async function handleMethod(request: JSONRPCRequest, httpRequest?: Reques
 	const session = await verifyAuthentication(httpRequest, jwtSecret)
 	if (!session) {
 		if (hasId(request)) {
-			return createError(id!, -32001, 'Authentication required. Please visit /login to authenticate with Discogs.')
+			return createError(id!, MCPErrorCode.Unauthorized, 'Authentication required. Please visit /login to authenticate with Discogs.')
 		}
 		return null
 	}
@@ -824,8 +825,8 @@ export async function handleMethod(request: JSONRPCRequest, httpRequest?: Reques
 				const result = await handleResourcesRead(params, session, env)
 				return hasId(request) ? createResponse(id!, result) : null
 			} catch (error) {
-				const message = error instanceof Error ? error.message : 'Failed to read resource'
-				return hasId(request) ? createError(id!, -32603, message) : null
+				const errorInfo = mapErrorToJSONRPC(error)
+				return hasId(request) ? createError(id!, errorInfo.code, errorInfo.message, errorInfo.data) : null
 			}
 		}
 
