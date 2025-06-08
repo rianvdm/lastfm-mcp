@@ -564,10 +564,10 @@ describe('MCP Tools', () => {
 					method: 'tools/call',
 					params: {
 						name: 'get_recommendations',
-						arguments: { 
+						arguments: {
 							genre: 'Jazz',
 							decade: '1960s',
-							limit: 3 
+							limit: 3,
 						},
 					},
 					id: 2,

@@ -88,7 +88,7 @@ The server provides these MCP tools:
 
 4. **get_recommendations**
    - Description: "Get context-aware music recommendations based on collection"
-   - Parameters: 
+   - Parameters:
      - `limit` (number, optional): Number of recommendations to return (1-50, default 10)
      - `genre` (string, optional): Filter by genre (e.g., "Jazz", "Rock", "Electronic")
      - `decade` (string, optional): Filter by decade (e.g., "1960s", "1970s", "1980s")

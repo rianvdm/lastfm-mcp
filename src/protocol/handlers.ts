@@ -668,7 +668,7 @@ async function handleAuthenticatedToolsCall(params: unknown, session: SessionPay
 				const consumerSecret = env?.DISCOGS_CONSUMER_SECRET || ''
 
 				const userProfile = await discogsClient.getUserProfile(session.accessToken, session.accessTokenSecret, consumerKey, consumerSecret)
-				
+
 				// Get full collection for context-aware recommendations
 				const fullCollection = await discogsClient.searchCollection(
 					userProfile.username,
@@ -698,13 +698,10 @@ async function handleAuthenticatedToolsCall(params: unknown, session: SessionPay
 
 				// Filter by genre
 				if (genre) {
-					filteredReleases = filteredReleases.filter(release => 
-						release.basic_information.genres?.some(g => 
-							g.toLowerCase().includes(genre.toLowerCase())
-						) || 
-						release.basic_information.styles?.some(s => 
-							s.toLowerCase().includes(genre.toLowerCase())
-						)
+					filteredReleases = filteredReleases.filter(
+						(release) =>
+							release.basic_information.genres?.some((g) => g.toLowerCase().includes(genre.toLowerCase())) ||
+							release.basic_information.styles?.some((s) => s.toLowerCase().includes(genre.toLowerCase())),
 					)
 				}
 
@@ -712,7 +709,7 @@ async function handleAuthenticatedToolsCall(params: unknown, session: SessionPay
 				if (decade) {
 					const decadeNum = parseInt(decade.replace(/s$/, ''))
 					if (!isNaN(decadeNum)) {
-						filteredReleases = filteredReleases.filter(release => {
+						filteredReleases = filteredReleases.filter((release) => {
 							const year = release.basic_information.year
 							return year && year >= decadeNum && year < decadeNum + 10
 						})
@@ -722,18 +719,12 @@ async function handleAuthenticatedToolsCall(params: unknown, session: SessionPay
 				// Filter by similarity to artist/album
 				if (similarTo) {
 					const similarLower = similarTo.toLowerCase()
-					filteredReleases = filteredReleases.filter(release => {
+					filteredReleases = filteredReleases.filter((release) => {
 						const info = release.basic_information
-						const artistMatch = info.artists?.some(artist => 
-							artist.name.toLowerCase().includes(similarLower)
-						)
+						const artistMatch = info.artists?.some((artist) => artist.name.toLowerCase().includes(similarLower))
 						const titleMatch = info.title.toLowerCase().includes(similarLower)
-						const genreMatch = info.genres?.some(g => 
-							g.toLowerCase().includes(similarLower)
-						)
-						const styleMatch = info.styles?.some(s => 
-							s.toLowerCase().includes(similarLower)
-						)
+						const genreMatch = info.genres?.some((g) => g.toLowerCase().includes(similarLower))
+						const styleMatch = info.styles?.some((s) => s.toLowerCase().includes(similarLower))
 						return artistMatch || titleMatch || genreMatch || styleMatch
 					})
 				}
@@ -741,21 +732,13 @@ async function handleAuthenticatedToolsCall(params: unknown, session: SessionPay
 				// Filter by general query
 				if (query) {
 					const queryLower = query.toLowerCase()
-					filteredReleases = filteredReleases.filter(release => {
+					filteredReleases = filteredReleases.filter((release) => {
 						const info = release.basic_information
-						const artistMatch = info.artists?.some(artist => 
-							artist.name.toLowerCase().includes(queryLower)
-						)
+						const artistMatch = info.artists?.some((artist) => artist.name.toLowerCase().includes(queryLower))
 						const titleMatch = info.title.toLowerCase().includes(queryLower)
-						const genreMatch = info.genres?.some(g => 
-							g.toLowerCase().includes(queryLower)
-						)
-						const styleMatch = info.styles?.some(s => 
-							s.toLowerCase().includes(queryLower)
-						)
-						const labelMatch = info.labels?.some(l => 
-							l.name.toLowerCase().includes(queryLower)
-						)
+						const genreMatch = info.genres?.some((g) => g.toLowerCase().includes(queryLower))
+						const styleMatch = info.styles?.some((s) => s.toLowerCase().includes(queryLower))
+						const labelMatch = info.labels?.some((l) => l.name.toLowerCase().includes(queryLower))
 						return artistMatch || titleMatch || genreMatch || styleMatch || labelMatch
 					})
 				}
@@ -773,7 +756,7 @@ async function handleAuthenticatedToolsCall(params: unknown, session: SessionPay
 
 				// Build response
 				let text = `**Context-Aware Music Recommendations**\n\n`
-				
+
 				if (genre || decade || similarTo || query) {
 					text += `**Filters Applied:**\n`
 					if (genre) text += `• Genre: ${genre}\n`
@@ -793,11 +776,11 @@ async function handleAuthenticatedToolsCall(params: unknown, session: SessionPay
 				} else {
 					recommendations.forEach((release, index) => {
 						const info = release.basic_information
-						const artists = info.artists.map(a => a.name).join(', ')
+						const artists = info.artists.map((a) => a.name).join(', ')
 						const genres = info.genres?.join(', ') || 'Unknown'
 						const year = info.year || 'Unknown'
 						const rating = release.rating > 0 ? ` ⭐${release.rating}` : ''
-						
+
 						text += `${index + 1}. **${artists} - ${info.title}** (${year})${rating}\n`
 						text += `   Genres: ${genres}\n`
 						if (info.styles && info.styles.length > 0) {
