@@ -34,16 +34,16 @@
 	"kv_namespaces": [
 		{
 			"binding": "MCP_LOGS",
-			"id": "b0c83f4b63a94c7490a609095e35b84f"
+			"id": "b0c83f4b63a94c7490a609095e35b84f",
 		},
 		{
 			"binding": "MCP_RL",
-			"id": "b4caaaa688cc45d2a9a85fe67ba53bfc"
+			"id": "b4caaaa688cc45d2a9a85fe67ba53bfc",
 		},
 		{
 			"binding": "MCP_SESSIONS",
-			"id": "a0bc40f523d54a6ab70fa947ac3daeaf"
-		}
+			"id": "a0bc40f523d54a6ab70fa947ac3daeaf",
+		},
 	],
 
 	/**

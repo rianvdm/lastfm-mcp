@@ -1,10 +1,8 @@
 {
-  "mcpServers": {
-    "discogs-local": {
-      "command": "node",
-      "args": [
-        "/Users/rian/Documents/GitHub/discogs-mcp/proxy.cjs"
-      ]
-    }
-  }
-} 
+	"mcpServers": {
+		"discogs-local": {
+			"command": "node",
+			"args": ["/Users/rian/Documents/GitHub/discogs-mcp/proxy.cjs"]
+		}
+	}
+}

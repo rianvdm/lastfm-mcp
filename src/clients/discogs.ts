@@ -3,501 +3,508 @@
 import { DiscogsAuth } from '../auth/discogs'
 
 export interface DiscogsRelease {
-  id: number
-  title: string
-  artists: Array<{
-    name: string
-    id: number
-  }>
-  year?: number
-  formats: Array<{
-    name: string
-    qty: string
-    descriptions?: string[]
-  }>
-  genres: string[]
-  styles: string[]
-  tracklist: Array<{
-    position: string
-    title: string
-    duration?: string
-  }>
-  labels: Array<{
-    name: string
-    catno: string
-  }>
-  images?: Array<{
-    type: string
-    uri: string
-    width: number
-    height: number
-  }>
-  master_id?: number
-  master_url?: string
-  resource_url: string
-  uri: string
-  country?: string
-  released?: string
-  notes?: string
-  data_quality: string
+	id: number
+	title: string
+	artists: Array<{
+		name: string
+		id: number
+	}>
+	year?: number
+	formats: Array<{
+		name: string
+		qty: string
+		descriptions?: string[]
+	}>
+	genres: string[]
+	styles: string[]
+	tracklist: Array<{
+		position: string
+		title: string
+		duration?: string
+	}>
+	labels: Array<{
+		name: string
+		catno: string
+	}>
+	images?: Array<{
+		type: string
+		uri: string
+		width: number
+		height: number
+	}>
+	master_id?: number
+	master_url?: string
+	resource_url: string
+	uri: string
+	country?: string
+	released?: string
+	notes?: string
+	data_quality: string
 }
 
 export interface DiscogsCollectionItem {
-  id: number
-  instance_id: number
-  date_added: string
-  rating: number
-  basic_information: {
-    id: number
-    title: string
-    year: number
-    resource_url: string
-    thumb: string
-    cover_image: string
-    formats: Array<{
-      name: string
-      qty: string
-      descriptions?: string[]
-    }>
-    labels: Array<{
-      name: string
-      catno: string
-    }>
-    artists: Array<{
-      name: string
-      id: number
-    }>
-    genres: string[]
-    styles: string[]
-  }
+	id: number
+	instance_id: number
+	date_added: string
+	rating: number
+	basic_information: {
+		id: number
+		title: string
+		year: number
+		resource_url: string
+		thumb: string
+		cover_image: string
+		formats: Array<{
+			name: string
+			qty: string
+			descriptions?: string[]
+		}>
+		labels: Array<{
+			name: string
+			catno: string
+		}>
+		artists: Array<{
+			name: string
+			id: number
+		}>
+		genres: string[]
+		styles: string[]
+	}
 }
 
 export interface DiscogsCollectionResponse {
-  pagination: {
-    pages: number
-    page: number
-    per_page: number
-    items: number
-    urls: {
-      last?: string
-      next?: string
-    }
-  }
-  releases: DiscogsCollectionItem[]
+	pagination: {
+		pages: number
+		page: number
+		per_page: number
+		items: number
+		urls: {
+			last?: string
+			next?: string
+		}
+	}
+	releases: DiscogsCollectionItem[]
 }
 
 export interface DiscogsSearchResponse {
-  pagination: {
-    pages: number
-    page: number
-    per_page: number
-    items: number
-    urls: {
-      last?: string
-      next?: string
-    }
-  }
-  results: Array<{
-    id: number
-    type: string
-    title: string
-    year?: number
-    format: string[]
-    label: string[]
-    genre: string[]
-    style: string[]
-    country?: string
-    thumb: string
-    cover_image: string
-    resource_url: string
-    master_id?: number
-    master_url?: string
-  }>
+	pagination: {
+		pages: number
+		page: number
+		per_page: number
+		items: number
+		urls: {
+			last?: string
+			next?: string
+		}
+	}
+	results: Array<{
+		id: number
+		type: string
+		title: string
+		year?: number
+		format: string[]
+		label: string[]
+		genre: string[]
+		style: string[]
+		country?: string
+		thumb: string
+		cover_image: string
+		resource_url: string
+		master_id?: number
+		master_url?: string
+	}>
 }
 
 export interface DiscogsCollectionStats {
-  totalReleases: number
-  totalValue: number
-  genreBreakdown: Record<string, number>
-  decadeBreakdown: Record<string, number>
-  formatBreakdown: Record<string, number>
-  labelBreakdown: Record<string, number>
-  averageRating: number
-  ratedReleases: number
+	totalReleases: number
+	totalValue: number
+	genreBreakdown: Record<string, number>
+	decadeBreakdown: Record<string, number>
+	formatBreakdown: Record<string, number>
+	labelBreakdown: Record<string, number>
+	averageRating: number
+	ratedReleases: number
 }
 
 export class DiscogsClient {
-  private baseUrl = 'https://api.discogs.com'
-  private userAgent = 'discogs-mcp/1.0.0'
+	private baseUrl = 'https://api.discogs.com'
+	private userAgent = 'discogs-mcp/1.0.0'
 
-  /**
-   * Create OAuth 1.0a authorization header using proper HMAC-SHA1 signature
-   */
-  private async createOAuthHeader(
-    url: string,
-    method: string,
-    accessToken: string, 
-    accessTokenSecret: string, 
-    consumerKey: string, 
-    consumerSecret: string
-  ): Promise<string> {
-    if (!consumerKey || !consumerSecret) {
-      throw new Error('Consumer key and secret are required for OAuth authentication')
-    }
-    
-    const auth = new DiscogsAuth(consumerKey, consumerSecret)
-    const headers = await auth.getAuthHeaders(url, method, {
-      key: accessToken,
-      secret: accessTokenSecret
-    })
-    
-    return headers.Authorization
-  }
+	/**
+	 * Create OAuth 1.0a authorization header using proper HMAC-SHA1 signature
+	 */
+	private async createOAuthHeader(
+		url: string,
+		method: string,
+		accessToken: string,
+		accessTokenSecret: string,
+		consumerKey: string,
+		consumerSecret: string,
+	): Promise<string> {
+		if (!consumerKey || !consumerSecret) {
+			throw new Error('Consumer key and secret are required for OAuth authentication')
+		}
 
-  /**
-   * Get detailed information about a specific release
-   */
-  async getRelease(
-    releaseId: string, 
-    accessToken: string, 
-    accessTokenSecret?: string,
-    consumerKey?: string,
-    consumerSecret?: string
-  ): Promise<DiscogsRelease> {
-    const url = `${this.baseUrl}/releases/${releaseId}`
-    const headers: Record<string, string> = {
-      'User-Agent': this.userAgent,
-    }
+		const auth = new DiscogsAuth(consumerKey, consumerSecret)
+		const headers = await auth.getAuthHeaders(url, method, {
+			key: accessToken,
+			secret: accessTokenSecret,
+		})
 
-    // Use OAuth 1.0a if we have all required parameters, otherwise fall back to simple token auth
-    if (accessTokenSecret && consumerKey && consumerSecret) {
-      headers['Authorization'] = await this.createOAuthHeader(url, 'GET', accessToken, accessTokenSecret, consumerKey, consumerSecret)
-    } else {
-      headers['Authorization'] = `Discogs token=${accessToken}`
-    }
+		return headers.Authorization
+	}
 
-    const response = await fetch(url, {
-      headers,
-    })
+	/**
+	 * Get detailed information about a specific release
+	 */
+	async getRelease(
+		releaseId: string,
+		accessToken: string,
+		accessTokenSecret?: string,
+		consumerKey?: string,
+		consumerSecret?: string,
+	): Promise<DiscogsRelease> {
+		const url = `${this.baseUrl}/releases/${releaseId}`
+		const headers: Record<string, string> = {
+			'User-Agent': this.userAgent,
+		}
 
-    if (!response.ok) {
-      throw new Error(`Failed to fetch release ${releaseId}: ${response.status} ${response.statusText}`)
-    }
+		// Use OAuth 1.0a if we have all required parameters, otherwise fall back to simple token auth
+		if (accessTokenSecret && consumerKey && consumerSecret) {
+			headers['Authorization'] = await this.createOAuthHeader(url, 'GET', accessToken, accessTokenSecret, consumerKey, consumerSecret)
+		} else {
+			headers['Authorization'] = `Discogs token=${accessToken}`
+		}
 
-    return response.json()
-  }
+		const response = await fetch(url, {
+			headers,
+		})
 
-  /**
-   * Search user's collection
-   */
-  async searchCollection(
-    username: string,
-    accessToken: string,
-    accessTokenSecret: string,
-    options: {
-      query?: string
-      page?: number
-      per_page?: number
-      sort?: 'added' | 'artist' | 'title' | 'year'
-      sort_order?: 'asc' | 'desc'
-    } = {},
-    consumerKey: string,
-    consumerSecret: string
-  ): Promise<DiscogsCollectionResponse> {
-    // If there's a query, we need to fetch all items and filter client-side
-    // because Discogs API doesn't support server-side search within collections
-    if (options.query) {
-      return this.searchCollectionWithQuery(username, accessToken, accessTokenSecret, options, consumerKey, consumerSecret)
-    }
+		if (!response.ok) {
+			throw new Error(`Failed to fetch release ${releaseId}: ${response.status} ${response.statusText}`)
+		}
 
-    // No query - use regular collection fetching with API pagination
-    const params = new URLSearchParams()
-    
-    if (options.page) params.append('page', options.page.toString())
-    if (options.per_page) params.append('per_page', options.per_page.toString())
-    if (options.sort) params.append('sort', options.sort)
-    if (options.sort_order) params.append('sort_order', options.sort_order)
+		return response.json()
+	}
 
-    const url = `${this.baseUrl}/users/${username}/collection/folders/0/releases?${params.toString()}`
-    
-    const authHeader = await this.createOAuthHeader(url, 'GET', accessToken, accessTokenSecret, consumerKey, consumerSecret)
-    
-    const response = await fetch(url, {
-      headers: {
-        'Authorization': authHeader,
-        'User-Agent': this.userAgent,
-      },
-    })
+	/**
+	 * Search user's collection
+	 */
+	async searchCollection(
+		username: string,
+		accessToken: string,
+		accessTokenSecret: string,
+		options: {
+			query?: string
+			page?: number
+			per_page?: number
+			sort?: 'added' | 'artist' | 'title' | 'year'
+			sort_order?: 'asc' | 'desc'
+		} = {},
+		consumerKey: string,
+		consumerSecret: string,
+	): Promise<DiscogsCollectionResponse> {
+		// If there's a query, we need to fetch all items and filter client-side
+		// because Discogs API doesn't support server-side search within collections
+		if (options.query) {
+			return this.searchCollectionWithQuery(username, accessToken, accessTokenSecret, options, consumerKey, consumerSecret)
+		}
 
-    if (!response.ok) {
-      throw new Error(`Failed to search collection: ${response.status} ${response.statusText}`)
-    }
+		// No query - use regular collection fetching with API pagination
+		const params = new URLSearchParams()
 
-    return response.json()
-  }
+		if (options.page) params.append('page', options.page.toString())
+		if (options.per_page) params.append('per_page', options.per_page.toString())
+		if (options.sort) params.append('sort', options.sort)
+		if (options.sort_order) params.append('sort_order', options.sort_order)
 
-  /**
-   * Search collection with client-side filtering
-   */
-  private async searchCollectionWithQuery(
-    username: string,
-    accessToken: string,
-    accessTokenSecret: string,
-    options: {
-      query?: string
-      page?: number
-      per_page?: number
-      sort?: 'added' | 'artist' | 'title' | 'year'
-      sort_order?: 'asc' | 'desc'
-    },
-    consumerKey: string,
-    consumerSecret: string
-  ): Promise<DiscogsCollectionResponse> {
-    const query = options.query?.toLowerCase() || ''
-    const requestedPage = options.page || 1
-    const requestedPerPage = options.per_page || 50
+		const url = `${this.baseUrl}/users/${username}/collection/folders/0/releases?${params.toString()}`
 
-    // Fetch all collection items (we need to paginate through all pages)
-    let allReleases: DiscogsCollectionItem[] = []
-    let page = 1
-    let totalPages = 1
+		const authHeader = await this.createOAuthHeader(url, 'GET', accessToken, accessTokenSecret, consumerKey, consumerSecret)
 
-    do {
-      const params = new URLSearchParams()
-      params.append('page', page.toString())
-      params.append('per_page', '100') // Max per page to minimize requests
-      if (options.sort) params.append('sort', options.sort)
-      if (options.sort_order) params.append('sort_order', options.sort_order)
+		const response = await fetch(url, {
+			headers: {
+				Authorization: authHeader,
+				'User-Agent': this.userAgent,
+			},
+		})
 
-      const url = `${this.baseUrl}/users/${username}/collection/folders/0/releases?${params.toString()}`
-      const authHeader = await this.createOAuthHeader(url, 'GET', accessToken, accessTokenSecret, consumerKey, consumerSecret)
-      
-      const response = await fetch(url, {
-        headers: {
-          'Authorization': authHeader,
-          'User-Agent': this.userAgent,
-        },
-      })
+		if (!response.ok) {
+			throw new Error(`Failed to search collection: ${response.status} ${response.statusText}`)
+		}
 
-      if (!response.ok) {
-        throw new Error(`Failed to fetch collection: ${response.status} ${response.statusText}`)
-      }
+		return response.json()
+	}
 
-      const data: DiscogsCollectionResponse = await response.json()
-      allReleases = allReleases.concat(data.releases)
-      totalPages = data.pagination.pages
-      page++
-    } while (page <= totalPages)
+	/**
+	 * Search collection with client-side filtering
+	 */
+	private async searchCollectionWithQuery(
+		username: string,
+		accessToken: string,
+		accessTokenSecret: string,
+		options: {
+			query?: string
+			page?: number
+			per_page?: number
+			sort?: 'added' | 'artist' | 'title' | 'year'
+			sort_order?: 'asc' | 'desc'
+		},
+		consumerKey: string,
+		consumerSecret: string,
+	): Promise<DiscogsCollectionResponse> {
+		const query = options.query?.toLowerCase() || ''
+		const requestedPage = options.page || 1
+		const requestedPerPage = options.per_page || 50
 
-    // Filter releases based on query
-    const filteredReleases = allReleases.filter(item => {
-      const release = item.basic_information
-      
-      // Search by release ID (exact match or partial)
-      const releaseIdMatch = item.id.toString().includes(query) || 
-                            release.id.toString().includes(query)
-      
-      // Search in artist names
-      const artistMatch = release.artists.some(artist => 
-        artist.name.toLowerCase().includes(query)
-      )
-      
-      // Search in title
-      const titleMatch = release.title.toLowerCase().includes(query)
-      
-      // Search in genres
-      const genreMatch = release.genres.some(genre => 
-        genre.toLowerCase().includes(query)
-      )
-      
-      // Search in styles
-      const styleMatch = release.styles.some(style => 
-        style.toLowerCase().includes(query)
-      )
-      
-      // Search in label names and catalog numbers
-      const labelMatch = release.labels.some(label => 
-        label.name.toLowerCase().includes(query) ||
-        label.catno.toLowerCase().includes(query)
-      )
-      
-      // Search in formats
-      const formatMatch = release.formats.some(format => 
-        format.name.toLowerCase().includes(query)
-      )
-      
-      // Search by year
-      const yearMatch = release.year && release.year.toString().includes(query)
+		// Fetch all collection items (we need to paginate through all pages)
+		let allReleases: DiscogsCollectionItem[] = []
+		let page = 1
+		let totalPages = 1
 
-      return releaseIdMatch || artistMatch || titleMatch || genreMatch || styleMatch || labelMatch || formatMatch || yearMatch
-    })
+		do {
+			const params = new URLSearchParams()
+			params.append('page', page.toString())
+			params.append('per_page', '100') // Max per page to minimize requests
+			if (options.sort) params.append('sort', options.sort)
+			if (options.sort_order) params.append('sort_order', options.sort_order)
 
-    // Implement pagination on filtered results
-    const totalItems = filteredReleases.length
-    const totalFilteredPages = Math.ceil(totalItems / requestedPerPage)
-    const startIndex = (requestedPage - 1) * requestedPerPage
-    const endIndex = startIndex + requestedPerPage
-    const paginatedReleases = filteredReleases.slice(startIndex, endIndex)
+			const url = `${this.baseUrl}/users/${username}/collection/folders/0/releases?${params.toString()}`
+			const authHeader = await this.createOAuthHeader(url, 'GET', accessToken, accessTokenSecret, consumerKey, consumerSecret)
 
-    return {
-      pagination: {
-        pages: totalFilteredPages,
-        page: requestedPage,
-        per_page: requestedPerPage,
-        items: totalItems,
-        urls: {
-          next: requestedPage < totalFilteredPages ? `page=${requestedPage + 1}` : undefined,
-          last: totalFilteredPages > 1 ? `page=${totalFilteredPages}` : undefined,
-        }
-      },
-      releases: paginatedReleases
-    }
-  }
+			const response = await fetch(url, {
+				headers: {
+					Authorization: authHeader,
+					'User-Agent': this.userAgent,
+				},
+			})
 
-  /**
-   * Get user's collection statistics
-   */
-  async getCollectionStats(username: string, accessToken: string, accessTokenSecret: string, consumerKey: string, consumerSecret: string): Promise<DiscogsCollectionStats> {
-    // Get all collection items (we'll need to paginate through all pages)
-    let allReleases: DiscogsCollectionItem[] = []
-    let page = 1
-    let totalPages = 1
+			if (!response.ok) {
+				throw new Error(`Failed to fetch collection: ${response.status} ${response.statusText}`)
+			}
 
-    do {
-      const response = await this.searchCollection(username, accessToken, accessTokenSecret, {
-        page,
-        per_page: 100, // Max per page
-      }, consumerKey, consumerSecret)
-      
-      allReleases = allReleases.concat(response.releases)
-      totalPages = response.pagination.pages
-      page++
-    } while (page <= totalPages)
+			const data: DiscogsCollectionResponse = await response.json()
+			allReleases = allReleases.concat(data.releases)
+			totalPages = data.pagination.pages
+			page++
+		} while (page <= totalPages)
 
-    // Calculate statistics
-    const stats: DiscogsCollectionStats = {
-      totalReleases: allReleases.length,
-      totalValue: 0, // Discogs doesn't provide value in collection endpoint
-      genreBreakdown: {},
-      decadeBreakdown: {},
-      formatBreakdown: {},
-      labelBreakdown: {},
-      averageRating: 0,
-      ratedReleases: 0,
-    }
+		// Filter releases based on query
+		const filteredReleases = allReleases.filter((item) => {
+			const release = item.basic_information
 
-    let totalRating = 0
-    let ratedCount = 0
+			// Search by release ID (exact match or partial)
+			const releaseIdMatch = item.id.toString().includes(query) || release.id.toString().includes(query)
 
-    for (const item of allReleases) {
-      const release = item.basic_information
+			// Search in artist names
+			const artistMatch = release.artists?.some((artist) => artist.name.toLowerCase().includes(query)) || false
 
-      // Genre breakdown
-      for (const genre of release.genres || []) {
-        stats.genreBreakdown[genre] = (stats.genreBreakdown[genre] || 0) + 1
-      }
+			// Search in title
+			const titleMatch = release.title?.toLowerCase().includes(query) || false
 
-      // Decade breakdown
-      if (release.year) {
-        const decade = `${Math.floor(release.year / 10) * 10}s`
-        stats.decadeBreakdown[decade] = (stats.decadeBreakdown[decade] || 0) + 1
-      }
+			// Search in genres
+			const genreMatch = release.genres?.some((genre) => genre.toLowerCase().includes(query)) || false
 
-      // Format breakdown
-      for (const format of release.formats || []) {
-        stats.formatBreakdown[format.name] = (stats.formatBreakdown[format.name] || 0) + 1
-      }
+			// Search in styles
+			const styleMatch = release.styles?.some((style) => style.toLowerCase().includes(query)) || false
 
-      // Label breakdown
-      for (const label of release.labels || []) {
-        stats.labelBreakdown[label.name] = (stats.labelBreakdown[label.name] || 0) + 1
-      }
+			// Search in label names and catalog numbers
+			const labelMatch =
+				release.labels?.some((label) => label.name.toLowerCase().includes(query) || label.catno.toLowerCase().includes(query)) || false
 
-      // Rating calculation
-      if (item.rating > 0) {
-        totalRating += item.rating
-        ratedCount++
-      }
-    }
+			// Search in formats
+			const formatMatch = release.formats?.some((format) => format.name.toLowerCase().includes(query)) || false
 
-    stats.averageRating = ratedCount > 0 ? totalRating / ratedCount : 0
-    stats.ratedReleases = ratedCount
+			// Search by year
+			const yearMatch = release.year && release.year.toString().includes(query)
 
-    return stats
-  }
+			return releaseIdMatch || artistMatch || titleMatch || genreMatch || styleMatch || labelMatch || formatMatch || yearMatch
+		})
 
-  /**
-   * Get user profile to extract username
-   */
-  async getUserProfile(accessToken: string, accessTokenSecret: string, consumerKey: string, consumerSecret: string): Promise<{ username: string; id: number }> {
-    console.log('Making OAuth request to /oauth/identity with token:', accessToken.substring(0, 10) + '...')
-    
-    const url = `${this.baseUrl}/oauth/identity`
-    const authHeader = await this.createOAuthHeader(url, 'GET', accessToken, accessTokenSecret, consumerKey, consumerSecret)
-    
-    const response = await fetch(url, {
-      headers: {
-        'Authorization': authHeader,
-        'User-Agent': this.userAgent,
-      },
-    })
+		// Implement pagination on filtered results
+		const totalItems = filteredReleases.length
+		const totalFilteredPages = Math.ceil(totalItems / requestedPerPage)
+		const startIndex = (requestedPage - 1) * requestedPerPage
+		const endIndex = startIndex + requestedPerPage
+		const paginatedReleases = filteredReleases.slice(startIndex, endIndex)
 
-    console.log('Response status:', response.status, response.statusText)
-    
-    if (!response.ok) {
-      const errorText = await response.text()
-      console.log('Error response body:', errorText)
-      throw new Error(`Failed to get user profile: ${response.status} ${response.statusText}`)
-    }
+		return {
+			pagination: {
+				pages: totalFilteredPages,
+				page: requestedPage,
+				per_page: requestedPerPage,
+				items: totalItems,
+				urls: {
+					next: requestedPage < totalFilteredPages ? `page=${requestedPage + 1}` : undefined,
+					last: totalFilteredPages > 1 ? `page=${totalFilteredPages}` : undefined,
+				},
+			},
+			releases: paginatedReleases,
+		}
+	}
 
-    return response.json()
-  }
+	/**
+	 * Get user's collection statistics
+	 */
+	async getCollectionStats(
+		username: string,
+		accessToken: string,
+		accessTokenSecret: string,
+		consumerKey: string,
+		consumerSecret: string,
+	): Promise<DiscogsCollectionStats> {
+		// Get all collection items (we'll need to paginate through all pages)
+		let allReleases: DiscogsCollectionItem[] = []
+		let page = 1
+		let totalPages = 1
 
-  /**
-   * Search Discogs database (not user's collection)
-   */
-  async searchDatabase(
-    query: string,
-    accessToken: string,
-    accessTokenSecret?: string,
-    options: {
-      type?: 'release' | 'master' | 'artist' | 'label'
-      page?: number
-      per_page?: number
-    } = {},
-    consumerKey?: string,
-    consumerSecret?: string
-  ): Promise<DiscogsSearchResponse> {
-    const params = new URLSearchParams()
-    params.append('q', query)
-    
-    if (options.type) params.append('type', options.type)
-    if (options.page) params.append('page', options.page.toString())
-    if (options.per_page) params.append('per_page', options.per_page.toString())
+		do {
+			const response = await this.searchCollection(
+				username,
+				accessToken,
+				accessTokenSecret,
+				{
+					page,
+					per_page: 100, // Max per page
+				},
+				consumerKey,
+				consumerSecret,
+			)
 
-    const url = `${this.baseUrl}/database/search?${params.toString()}`
-    const headers: Record<string, string> = {
-      'User-Agent': this.userAgent,
-    }
+			allReleases = allReleases.concat(response.releases)
+			totalPages = response.pagination.pages
+			page++
+		} while (page <= totalPages)
 
-    // Use OAuth 1.0a if we have all required parameters, otherwise fall back to simple token auth
-    if (accessTokenSecret && consumerKey && consumerSecret) {
-      headers['Authorization'] = await this.createOAuthHeader(url, 'GET', accessToken, accessTokenSecret, consumerKey, consumerSecret)
-    } else {
-      headers['Authorization'] = `Discogs token=${accessToken}`
-    }
+		// Calculate statistics
+		const stats: DiscogsCollectionStats = {
+			totalReleases: allReleases.length,
+			totalValue: 0, // Discogs doesn't provide value in collection endpoint
+			genreBreakdown: {},
+			decadeBreakdown: {},
+			formatBreakdown: {},
+			labelBreakdown: {},
+			averageRating: 0,
+			ratedReleases: 0,
+		}
 
-    const response = await fetch(url, {
-      headers,
-    })
+		let totalRating = 0
+		let ratedCount = 0
 
-    if (!response.ok) {
-      throw new Error(`Failed to search database: ${response.status} ${response.statusText}`)
-    }
+		for (const item of allReleases) {
+			const release = item.basic_information
 
-    return response.json()
-  }
+			// Genre breakdown
+			for (const genre of release.genres || []) {
+				stats.genreBreakdown[genre] = (stats.genreBreakdown[genre] || 0) + 1
+			}
+
+			// Decade breakdown
+			if (release.year) {
+				const decade = `${Math.floor(release.year / 10) * 10}s`
+				stats.decadeBreakdown[decade] = (stats.decadeBreakdown[decade] || 0) + 1
+			}
+
+			// Format breakdown
+			for (const format of release.formats || []) {
+				stats.formatBreakdown[format.name] = (stats.formatBreakdown[format.name] || 0) + 1
+			}
+
+			// Label breakdown
+			for (const label of release.labels || []) {
+				stats.labelBreakdown[label.name] = (stats.labelBreakdown[label.name] || 0) + 1
+			}
+
+			// Rating calculation
+			if (item.rating > 0) {
+				totalRating += item.rating
+				ratedCount++
+			}
+		}
+
+		stats.averageRating = ratedCount > 0 ? totalRating / ratedCount : 0
+		stats.ratedReleases = ratedCount
+
+		return stats
+	}
+
+	/**
+	 * Get user profile to extract username
+	 */
+	async getUserProfile(
+		accessToken: string,
+		accessTokenSecret: string,
+		consumerKey: string,
+		consumerSecret: string,
+	): Promise<{ username: string; id: number }> {
+		console.log('Making OAuth request to /oauth/identity with token:', accessToken.substring(0, 10) + '...')
+
+		const url = `${this.baseUrl}/oauth/identity`
+		const authHeader = await this.createOAuthHeader(url, 'GET', accessToken, accessTokenSecret, consumerKey, consumerSecret)
+
+		const response = await fetch(url, {
+			headers: {
+				Authorization: authHeader,
+				'User-Agent': this.userAgent,
+			},
+		})
+
+		console.log('Response status:', response.status, response.statusText)
+
+		if (!response.ok) {
+			const errorText = await response.text()
+			console.log('Error response body:', errorText)
+			throw new Error(`Failed to get user profile: ${response.status} ${response.statusText}`)
+		}
+
+		return response.json()
+	}
+
+	/**
+	 * Search Discogs database (not user's collection)
+	 */
+	async searchDatabase(
+		query: string,
+		accessToken: string,
+		accessTokenSecret?: string,
+		options: {
+			type?: 'release' | 'master' | 'artist' | 'label'
+			page?: number
+			per_page?: number
+		} = {},
+		consumerKey?: string,
+		consumerSecret?: string,
+	): Promise<DiscogsSearchResponse> {
+		const params = new URLSearchParams()
+		params.append('q', query)
+
+		if (options.type) params.append('type', options.type)
+		if (options.page) params.append('page', options.page.toString())
+		if (options.per_page) params.append('per_page', options.per_page.toString())
+
+		const url = `${this.baseUrl}/database/search?${params.toString()}`
+		const headers: Record<string, string> = {
+			'User-Agent': this.userAgent,
+		}
+
+		// Use OAuth 1.0a if we have all required parameters, otherwise fall back to simple token auth
+		if (accessTokenSecret && consumerKey && consumerSecret) {
+			headers['Authorization'] = await this.createOAuthHeader(url, 'GET', accessToken, accessTokenSecret, consumerKey, consumerSecret)
+		} else {
+			headers['Authorization'] = `Discogs token=${accessToken}`
+		}
+
+		const response = await fetch(url, {
+			headers,
+		})
+
+		if (!response.ok) {
+			throw new Error(`Failed to search database: ${response.status} ${response.statusText}`)
+		}
+
+		return response.json()
+	}
 }
 
 // Export singleton instance
-export const discogsClient = new DiscogsClient() 
+export const discogsClient = new DiscogsClient()

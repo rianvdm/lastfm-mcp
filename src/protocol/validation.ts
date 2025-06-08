@@ -4,18 +4,18 @@
  */
 
 import { JSONRPCRequest, JSONRPCResponse, ErrorCode } from '../types/jsonrpc'
-import { 
-	InitializeParams, 
-	InitializeResult, 
-	PROTOCOL_VERSION, 
-	ClientCapabilities, 
+import {
+	InitializeParams,
+	InitializeResult,
+	PROTOCOL_VERSION,
+	ClientCapabilities,
 	ServerCapabilities,
 	Resource,
 	ResourcesReadParams,
 	Prompt,
 	PromptsGetParams,
 	PromptArgument,
-	PromptMessage
+	PromptMessage,
 } from '../types/mcp'
 
 // Protocol state tracking
@@ -39,7 +39,10 @@ export function getProtocolState(): string {
  * Validation error class
  */
 export class ValidationError extends Error {
-	constructor(message: string, public code: number = ErrorCode.InvalidParams) {
+	constructor(
+		message: string,
+		public code: number = ErrorCode.InvalidParams,
+	) {
 		super(message)
 		this.name = 'ValidationError'
 	}
@@ -85,12 +88,12 @@ export function validateProtocolFlow(method: string): void {
 				throw new ValidationError('Server already initialized', ErrorCode.InvalidRequest)
 			}
 			break
-		
+
 		case 'initialized':
 			// The initialized notification can be sent after initialize has been called
 			// No validation needed here - it's just a notification
 			break
-		
+
 		default:
 			// All other methods require initialization
 			if (protocolState !== 'initialized' && method !== 'initialize') {
@@ -460,7 +463,7 @@ export function validateToolInputSchema(schema: unknown): void {
 		if (!Array.isArray(s.required)) {
 			throw new ValidationError('Tool input schema required must be an array')
 		}
-		if (!s.required.every(item => typeof item === 'string')) {
+		if (!s.required.every((item) => typeof item === 'string')) {
 			throw new ValidationError('Tool input schema required items must be strings')
 		}
 	}

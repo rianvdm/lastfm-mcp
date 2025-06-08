@@ -75,9 +75,9 @@ describe('MCP Prompts', () => {
 		})
 
 		it('should return find_music prompt with query', () => {
-			const result = handlePromptsGet({ 
+			const result = handlePromptsGet({
 				name: 'find_music',
-				arguments: { query: 'Pink Floyd' }
+				arguments: { query: 'Pink Floyd' },
 			})
 
 			expect(result).toMatchObject({
@@ -112,19 +112,21 @@ describe('MCP Prompts', () => {
 		})
 
 		it('should throw error for missing query in find_music', () => {
-			expect(() => handlePromptsGet({ 
-				name: 'find_music',
-				arguments: {}
-			})).toThrow('find_music prompt requires a query argument')
+			expect(() =>
+				handlePromptsGet({
+					name: 'find_music',
+					arguments: {},
+				}),
+			).toThrow('find_music prompt requires a query argument')
 		})
 
 		it('should throw error for unknown prompt', () => {
 			expect(() => handlePromptsGet({ name: 'unknown_prompt' })).toThrow('Unknown prompt: unknown_prompt')
 		})
 
-		  it('should throw error for invalid params', () => {
-    expect(() => handlePromptsGet({})).toThrow('name parameter must be a string')
-    expect(() => handlePromptsGet('invalid')).toThrow('prompts/get params must be an object')
-  })
+		it('should throw error for invalid params', () => {
+			expect(() => handlePromptsGet({})).toThrow('name parameter must be a string')
+			expect(() => handlePromptsGet('invalid')).toThrow('prompts/get params must be an object')
+		})
 	})
-}) 
+})

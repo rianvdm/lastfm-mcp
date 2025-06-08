@@ -84,7 +84,7 @@ export function mapErrorToJSONRPC(error: unknown): { code: number; message: stri
 			return {
 				code: MCPErrorCode.Unauthorized,
 				message: 'Authentication required',
-				data: { originalMessage: message }
+				data: { originalMessage: message },
 			}
 		}
 
@@ -93,7 +93,7 @@ export function mapErrorToJSONRPC(error: unknown): { code: number; message: stri
 			return {
 				code: MCPErrorCode.RateLimited,
 				message: 'Rate limit exceeded',
-				data: { originalMessage: message }
+				data: { originalMessage: message },
 			}
 		}
 
@@ -102,7 +102,7 @@ export function mapErrorToJSONRPC(error: unknown): { code: number; message: stri
 			return {
 				code: MCPErrorCode.DiscogsAPIError,
 				message: 'Discogs API error',
-				data: { originalMessage: message }
+				data: { originalMessage: message },
 			}
 		}
 
@@ -111,7 +111,7 @@ export function mapErrorToJSONRPC(error: unknown): { code: number; message: stri
 			return {
 				code: MCPErrorCode.PromptNotFound,
 				message: 'Prompt not found',
-				data: { originalMessage: message }
+				data: { originalMessage: message },
 			}
 		}
 
@@ -120,7 +120,7 @@ export function mapErrorToJSONRPC(error: unknown): { code: number; message: stri
 			return {
 				code: MCPErrorCode.ToolNotFound,
 				message: 'Tool not found',
-				data: { originalMessage: message }
+				data: { originalMessage: message },
 			}
 		}
 
@@ -128,7 +128,7 @@ export function mapErrorToJSONRPC(error: unknown): { code: number; message: stri
 			return {
 				code: MCPErrorCode.ToolExecutionError,
 				message: 'Tool execution failed',
-				data: { originalMessage: message }
+				data: { originalMessage: message },
 			}
 		}
 
@@ -137,7 +137,7 @@ export function mapErrorToJSONRPC(error: unknown): { code: number; message: stri
 			return {
 				code: ErrorCode.InvalidParams,
 				message: message,
-				data: { originalMessage: message }
+				data: { originalMessage: message },
 			}
 		}
 
@@ -146,7 +146,7 @@ export function mapErrorToJSONRPC(error: unknown): { code: number; message: stri
 			return {
 				code: MCPErrorCode.ResourceNotFound,
 				message: 'Resource not found',
-				data: { originalMessage: message }
+				data: { originalMessage: message },
 			}
 		}
 
@@ -155,7 +155,7 @@ export function mapErrorToJSONRPC(error: unknown): { code: number; message: stri
 			return {
 				code: MCPErrorCode.ServerNotInitialized,
 				message: 'Server not initialized',
-				data: { originalMessage: message }
+				data: { originalMessage: message },
 			}
 		}
 
@@ -163,7 +163,7 @@ export function mapErrorToJSONRPC(error: unknown): { code: number; message: stri
 		return {
 			code: ErrorCode.InternalError,
 			message: 'Internal error',
-			data: { originalMessage: message }
+			data: { originalMessage: message },
 		}
 	}
 
@@ -171,6 +171,6 @@ export function mapErrorToJSONRPC(error: unknown): { code: number; message: stri
 	return {
 		code: ErrorCode.InternalError,
 		message: 'Internal error',
-		data: { error: String(error) }
+		data: { error: String(error) },
 	}
 }

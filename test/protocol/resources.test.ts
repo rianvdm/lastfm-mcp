@@ -23,21 +23,21 @@ describe('MCP Resources', () => {
 			expect(result.resources).toHaveLength(3)
 
 			// Check collection resource
-			const collectionResource = result.resources.find(r => r.uri === 'discogs://collection')
+			const collectionResource = result.resources.find((r) => r.uri === 'discogs://collection')
 			expect(collectionResource).toBeDefined()
 			expect(collectionResource?.name).toBe('User Collection')
 			expect(collectionResource?.description).toContain('Complete Discogs collection')
 			expect(collectionResource?.mimeType).toBe('application/json')
 
 			// Check release resource
-			const releaseResource = result.resources.find(r => r.uri === 'discogs://release/{id}')
+			const releaseResource = result.resources.find((r) => r.uri === 'discogs://release/{id}')
 			expect(releaseResource).toBeDefined()
 			expect(releaseResource?.name).toBe('Release Details')
 			expect(releaseResource?.description).toContain('specific Discogs release')
 			expect(releaseResource?.mimeType).toBe('application/json')
 
 			// Check search resource
-			const searchResource = result.resources.find(r => r.uri === 'discogs://search?q={query}')
+			const searchResource = result.resources.find((r) => r.uri === 'discogs://search?q={query}')
 			expect(searchResource).toBeDefined()
 			expect(searchResource?.name).toBe('Collection Search')
 			expect(searchResource?.description).toContain('Search results')
@@ -47,7 +47,7 @@ describe('MCP Resources', () => {
 		it('should return resources with proper URI schemes', () => {
 			const result = handleResourcesList()
 
-			result.resources.forEach(resource => {
+			result.resources.forEach((resource) => {
 				expect(resource.uri).toMatch(/^discogs:\/\//)
 				expect(resource.name).toBeTruthy()
 				expect(resource.mimeType).toBe('application/json')
@@ -108,10 +108,17 @@ describe('MCP Resources', () => {
 			const parsedContent = JSON.parse(result.contents[0].text!)
 			expect(parsedContent).toEqual(mockCollection)
 
-					expect(mockDiscogsClient.getUserProfile).toHaveBeenCalledWith('test-token', 'test-secret', '', '')
-		expect(mockDiscogsClient.searchCollection).toHaveBeenCalledWith('testuser', 'test-token', 'test-secret', {
-			per_page: 100,
-		}, '', '')
+			expect(mockDiscogsClient.getUserProfile).toHaveBeenCalledWith('test-token', 'test-secret', '', '')
+			expect(mockDiscogsClient.searchCollection).toHaveBeenCalledWith(
+				'testuser',
+				'test-token',
+				'test-secret',
+				{
+					per_page: 100,
+				},
+				'',
+				'',
+			)
 		})
 
 		it('should read release resource', async () => {
@@ -186,11 +193,18 @@ describe('MCP Resources', () => {
 			const parsedContent = JSON.parse(result.contents[0].text!)
 			expect(parsedContent).toEqual(mockSearchResults)
 
-					expect(mockDiscogsClient.getUserProfile).toHaveBeenCalledWith('test-token', 'test-secret', '', '')
-		expect(mockDiscogsClient.searchCollection).toHaveBeenCalledWith('testuser', 'test-token', 'test-secret', {
-			query: 'rock',
-			per_page: 50,
-		}, '', '')
+			expect(mockDiscogsClient.getUserProfile).toHaveBeenCalledWith('test-token', 'test-secret', '', '')
+			expect(mockDiscogsClient.searchCollection).toHaveBeenCalledWith(
+				'testuser',
+				'test-token',
+				'test-secret',
+				{
+					query: 'rock',
+					per_page: 50,
+				},
+				'',
+				'',
+			)
 		})
 
 		it('should throw error for invalid params', async () => {
@@ -218,4 +232,4 @@ describe('MCP Resources', () => {
 			await expect(handleResourcesRead({ uri: 'discogs://collection' }, mockSession)).rejects.toThrow('Failed to read resource: API Error')
 		})
 	})
-}) 
+})

@@ -23,11 +23,7 @@ import type { ExecutionContext } from '@cloudflare/workers-types'
 const oauthTokenStore = new Map<string, string>()
 
 export default {
-	async fetch(
-		request: Request,
-		env: Env,
-		_ctx: ExecutionContext
-	): Promise<Response> {
+	async fetch(request: Request, env: Env, _ctx: ExecutionContext): Promise<Response> {
 		const url = new URL(request.url)
 
 		// Handle different endpoints
@@ -83,46 +79,46 @@ async function handleLogin(env: Env): Promise<Response> {
 			hasConsumerKey: !!env.DISCOGS_CONSUMER_KEY,
 			hasConsumerSecret: !!env.DISCOGS_CONSUMER_SECRET,
 			consumerKeyLength: env.DISCOGS_CONSUMER_KEY?.length || 0,
-			consumerSecretLength: env.DISCOGS_CONSUMER_SECRET?.length || 0
+			consumerSecretLength: env.DISCOGS_CONSUMER_SECRET?.length || 0,
 		})
-		
+
 		if (!env.DISCOGS_CONSUMER_KEY || !env.DISCOGS_CONSUMER_SECRET) {
 			console.error('Missing Discogs OAuth credentials')
 			return new Response('OAuth configuration error: Missing credentials', { status: 500 })
 		}
-		
+
 		const auth = new DiscogsAuth(env.DISCOGS_CONSUMER_KEY, env.DISCOGS_CONSUMER_SECRET)
-		
+
 		// Get callback URL (in production, use proper domain)
 		const callbackUrl = 'http://localhost:8787/callback'
-		
+
 		console.log('Requesting OAuth token from Discogs...')
-		
+
 		// Get request token
 		const { oauth_token, oauth_token_secret } = await auth.getRequestToken(callbackUrl)
-		
-		console.log('Successfully received OAuth token:', { 
+
+		console.log('Successfully received OAuth token:', {
 			tokenLength: oauth_token.length,
-			secretLength: oauth_token_secret.length 
+			secretLength: oauth_token_secret.length,
 		})
-		
+
 		// Store token secret temporarily (in production, use KV storage)
 		oauthTokenStore.set(oauth_token, oauth_token_secret)
-		
+
 		// Redirect to Discogs authorization page
 		const authorizeUrl = auth.getAuthorizeUrl(oauth_token)
 		console.log('Redirecting to:', authorizeUrl)
-		
+
 		return Response.redirect(authorizeUrl, 302)
 	} catch (error) {
 		console.error('OAuth login error:', error)
-		
+
 		// Provide more detailed error information
 		let errorMessage = 'OAuth login failed'
 		if (error instanceof Error) {
 			errorMessage += `: ${error.message}`
 		}
-		
+
 		return new Response(errorMessage, { status: 500 })
 	}
 }
@@ -135,36 +131,39 @@ async function handleCallback(request: Request, env: Env): Promise<Response> {
 		const url = new URL(request.url)
 		const oauthToken = url.searchParams.get('oauth_token')
 		const oauthVerifier = url.searchParams.get('oauth_verifier')
-		
+
 		if (!oauthToken || !oauthVerifier) {
 			return new Response('Missing OAuth parameters', { status: 400 })
 		}
-		
+
 		// Retrieve token secret
 		const oauthTokenSecret = oauthTokenStore.get(oauthToken)
 		if (!oauthTokenSecret) {
 			return new Response('Invalid OAuth token', { status: 400 })
 		}
-		
+
 		// Clean up temporary storage
 		oauthTokenStore.delete(oauthToken)
-		
+
 		// Exchange for access token
 		const auth = new DiscogsAuth(env.DISCOGS_CONSUMER_KEY, env.DISCOGS_CONSUMER_SECRET)
-		const { oauth_token: accessToken, oauth_token_secret: accessTokenSecret } = 
-			await auth.getAccessToken(oauthToken, oauthTokenSecret, oauthVerifier)
-		
+		const { oauth_token: accessToken, oauth_token_secret: accessTokenSecret } = await auth.getAccessToken(
+			oauthToken,
+			oauthTokenSecret,
+			oauthVerifier,
+		)
+
 		// Create JWT session token
 		const sessionToken = await createSessionToken(
 			{
 				userId: accessToken, // Use access token as user ID for now
 				accessToken,
-				accessTokenSecret
+				accessTokenSecret,
 			},
 			env.JWT_SECRET,
-			24 // expires in 24 hours
+			24, // expires in 24 hours
 		)
-		
+
 		// Store session in KV for MCP proxy access
 		if (env.MCP_SESSIONS) {
 			try {
@@ -174,35 +173,32 @@ async function handleCallback(request: Request, env: Env): Promise<Response> {
 					accessToken,
 					accessTokenSecret,
 					timestamp: Date.now(),
-					expiresAt: Date.now() + (24 * 60 * 60 * 1000) // 24 hours
-				};
+					expiresAt: Date.now() + 24 * 60 * 60 * 1000, // 24 hours
+				}
 				await env.MCP_SESSIONS.put('latest-session', JSON.stringify(sessionData), {
-					expirationTtl: 24 * 60 * 60 // 24 hours
-				});
+					expirationTtl: 24 * 60 * 60, // 24 hours
+				})
 			} catch (error) {
-				console.warn('Could not save session to KV:', error);
+				console.warn('Could not save session to KV:', error)
 			}
 		}
-		
+
 		// Set secure HTTP-only cookie
 		const cookieOptions = [
 			'HttpOnly',
 			'Secure',
 			'SameSite=Strict',
 			'Path=/',
-			'Max-Age=86400' // 24 hours in seconds
+			'Max-Age=86400', // 24 hours in seconds
 		].join('; ')
-		
-		return new Response(
-			`Authentication successful! You can now use the MCP server to access your Discogs collection.`,
-			{ 
-				status: 200,
-				headers: { 
-					'Content-Type': 'text/plain',
-					'Set-Cookie': `session=${sessionToken}; ${cookieOptions}`
-				}
-			}
-		)
+
+		return new Response(`Authentication successful! You can now use the MCP server to access your Discogs collection.`, {
+			status: 200,
+			headers: {
+				'Content-Type': 'text/plain',
+				'Set-Cookie': `session=${sessionToken}; ${cookieOptions}`,
+			},
+		})
 	} catch (error) {
 		console.error('OAuth callback error:', error)
 		return new Response('OAuth callback failed', { status: 500 })
@@ -226,13 +222,15 @@ async function handleMCPRequest(request: Request, env?: Env): Promise<Response> 
 	let userId = 'anonymous'
 	let method = 'unknown'
 	let params: unknown = null
-	
+
 	// Initialize utilities
 	const logger = env?.MCP_LOGS ? new KVLogger(env.MCP_LOGS) : null
-	const rateLimiter = env?.MCP_RL ? new RateLimiter(env.MCP_RL, {
-		requestsPerMinute: 60,  // TODO: Make configurable via env vars
-		requestsPerHour: 1000
-	}) : null
+	const rateLimiter = env?.MCP_RL
+		? new RateLimiter(env.MCP_RL, {
+				requestsPerMinute: 60, // TODO: Make configurable via env vars
+				requestsPerHour: 1000,
+			})
+		: null
 
 	try {
 		// Check for connection ID header (for SSE-connected clients)
@@ -250,7 +248,7 @@ async function handleMCPRequest(request: Request, env?: Env): Promise<Response> 
 		// Handle empty body
 		if (!body) {
 			const errorResponse = createError(null, ErrorCode.InvalidRequest, 'Empty request body')
-			
+
 			// Log the error
 			if (logger) {
 				const latency = Date.now() - startTime
@@ -258,10 +256,10 @@ async function handleMCPRequest(request: Request, env?: Env): Promise<Response> 
 					status: 'error',
 					latency,
 					errorCode: ErrorCode.InvalidRequest,
-					errorMessage: 'Empty request body'
+					errorMessage: 'Empty request body',
 				})
 			}
-			
+
 			return new Response(serializeResponse(errorResponse), {
 				headers: { 'Content-Type': 'application/json' },
 			})
@@ -277,7 +275,7 @@ async function handleMCPRequest(request: Request, env?: Env): Promise<Response> 
 			// Parse error or invalid request
 			const jsonrpcError = error as JSONRPCError
 			const errorResponse = createError(null, jsonrpcError.code || ErrorCode.ParseError, jsonrpcError.message || 'Parse error')
-			
+
 			// Log the parse error
 			if (logger) {
 				const latency = Date.now() - startTime
@@ -285,10 +283,10 @@ async function handleMCPRequest(request: Request, env?: Env): Promise<Response> 
 					status: 'error',
 					latency,
 					errorCode: jsonrpcError.code || ErrorCode.ParseError,
-					errorMessage: jsonrpcError.message || 'Parse error'
+					errorMessage: jsonrpcError.message || 'Parse error',
 				})
 			}
-			
+
 			return new Response(serializeResponse(errorResponse), {
 				headers: { 'Content-Type': 'application/json' },
 			})
@@ -305,14 +303,14 @@ async function handleMCPRequest(request: Request, env?: Env): Promise<Response> 
 		// Apply rate limiting (skip for initialize method)
 		if (rateLimiter && method !== 'initialize' && method !== 'initialized') {
 			const rateLimitResult = await rateLimiter.checkLimit(userId)
-			
+
 			if (!rateLimitResult.allowed) {
 				const errorResponse = createError(
 					jsonrpcRequest.id || null,
 					rateLimitResult.errorCode || -32000,
-					rateLimitResult.errorMessage || 'Rate limit exceeded'
+					rateLimitResult.errorMessage || 'Rate limit exceeded',
 				)
-				
+
 				// Log the rate limit error
 				if (logger) {
 					const latency = Date.now() - startTime
@@ -320,16 +318,15 @@ async function handleMCPRequest(request: Request, env?: Env): Promise<Response> 
 						status: 'error',
 						latency,
 						errorCode: rateLimitResult.errorCode || -32000,
-						errorMessage: rateLimitResult.errorMessage || 'Rate limit exceeded'
+						errorMessage: rateLimitResult.errorMessage || 'Rate limit exceeded',
 					})
 				}
-				
+
 				return new Response(serializeResponse(errorResponse), {
 					status: 429,
-					headers: { 
+					headers: {
 						'Content-Type': 'application/json',
-						'Retry-After': rateLimitResult.resetTime ? 
-							Math.ceil((rateLimitResult.resetTime - Date.now()) / 1000).toString() : '60'
+						'Retry-After': rateLimitResult.resetTime ? Math.ceil((rateLimitResult.resetTime - Date.now()) / 1000).toString() : '60',
 					},
 				})
 			}
@@ -345,7 +342,7 @@ async function handleMCPRequest(request: Request, env?: Env): Promise<Response> 
 		if (logger) {
 			await logger.log(userId, method, params, {
 				status: 'success',
-				latency
+				latency,
 			})
 		}
 
@@ -362,7 +359,7 @@ async function handleMCPRequest(request: Request, env?: Env): Promise<Response> 
 		// Internal server error
 		console.error('Internal error:', error)
 		const errorResponse = createError(null, ErrorCode.InternalError, 'Internal server error')
-		
+
 		// Log the internal error
 		if (logger) {
 			const latency = Date.now() - startTime
@@ -370,10 +367,10 @@ async function handleMCPRequest(request: Request, env?: Env): Promise<Response> 
 				status: 'error',
 				latency,
 				errorCode: ErrorCode.InternalError,
-				errorMessage: error instanceof Error ? error.message : 'Internal server error'
+				errorMessage: error instanceof Error ? error.message : 'Internal server error',
 			})
 		}
-		
+
 		return new Response(serializeResponse(errorResponse), {
 			status: 500,
 			headers: { 'Content-Type': 'application/json' },
@@ -391,16 +388,19 @@ async function handleMCPAuth(request: Request, env: Env): Promise<Response> {
 			const sessionDataStr = await env.MCP_SESSIONS.get('latest-session')
 			if (sessionDataStr) {
 				const sessionData = JSON.parse(sessionDataStr)
-				
+
 				// Return the session token (KV TTL handles expiration)
-				return new Response(JSON.stringify({
-					session_token: sessionData.token,
-					user_id: sessionData.userId,
-					message: 'Use this token in the Cookie header as: session=' + sessionData.token,
-					expires_at: new Date(sessionData.expiresAt).toISOString()
-				}), {
-					headers: { 'Content-Type': 'application/json' }
-				})
+				return new Response(
+					JSON.stringify({
+						session_token: sessionData.token,
+						user_id: sessionData.userId,
+						message: 'Use this token in the Cookie header as: session=' + sessionData.token,
+						expires_at: new Date(sessionData.expiresAt).toISOString(),
+					}),
+					{
+						headers: { 'Content-Type': 'application/json' },
+					},
+				)
 			}
 		}
 
@@ -410,41 +410,53 @@ async function handleMCPAuth(request: Request, env: Env): Promise<Response> {
 			// Extract session token from cookie
 			const cookieHeader = request.headers.get('Cookie')
 			if (cookieHeader) {
-				const cookies = cookieHeader.split(';').reduce((acc, cookie) => {
-					const [key, value] = cookie.trim().split('=')
-					if (key && value) {
-						acc[key] = value
-					}
-					return acc
-				}, {} as Record<string, string>)
+				const cookies = cookieHeader.split(';').reduce(
+					(acc, cookie) => {
+						const [key, value] = cookie.trim().split('=')
+						if (key && value) {
+							acc[key] = value
+						}
+						return acc
+					},
+					{} as Record<string, string>,
+				)
 
 				const sessionToken = cookies.session
 				if (sessionToken) {
-					return new Response(JSON.stringify({
-						session_token: sessionToken,
-						user_id: session.userId,
-						message: 'Use this token in the Cookie header as: session=' + sessionToken
-					}), {
-						headers: { 'Content-Type': 'application/json' }
-					})
+					return new Response(
+						JSON.stringify({
+							session_token: sessionToken,
+							user_id: session.userId,
+							message: 'Use this token in the Cookie header as: session=' + sessionToken,
+						}),
+						{
+							headers: { 'Content-Type': 'application/json' },
+						},
+					)
 				}
 			}
 		}
 
-		return new Response(JSON.stringify({
-			error: 'Not authenticated',
-			message: 'Please visit /login to authenticate with Discogs first'
-		}), {
-			status: 401,
-			headers: { 'Content-Type': 'application/json' }
-		})
+		return new Response(
+			JSON.stringify({
+				error: 'Not authenticated',
+				message: 'Please visit /login to authenticate with Discogs first',
+			}),
+			{
+				status: 401,
+				headers: { 'Content-Type': 'application/json' },
+			},
+		)
 	} catch (error) {
 		console.error('MCP auth error:', error)
-		return new Response(JSON.stringify({
-			error: 'Authentication check failed'
-		}), {
-			status: 500,
-			headers: { 'Content-Type': 'application/json' }
-		})
+		return new Response(
+			JSON.stringify({
+				error: 'Authentication check failed',
+			}),
+			{
+				status: 500,
+				headers: { 'Content-Type': 'application/json' },
+			},
+		)
 	}
 }

@@ -21,17 +21,20 @@ const mockJwtSecret = 'test-jwt-secret'
 
 // Helper to create mock authenticated request
 async function createMockAuthenticatedRequest(): Promise<Request> {
-	const sessionToken = await createSessionToken({
-		userId: 'test-user',
-		accessToken: 'test-token',
-		accessTokenSecret: 'test-secret',
-	}, mockJwtSecret)
+	const sessionToken = await createSessionToken(
+		{
+			userId: 'test-user',
+			accessToken: 'test-token',
+			accessTokenSecret: 'test-secret',
+		},
+		mockJwtSecret,
+	)
 
 	return new Request('http://localhost:8787/', {
 		method: 'POST',
 		headers: {
 			'Content-Type': 'application/json',
-			'Cookie': `session=${sessionToken}`
+			Cookie: `session=${sessionToken}`,
 		},
 	})
 }
@@ -68,7 +71,7 @@ describe('MCP Tools', () => {
 				method: 'tools/call',
 				params: {
 					name: 'ping',
-					arguments: { message: 'Hello World!' }
+					arguments: { message: 'Hello World!' },
 				},
 				id: 2,
 			})
@@ -80,10 +83,10 @@ describe('MCP Tools', () => {
 					content: [
 						{
 							type: 'text',
-							text: 'Pong! You said: Hello World!'
-						}
-					]
-				}
+							text: 'Pong! You said: Hello World!',
+						},
+					],
+				},
 			})
 		})
 
@@ -111,7 +114,7 @@ describe('MCP Tools', () => {
 				method: 'tools/call',
 				params: {
 					name: 'server_info',
-					arguments: {}
+					arguments: {},
 				},
 				id: 2,
 			})
@@ -123,10 +126,10 @@ describe('MCP Tools', () => {
 					content: [
 						{
 							type: 'text',
-							text: expect.stringContaining('Discogs MCP Server v1.0.0')
-						}
-					]
-				}
+							text: expect.stringContaining('Discogs MCP Server v1.0.0'),
+						},
+					],
+				},
 			})
 		})
 	})
@@ -180,15 +183,19 @@ describe('MCP Tools', () => {
 				method: 'initialized',
 			})
 
-			const response = await handleMethod({
-				jsonrpc: '2.0',
-				method: 'tools/call',
-				params: {
-					name: 'search_collection',
-					arguments: { query: 'rock', per_page: 25 }
+			const response = await handleMethod(
+				{
+					jsonrpc: '2.0',
+					method: 'tools/call',
+					params: {
+						name: 'search_collection',
+						arguments: { query: 'rock', per_page: 25 },
+					},
+					id: 2,
 				},
-				id: 2,
-			}, await createMockAuthenticatedRequest(), mockJwtSecret)
+				await createMockAuthenticatedRequest(),
+				mockJwtSecret,
+			)
 
 			expect(response).toMatchObject({
 				jsonrpc: '2.0',
@@ -197,14 +204,14 @@ describe('MCP Tools', () => {
 					content: [
 						{
 							type: 'text',
-							text: expect.stringContaining('Found 2 results for "rock"')
+							text: expect.stringContaining('Found 2 results for "rock"'),
 						},
 						{
 							type: 'text',
-							text: expect.stringContaining('Structured Data')
-						}
-					]
-				}
+							text: expect.stringContaining('Structured Data'),
+						},
+					],
+				},
 			})
 
 			// Verify the response includes release IDs
@@ -219,10 +226,17 @@ describe('MCP Tools', () => {
 			expect(structuredDataText).toContain('"instance_id": 1')
 
 			expect(mockDiscogsClient.getUserProfile).toHaveBeenCalledWith('test-token', 'test-secret', '', '')
-			expect(mockDiscogsClient.searchCollection).toHaveBeenCalledWith('testuser', 'test-token', 'test-secret', {
-				query: 'rock',
-				per_page: 25,
-			}, '', '')
+			expect(mockDiscogsClient.searchCollection).toHaveBeenCalledWith(
+				'testuser',
+				'test-token',
+				'test-secret',
+				{
+					query: 'rock',
+					per_page: 25,
+				},
+				'',
+				'',
+			)
 		})
 
 		it('should handle get_release tool', async () => {
@@ -265,15 +279,19 @@ describe('MCP Tools', () => {
 				method: 'initialized',
 			})
 
-			const response = await handleMethod({
-				jsonrpc: '2.0',
-				method: 'tools/call',
-				params: {
-					name: 'get_release',
-					arguments: { release_id: '123456' }
+			const response = await handleMethod(
+				{
+					jsonrpc: '2.0',
+					method: 'tools/call',
+					params: {
+						name: 'get_release',
+						arguments: { release_id: '123456' },
+					},
+					id: 2,
 				},
-				id: 2,
-			}, await createMockAuthenticatedRequest(), mockJwtSecret)
+				await createMockAuthenticatedRequest(),
+				mockJwtSecret,
+			)
 
 			expect(response).toMatchObject({
 				jsonrpc: '2.0',
@@ -282,10 +300,10 @@ describe('MCP Tools', () => {
 					content: [
 						{
 							type: 'text',
-							text: expect.stringContaining('Test Artist - Test Release')
-						}
-					]
-				}
+							text: expect.stringContaining('Test Artist - Test Release'),
+						},
+					],
+				},
 			})
 
 			expect(mockDiscogsClient.getRelease).toHaveBeenCalledWith('123456', 'test-token', 'test-secret')
@@ -295,11 +313,11 @@ describe('MCP Tools', () => {
 			const mockUserProfile = { username: 'testuser', id: 123 }
 			const mockStats = {
 				totalReleases: 100,
-				totalValue: 1500.50,
-				genreBreakdown: { 'Rock': 40, 'Jazz': 30, 'Electronic': 20, 'Hip Hop': 10 },
+				totalValue: 1500.5,
+				genreBreakdown: { Rock: 40, Jazz: 30, Electronic: 20, 'Hip Hop': 10 },
 				decadeBreakdown: { '2000': 30, '1990': 25, '1980': 20, '2010': 15, '1970': 10 },
-				formatBreakdown: { 'Vinyl': 60, 'CD': 30, 'Cassette': 10 },
-				labelBreakdown: { 'Blue Note': 15, 'Warp': 10, 'Def Jam': 8 },
+				formatBreakdown: { Vinyl: 60, CD: 30, Cassette: 10 },
+				labelBreakdown: { 'Blue Note': 15, Warp: 10, 'Def Jam': 8 },
 				averageRating: 4.2,
 				ratedReleases: 75,
 			}
@@ -325,15 +343,19 @@ describe('MCP Tools', () => {
 				method: 'initialized',
 			})
 
-			const response = await handleMethod({
-				jsonrpc: '2.0',
-				method: 'tools/call',
-				params: {
-					name: 'get_collection_stats',
-					arguments: {}
+			const response = await handleMethod(
+				{
+					jsonrpc: '2.0',
+					method: 'tools/call',
+					params: {
+						name: 'get_collection_stats',
+						arguments: {},
+					},
+					id: 2,
 				},
-				id: 2,
-			}, await createMockAuthenticatedRequest(), mockJwtSecret)
+				await createMockAuthenticatedRequest(),
+				mockJwtSecret,
+			)
 
 			expect(response).toMatchObject({
 				jsonrpc: '2.0',
@@ -342,25 +364,25 @@ describe('MCP Tools', () => {
 					content: [
 						{
 							type: 'text',
-							text: expect.stringContaining('Collection Statistics for testuser')
-						}
-					]
-				}
-					})
+							text: expect.stringContaining('Collection Statistics for testuser'),
+						},
+					],
+				},
+			})
 
-		expect(mockDiscogsClient.getUserProfile).toHaveBeenCalledWith('test-token', 'test-secret', '', '')
-		expect(mockDiscogsClient.getCollectionStats).toHaveBeenCalledWith('testuser', 'test-token', 'test-secret', '', '')
-	})
+			expect(mockDiscogsClient.getUserProfile).toHaveBeenCalledWith('test-token', 'test-secret', '', '')
+			expect(mockDiscogsClient.getCollectionStats).toHaveBeenCalledWith('testuser', 'test-token', 'test-secret', '', '')
+		})
 
-	it('should handle get_recommendations tool', async () => {
+		it('should handle get_recommendations tool', async () => {
 			const mockUserProfile = { username: 'testuser', id: 123 }
 			const mockStats = {
 				totalReleases: 100,
-				totalValue: 1500.50,
-				genreBreakdown: { 'Rock': 40, 'Jazz': 30, 'Electronic': 20 },
+				totalValue: 1500.5,
+				genreBreakdown: { Rock: 40, Jazz: 30, Electronic: 20 },
 				decadeBreakdown: { '2000': 30, '1990': 25, '1980': 20 },
-				formatBreakdown: { 'Vinyl': 60, 'CD': 30, 'Cassette': 10 },
-				labelBreakdown: { 'Blue Note': 15, 'Warp': 10 },
+				formatBreakdown: { Vinyl: 60, CD: 30, Cassette: 10 },
+				labelBreakdown: { 'Blue Note': 15, Warp: 10 },
 				averageRating: 4.2,
 				ratedReleases: 75,
 			}
@@ -368,33 +390,37 @@ describe('MCP Tools', () => {
 			mockDiscogsClient.getUserProfile.mockResolvedValue(mockUserProfile)
 			mockDiscogsClient.getCollectionStats.mockResolvedValue(mockStats)
 
-					// Initialize first
-		await handleMethod({
-			jsonrpc: '2.0',
-			method: 'initialize',
-			params: {
-				protocolVersion: '2024-11-05',
-				capabilities: {},
-				clientInfo: { name: 'Test', version: '1.0' },
-			},
-			id: 1,
-		})
+			// Initialize first
+			await handleMethod({
+				jsonrpc: '2.0',
+				method: 'initialize',
+				params: {
+					protocolVersion: '2024-11-05',
+					capabilities: {},
+					clientInfo: { name: 'Test', version: '1.0' },
+				},
+				id: 1,
+			})
 
-		// Send initialized notification
-		await handleMethod({
-			jsonrpc: '2.0',
-			method: 'initialized',
-		})
+			// Send initialized notification
+			await handleMethod({
+				jsonrpc: '2.0',
+				method: 'initialized',
+			})
 
-		const response = await handleMethod({
-			jsonrpc: '2.0',
-			method: 'tools/call',
-			params: {
-				name: 'get_recommendations',
-				arguments: { limit: 5 }
-			},
-			id: 2,
-		}, await createMockAuthenticatedRequest(), mockJwtSecret)
+			const response = await handleMethod(
+				{
+					jsonrpc: '2.0',
+					method: 'tools/call',
+					params: {
+						name: 'get_recommendations',
+						arguments: { limit: 5 },
+					},
+					id: 2,
+				},
+				await createMockAuthenticatedRequest(),
+				mockJwtSecret,
+			)
 
 			expect(response).toMatchObject({
 				jsonrpc: '2.0',
@@ -403,56 +429,17 @@ describe('MCP Tools', () => {
 					content: [
 						{
 							type: 'text',
-							text: expect.stringContaining('Music Recommendations Based on Your Collection')
-						}
-					]
-				}
-					})
-
-		expect(mockDiscogsClient.getUserProfile).toHaveBeenCalledWith('test-token', 'test-secret', '', '')
-		expect(mockDiscogsClient.getCollectionStats).toHaveBeenCalledWith('testuser', 'test-token', 'test-secret', '', '')
-	})
-
-	it('should require authentication for authenticated tools', async () => {
-					// Initialize first
-		await handleMethod({
-			jsonrpc: '2.0',
-			method: 'initialize',
-			params: {
-				protocolVersion: '2024-11-05',
-				capabilities: {},
-				clientInfo: { name: 'Test', version: '1.0' },
-			},
-			id: 1,
-		})
-
-		// Send initialized notification
-		await handleMethod({
-			jsonrpc: '2.0',
-			method: 'initialized',
-		})
-
-		const response = await handleMethod({
-			jsonrpc: '2.0',
-			method: 'tools/call',
-			params: {
-				name: 'search_collection',
-				arguments: { query: 'rock' }
-			},
-			id: 2,
-		})
-
-			expect(response).toMatchObject({
-				jsonrpc: '2.0',
-				id: 2,
-				error: {
-					code: -32603,
-					message: 'Internal error: Missing authentication context for authenticated tool'
-				}
+							text: expect.stringContaining('Music Recommendations Based on Your Collection'),
+						},
+					],
+				},
 			})
+
+			expect(mockDiscogsClient.getUserProfile).toHaveBeenCalledWith('test-token', 'test-secret', '', '')
+			expect(mockDiscogsClient.getCollectionStats).toHaveBeenCalledWith('testuser', 'test-token', 'test-secret', '', '')
 		})
 
-		it('should handle tool parameter validation', async () => {
+		it('should require authentication for authenticated tools', async () => {
 			// Initialize first
 			await handleMethod({
 				jsonrpc: '2.0',
@@ -476,18 +463,61 @@ describe('MCP Tools', () => {
 				method: 'tools/call',
 				params: {
 					name: 'search_collection',
-					arguments: {} // Missing required query parameter
+					arguments: { query: 'rock' },
 				},
 				id: 2,
-			}, await createMockAuthenticatedRequest(), mockJwtSecret)
+			})
+
+			expect(response).toMatchObject({
+				jsonrpc: '2.0',
+				id: 2,
+				error: {
+					code: -32603,
+					message: 'Internal error: Missing authentication context for authenticated tool',
+				},
+			})
+		})
+
+		it('should handle tool parameter validation', async () => {
+			// Initialize first
+			await handleMethod({
+				jsonrpc: '2.0',
+				method: 'initialize',
+				params: {
+					protocolVersion: '2024-11-05',
+					capabilities: {},
+					clientInfo: { name: 'Test', version: '1.0' },
+				},
+				id: 1,
+			})
+
+			// Send initialized notification
+			await handleMethod({
+				jsonrpc: '2.0',
+				method: 'initialized',
+			})
+
+			const response = await handleMethod(
+				{
+					jsonrpc: '2.0',
+					method: 'tools/call',
+					params: {
+						name: 'search_collection',
+						arguments: {}, // Missing required query parameter
+					},
+					id: 2,
+				},
+				await createMockAuthenticatedRequest(),
+				mockJwtSecret,
+			)
 
 			expect(response).toMatchObject({
 				jsonrpc: '2.0',
 				id: 2,
 				error: {
 					code: -32602,
-					message: 'Missing required parameter: query'
-				}
+					message: 'Missing required parameter: query',
+				},
 			})
 		})
 
@@ -539,15 +569,19 @@ describe('MCP Tools', () => {
 				method: 'initialized',
 			})
 
-			const response = await handleMethod({
-				jsonrpc: '2.0',
-				method: 'tools/call',
-				params: {
-					name: 'search_collection',
-					arguments: { query: '654321', per_page: 25 }
+			const response = await handleMethod(
+				{
+					jsonrpc: '2.0',
+					method: 'tools/call',
+					params: {
+						name: 'search_collection',
+						arguments: { query: '654321', per_page: 25 },
+					},
+					id: 2,
 				},
-				id: 2,
-			}, await createMockAuthenticatedRequest(), mockJwtSecret)
+				await createMockAuthenticatedRequest(),
+				mockJwtSecret,
+			)
 
 			expect(response).toMatchObject({
 				jsonrpc: '2.0',
@@ -556,14 +590,14 @@ describe('MCP Tools', () => {
 					content: [
 						{
 							type: 'text',
-							text: expect.stringContaining('Found 1 results for "654321"')
+							text: expect.stringContaining('Found 1 results for "654321"'),
 						},
 						{
 							type: 'text',
-							text: expect.stringContaining('Structured Data')
-						}
-					]
-				}
+							text: expect.stringContaining('Structured Data'),
+						},
+					],
+				},
 			})
 
 			// Verify the response includes the specific release ID
@@ -580,10 +614,17 @@ describe('MCP Tools', () => {
 			expect(structuredDataText).toContain('"year": 1967')
 
 			expect(mockDiscogsClient.getUserProfile).toHaveBeenCalledWith('test-token', 'test-secret', '', '')
-			expect(mockDiscogsClient.searchCollection).toHaveBeenCalledWith('testuser', 'test-token', 'test-secret', {
-				query: '654321',
-				per_page: 25,
-			}, '', '')
+			expect(mockDiscogsClient.searchCollection).toHaveBeenCalledWith(
+				'testuser',
+				'test-token',
+				'test-secret',
+				{
+					query: '654321',
+					per_page: 25,
+				},
+				'',
+				'',
+			)
 		})
 	})
-}) 
+})

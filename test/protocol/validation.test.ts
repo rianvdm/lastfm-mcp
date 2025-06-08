@@ -10,7 +10,7 @@ import {
 	markInitialized,
 	resetProtocolState,
 	getProtocolState,
-	ValidationError
+	ValidationError,
 } from '../../src/protocol/validation'
 import { ErrorCode } from '../../src/types/jsonrpc'
 
@@ -25,7 +25,7 @@ describe('MCP Protocol Validation', () => {
 				jsonrpc: '2.0',
 				method: 'test',
 				params: { foo: 'bar' },
-				id: 1
+				id: 1,
 			}
 
 			expect(() => validateJSONRPCMessage(validRequest)).not.toThrow()
@@ -35,7 +35,7 @@ describe('MCP Protocol Validation', () => {
 			const validNotification = {
 				jsonrpc: '2.0',
 				method: 'test',
-				params: { foo: 'bar' }
+				params: { foo: 'bar' },
 			}
 
 			expect(() => validateJSONRPCMessage(validNotification)).not.toThrow()
@@ -50,7 +50,7 @@ describe('MCP Protocol Validation', () => {
 		it('should reject missing jsonrpc field', () => {
 			const invalidRequest = {
 				method: 'test',
-				id: 1
+				id: 1,
 			}
 
 			expect(() => validateJSONRPCMessage(invalidRequest)).toThrow(ValidationError)
@@ -60,7 +60,7 @@ describe('MCP Protocol Validation', () => {
 			const invalidRequest = {
 				jsonrpc: '1.0',
 				method: 'test',
-				id: 1
+				id: 1,
 			}
 
 			expect(() => validateJSONRPCMessage(invalidRequest)).toThrow(ValidationError)
@@ -69,7 +69,7 @@ describe('MCP Protocol Validation', () => {
 		it('should reject missing method', () => {
 			const invalidRequest = {
 				jsonrpc: '2.0',
-				id: 1
+				id: 1,
 			}
 
 			expect(() => validateJSONRPCMessage(invalidRequest)).toThrow(ValidationError)
@@ -79,7 +79,7 @@ describe('MCP Protocol Validation', () => {
 			const invalidRequest = {
 				jsonrpc: '2.0',
 				method: '',
-				id: 1
+				id: 1,
 			}
 
 			expect(() => validateJSONRPCMessage(invalidRequest)).toThrow(ValidationError)
@@ -89,7 +89,7 @@ describe('MCP Protocol Validation', () => {
 			const invalidRequest = {
 				jsonrpc: '2.0',
 				method: 'test',
-				id: {}
+				id: {},
 			}
 
 			expect(() => validateJSONRPCMessage(invalidRequest)).toThrow(ValidationError)
@@ -100,7 +100,7 @@ describe('MCP Protocol Validation', () => {
 				jsonrpc: '2.0',
 				method: 'test',
 				params: 'invalid',
-				id: 1
+				id: 1,
 			}
 
 			expect(() => validateJSONRPCMessage(invalidRequest)).toThrow(ValidationError)
@@ -144,12 +144,12 @@ describe('MCP Protocol Validation', () => {
 				capabilities: {
 					roots: { listChanged: true },
 					sampling: {},
-					experimental: {}
+					experimental: {},
 				},
 				clientInfo: {
 					name: 'Test Client',
-					version: '1.0.0'
-				}
+					version: '1.0.0',
+				},
 			}
 
 			expect(() => validateInitializeParams(validParams)).not.toThrow()
@@ -163,7 +163,7 @@ describe('MCP Protocol Validation', () => {
 		it('should reject missing protocolVersion', () => {
 			const invalidParams = {
 				capabilities: {},
-				clientInfo: { name: 'Test', version: '1.0' }
+				clientInfo: { name: 'Test', version: '1.0' },
 			}
 
 			expect(() => validateInitializeParams(invalidParams)).toThrow(ValidationError)
@@ -173,7 +173,7 @@ describe('MCP Protocol Validation', () => {
 			const invalidParams = {
 				protocolVersion: '2024-11-05',
 				capabilities: {},
-				clientInfo: { name: 'Test' } // missing version
+				clientInfo: { name: 'Test' }, // missing version
 			}
 
 			expect(() => validateInitializeParams(invalidParams)).toThrow(ValidationError)
@@ -183,7 +183,7 @@ describe('MCP Protocol Validation', () => {
 			const invalidParams = {
 				protocolVersion: '2024-11-05',
 				capabilities: 'invalid',
-				clientInfo: { name: 'Test', version: '1.0' }
+				clientInfo: { name: 'Test', version: '1.0' },
 			}
 
 			expect(() => validateInitializeParams(invalidParams)).toThrow(ValidationError)
@@ -193,7 +193,7 @@ describe('MCP Protocol Validation', () => {
 	describe('validateResourcesReadParams', () => {
 		it('should validate valid params', () => {
 			const validParams = {
-				uri: 'discogs://collection'
+				uri: 'discogs://collection',
 			}
 
 			expect(() => validateResourcesReadParams(validParams)).not.toThrow()
@@ -212,7 +212,7 @@ describe('MCP Protocol Validation', () => {
 
 		it('should reject invalid uri format', () => {
 			const invalidParams = {
-				uri: 'invalid-uri'
+				uri: 'invalid-uri',
 			}
 
 			expect(() => validateResourcesReadParams(invalidParams)).toThrow(ValidationError)
@@ -223,7 +223,7 @@ describe('MCP Protocol Validation', () => {
 		it('should validate valid params', () => {
 			const validParams = {
 				name: 'test_prompt',
-				arguments: { query: 'test' }
+				arguments: { query: 'test' },
 			}
 
 			expect(() => validatePromptsGetParams(validParams)).not.toThrow()
@@ -231,7 +231,7 @@ describe('MCP Protocol Validation', () => {
 
 		it('should validate params without arguments', () => {
 			const validParams = {
-				name: 'test_prompt'
+				name: 'test_prompt',
 			}
 
 			expect(() => validatePromptsGetParams(validParams)).not.toThrow()
@@ -244,7 +244,7 @@ describe('MCP Protocol Validation', () => {
 
 		it('should reject missing name', () => {
 			const invalidParams = {
-				arguments: { query: 'test' }
+				arguments: { query: 'test' },
 			}
 
 			expect(() => validatePromptsGetParams(invalidParams)).toThrow(ValidationError)
@@ -253,7 +253,7 @@ describe('MCP Protocol Validation', () => {
 		it('should reject invalid arguments type', () => {
 			const invalidParams = {
 				name: 'test_prompt',
-				arguments: 'invalid'
+				arguments: 'invalid',
 			}
 
 			expect(() => validatePromptsGetParams(invalidParams)).toThrow(ValidationError)
@@ -266,14 +266,14 @@ describe('MCP Protocol Validation', () => {
 				type: 'object',
 				properties: {
 					query: { type: 'string' },
-					limit: { type: 'number' }
+					limit: { type: 'number' },
 				},
-				required: ['query']
+				required: ['query'],
 			}
 
 			const validArgs = {
 				query: 'test',
-				limit: 10
+				limit: 10,
 			}
 
 			expect(() => validateToolArguments(validArgs, schema)).not.toThrow()
@@ -283,9 +283,9 @@ describe('MCP Protocol Validation', () => {
 			const schema = {
 				type: 'object',
 				properties: {
-					query: { type: 'string' }
+					query: { type: 'string' },
 				},
-				required: ['query']
+				required: ['query'],
 			}
 
 			const invalidArgs = {}
@@ -299,9 +299,9 @@ describe('MCP Protocol Validation', () => {
 				properties: {
 					query: { type: 'string' },
 					limit: { type: 'number' },
-					enabled: { type: 'boolean' }
+					enabled: { type: 'boolean' },
 				},
-				required: []
+				required: [],
 			}
 
 			// Valid types
@@ -326,7 +326,7 @@ describe('MCP Protocol Validation', () => {
 			const validResponse = {
 				jsonrpc: '2.0',
 				id: 1,
-				result: { success: true }
+				result: { success: true },
 			}
 
 			expect(() => validateJSONRPCResponse(validResponse)).not.toThrow()
@@ -338,8 +338,8 @@ describe('MCP Protocol Validation', () => {
 				id: 1,
 				error: {
 					code: -32602,
-					message: 'Invalid params'
-				}
+					message: 'Invalid params',
+				},
 			}
 
 			expect(() => validateJSONRPCResponse(validResponse)).not.toThrow()
@@ -353,7 +353,7 @@ describe('MCP Protocol Validation', () => {
 		it('should reject missing jsonrpc field', () => {
 			const invalidResponse = {
 				id: 1,
-				result: { success: true }
+				result: { success: true },
 			}
 
 			expect(() => validateJSONRPCResponse(invalidResponse)).toThrow(ValidationError)
@@ -364,7 +364,7 @@ describe('MCP Protocol Validation', () => {
 				jsonrpc: '2.0',
 				id: 1,
 				result: { success: true },
-				error: { code: -32602, message: 'Invalid params' }
+				error: { code: -32602, message: 'Invalid params' },
 			}
 
 			expect(() => validateJSONRPCResponse(invalidResponse)).toThrow(ValidationError)
@@ -373,7 +373,7 @@ describe('MCP Protocol Validation', () => {
 		it('should reject responses with neither result nor error', () => {
 			const invalidResponse = {
 				jsonrpc: '2.0',
-				id: 1
+				id: 1,
 			}
 
 			expect(() => validateJSONRPCResponse(invalidResponse)).toThrow(ValidationError)
@@ -385,8 +385,8 @@ describe('MCP Protocol Validation', () => {
 				id: 1,
 				error: {
 					code: 'invalid', // should be number
-					message: 'Invalid params'
-				}
+					message: 'Invalid params',
+				},
 			}
 
 			expect(() => validateJSONRPCResponse(invalidResponse)).toThrow(ValidationError)
@@ -406,7 +406,7 @@ describe('MCP Protocol Validation', () => {
 		it('should reset state', () => {
 			markInitialized()
 			expect(getProtocolState()).toBe('initialized')
-			
+
 			resetProtocolState()
 			expect(getProtocolState()).toBe('uninitialized')
 		})

@@ -5,18 +5,30 @@
 
 import { JSONRPCRequest, hasId, mapErrorToJSONRPC, MCPErrorCode, ErrorCode } from '../types/jsonrpc'
 import { createResponse, createError, createMethodNotFoundError } from './parser'
-import { InitializeResult, PROTOCOL_VERSION, SERVER_INFO, DEFAULT_CAPABILITIES, Resource, ResourcesListResult, ResourcesReadResult, Prompt, PromptsListParams, PromptsListResult, PromptsGetResult } from '../types/mcp'
+import {
+	InitializeResult,
+	PROTOCOL_VERSION,
+	SERVER_INFO,
+	DEFAULT_CAPABILITIES,
+	Resource,
+	ResourcesListResult,
+	ResourcesReadResult,
+	Prompt,
+	PromptsListParams,
+	PromptsListResult,
+	PromptsGetResult,
+} from '../types/mcp'
 import type { Env } from '../types/env'
-import { 
-	validateJSONRPCMessage, 
-	validateProtocolFlow, 
-	validateInitializeParams, 
-	validateResourcesReadParams, 
+import {
+	validateJSONRPCMessage,
+	validateProtocolFlow,
+	validateInitializeParams,
+	validateResourcesReadParams,
 	validatePromptsGetParams,
 	validateToolArguments,
 	validateJSONRPCResponse,
 	markInitialized,
-	ValidationError
+	ValidationError,
 } from './validation'
 import { verifySessionToken, SessionPayload } from '../auth/jwt'
 import { discogsClient } from '../clients/discogs'
@@ -36,13 +48,16 @@ export async function verifyAuthentication(request: Request, jwtSecret: string):
 		}
 
 		// Parse cookies
-		const cookies = cookieHeader.split(';').reduce((acc, cookie) => {
-			const [key, value] = cookie.trim().split('=')
-			if (key && value) {
-				acc[key] = value
-			}
-			return acc
-		}, {} as Record<string, string>)
+		const cookies = cookieHeader.split(';').reduce(
+			(acc, cookie) => {
+				const [key, value] = cookie.trim().split('=')
+				if (key && value) {
+					acc[key] = value
+				}
+				return acc
+			},
+			{} as Record<string, string>,
+		)
 
 		const sessionToken = cookies.session
 		if (!sessionToken) {
@@ -85,7 +100,7 @@ export function handleInitialize(params: unknown): InitializeResult {
 		validateJSONRPCResponse({
 			jsonrpc: '2.0',
 			id: 1, // dummy ID for validation
-			result
+			result,
 		})
 	} catch (error) {
 		console.error('Invalid initialize result:', error)
@@ -123,7 +138,7 @@ export function handleResourcesList(): ResourcesListResult {
 		{
 			uri: 'discogs://search?q={query}',
 			name: 'Collection Search',
-			description: 'Search results from user\'s collection. Replace {query} with search terms.',
+			description: "Search results from user's collection. Replace {query} with search terms.",
 			mimeType: 'application/json',
 		},
 	]
@@ -146,11 +161,18 @@ export async function handleResourcesRead(params: unknown, session: SessionPaylo
 			// Get user's complete collection
 			const consumerKey = env?.DISCOGS_CONSUMER_KEY || ''
 			const consumerSecret = env?.DISCOGS_CONSUMER_SECRET || ''
-			
+
 			const userProfile = await discogsClient.getUserProfile(session.accessToken, session.accessTokenSecret, consumerKey, consumerSecret)
-			const collection = await discogsClient.searchCollection(userProfile.username, session.accessToken, session.accessTokenSecret, {
-				per_page: 100, // Start with first 100 items
-			}, consumerKey, consumerSecret)
+			const collection = await discogsClient.searchCollection(
+				userProfile.username,
+				session.accessToken,
+				session.accessTokenSecret,
+				{
+					per_page: 100, // Start with first 100 items
+				},
+				consumerKey,
+				consumerSecret,
+			)
 
 			return {
 				contents: [
@@ -183,19 +205,26 @@ export async function handleResourcesRead(params: unknown, session: SessionPaylo
 			// Search user's collection
 			const url = new URL(uri.replace('discogs://', 'https://example.com/'))
 			const query = url.searchParams.get('q')
-			
+
 			if (!query) {
 				throw new Error('Invalid search URI - query parameter is required')
 			}
 
 			const consumerKey = env?.DISCOGS_CONSUMER_KEY || ''
 			const consumerSecret = env?.DISCOGS_CONSUMER_SECRET || ''
-			
+
 			const userProfile = await discogsClient.getUserProfile(session.accessToken, session.accessTokenSecret, consumerKey, consumerSecret)
-			const searchResults = await discogsClient.searchCollection(userProfile.username, session.accessToken, session.accessTokenSecret, {
-				query,
-				per_page: 50,
-			}, consumerKey, consumerSecret)
+			const searchResults = await discogsClient.searchCollection(
+				userProfile.username,
+				session.accessToken,
+				session.accessTokenSecret,
+				{
+					query,
+					per_page: 50,
+				},
+				consumerKey,
+				consumerSecret,
+			)
 
 			return {
 				contents: [
@@ -347,15 +376,15 @@ async function handleToolsCall(params: unknown): Promise<ToolCallResult> {
 		ping: {
 			type: 'object',
 			properties: {
-				message: { type: 'string' }
+				message: { type: 'string' },
 			},
-			required: []
+			required: [],
 		},
 		server_info: {
 			type: 'object',
 			properties: {},
-			required: []
-		}
+			required: [],
+		},
 	}
 
 	// Validate tool arguments against schema
@@ -374,9 +403,9 @@ async function handleToolsCall(params: unknown): Promise<ToolCallResult> {
 				content: [
 					{
 						type: 'text',
-						text: `Pong! You said: ${message}`
-					}
-				]
+						text: `Pong! You said: ${message}`,
+					},
+				],
 			}
 		}
 		case 'server_info': {
@@ -384,9 +413,9 @@ async function handleToolsCall(params: unknown): Promise<ToolCallResult> {
 				content: [
 					{
 						type: 'text',
-						text: `Discogs MCP Server v1.0.0\n\nStatus: Running\nProtocol: MCP 2024-11-05\nFeatures:\n- Resources: Collection, Releases, Search\n- Authentication: OAuth 1.0a\n- Rate Limiting: Enabled\n\nTo get started, authenticate at http://localhost:8787/login`
-					}
-				]
+						text: `Discogs MCP Server v1.0.0\n\nStatus: Running\nProtocol: MCP 2024-11-05\nFeatures:\n- Resources: Collection, Releases, Search\n- Authentication: OAuth 1.0a\n- Rate Limiting: Enabled\n\nTo get started, authenticate at http://localhost:8787/login`,
+					},
+				],
 			}
 		}
 		default:
@@ -411,29 +440,29 @@ async function handleAuthenticatedToolsCall(params: unknown, session: SessionPay
 			type: 'object',
 			properties: {
 				query: { type: 'string' },
-				per_page: { type: 'number', minimum: 1, maximum: 100 }
+				per_page: { type: 'number', minimum: 1, maximum: 100 },
 			},
-			required: ['query']
+			required: ['query'],
 		},
 		get_release: {
 			type: 'object',
 			properties: {
-				release_id: { type: 'string' }
+				release_id: { type: 'string' },
 			},
-			required: ['release_id']
+			required: ['release_id'],
 		},
 		get_collection_stats: {
 			type: 'object',
 			properties: {},
-			required: []
+			required: [],
 		},
 		get_recommendations: {
 			type: 'object',
 			properties: {
-				limit: { type: 'number', minimum: 1, maximum: 50 }
+				limit: { type: 'number', minimum: 1, maximum: 50 },
 			},
-			required: []
-		}
+			required: [],
+		},
 	}
 
 	// Validate tool arguments against schema
@@ -457,22 +486,31 @@ async function handleAuthenticatedToolsCall(params: unknown, session: SessionPay
 			try {
 				const consumerKey = env?.DISCOGS_CONSUMER_KEY || ''
 				const consumerSecret = env?.DISCOGS_CONSUMER_SECRET || ''
-				
+
 				const userProfile = await discogsClient.getUserProfile(session.accessToken, session.accessTokenSecret, consumerKey, consumerSecret)
-				const results = await discogsClient.searchCollection(userProfile.username, session.accessToken, session.accessTokenSecret, {
-					query,
-					per_page: perPage,
-				}, consumerKey, consumerSecret)
+				const results = await discogsClient.searchCollection(
+					userProfile.username,
+					session.accessToken,
+					session.accessTokenSecret,
+					{
+						query,
+						per_page: perPage,
+					},
+					consumerKey,
+					consumerSecret,
+				)
 
 				const summary = `Found ${results.pagination.items} results for "${query}" in your collection (showing ${results.releases.length} items):`
-				
+
 				// Create formatted list with release IDs
-				const releaseList = results.releases.map(release => {
-					const info = release.basic_information
-					const artists = info.artists.map(a => a.name).join(', ')
-					const formats = info.formats.map(f => f.name).join(', ')
-					return `• [ID: ${release.id}] ${artists} - ${info.title} (${info.year}) [${formats}]`
-				}).join('\n')
+				const releaseList = results.releases
+					.map((release) => {
+						const info = release.basic_information
+						const artists = info.artists.map((a) => a.name).join(', ')
+						const formats = info.formats.map((f) => f.name).join(', ')
+						return `• [ID: ${release.id}] ${artists} - ${info.title} (${info.year}) [${formats}]`
+					})
+					.join('\n')
 
 				// Create structured data for programmatic use
 				const structuredData = {
@@ -481,33 +519,33 @@ async function handleAuthenticatedToolsCall(params: unknown, session: SessionPay
 					page: results.pagination.page,
 					per_page: results.pagination.per_page,
 					total_pages: results.pagination.pages,
-					releases: results.releases.map(release => ({
+					releases: results.releases.map((release) => ({
 						release_id: release.id,
 						instance_id: release.instance_id,
 						title: release.basic_information.title,
-						artists: release.basic_information.artists.map(a => ({ name: a.name, id: a.id })),
+						artists: release.basic_information.artists.map((a) => ({ name: a.name, id: a.id })),
 						year: release.basic_information.year,
-						formats: release.basic_information.formats.map(f => f.name),
+						formats: release.basic_information.formats.map((f) => f.name),
 						genres: release.basic_information.genres,
 						styles: release.basic_information.styles,
-						labels: release.basic_information.labels.map(l => ({ name: l.name, catno: l.catno })),
+						labels: release.basic_information.labels.map((l) => ({ name: l.name, catno: l.catno })),
 						rating: release.rating,
 						date_added: release.date_added,
-						resource_url: release.basic_information.resource_url
-					}))
+						resource_url: release.basic_information.resource_url,
+					})),
 				}
 
 				return {
 					content: [
 						{
 							type: 'text',
-							text: `${summary}\n\n${releaseList}\n\n**Tip:** Use the release IDs with the get_release tool for detailed information about specific albums.`
+							text: `${summary}\n\n${releaseList}\n\n**Tip:** Use the release IDs with the get_release tool for detailed information about specific albums.`,
 						},
 						{
 							type: 'text',
-							text: `\n**Structured Data:**\n\`\`\`json\n${JSON.stringify(structuredData, null, 2)}\n\`\`\``
-						}
-					]
+							text: `\n**Structured Data:**\n\`\`\`json\n${JSON.stringify(structuredData, null, 2)}\n\`\`\``,
+						},
+					],
 				}
 			} catch (error) {
 				throw new Error(`Failed to search collection: ${error instanceof Error ? error.message : 'Unknown error'}`)
@@ -522,13 +560,13 @@ async function handleAuthenticatedToolsCall(params: unknown, session: SessionPay
 
 			try {
 				const release = await discogsClient.getRelease(releaseId, session.accessToken, session.accessTokenSecret)
-				
-				const artists = release.artists.map(a => a.name).join(', ')
-				const formats = release.formats.map(f => `${f.name} (${f.qty})`).join(', ')
-				const genres = release.genres.join(', ')
-				const styles = release.styles.join(', ')
-				const labels = release.labels.map(l => `${l.name} (${l.catno})`).join(', ')
-				
+
+				const artists = (release.artists || []).map((a) => a.name).join(', ')
+				const formats = (release.formats || []).map((f) => `${f.name} (${f.qty})`).join(', ')
+				const genres = (release.genres || []).join(', ')
+				const styles = (release.styles || []).join(', ')
+				const labels = (release.labels || []).map((l) => `${l.name} (${l.catno})`).join(', ')
+
 				let text = `**${artists} - ${release.title}**\n\n`
 				text += `Year: ${release.year || 'Unknown'}\n`
 				text += `Formats: ${formats}\n`
@@ -536,10 +574,10 @@ async function handleAuthenticatedToolsCall(params: unknown, session: SessionPay
 				if (styles) text += `Styles: ${styles}\n`
 				text += `Labels: ${labels}\n`
 				if (release.country) text += `Country: ${release.country}\n`
-				
+
 				if (release.tracklist && release.tracklist.length > 0) {
 					text += `\n**Tracklist:**\n`
-					release.tracklist.forEach(track => {
+					release.tracklist.forEach((track) => {
 						text += `${track.position}. ${track.title}`
 						if (track.duration) text += ` (${track.duration})`
 						text += '\n'
@@ -550,9 +588,9 @@ async function handleAuthenticatedToolsCall(params: unknown, session: SessionPay
 					content: [
 						{
 							type: 'text',
-							text
-						}
-					]
+							text,
+						},
+					],
 				}
 			} catch (error) {
 				throw new Error(`Failed to get release: ${error instanceof Error ? error.message : 'Unknown error'}`)
@@ -563,9 +601,15 @@ async function handleAuthenticatedToolsCall(params: unknown, session: SessionPay
 			try {
 				const consumerKey = env?.DISCOGS_CONSUMER_KEY || ''
 				const consumerSecret = env?.DISCOGS_CONSUMER_SECRET || ''
-				
+
 				const userProfile = await discogsClient.getUserProfile(session.accessToken, session.accessTokenSecret, consumerKey, consumerSecret)
-				const stats = await discogsClient.getCollectionStats(userProfile.username, session.accessToken, session.accessTokenSecret, consumerKey, consumerSecret)
+				const stats = await discogsClient.getCollectionStats(
+					userProfile.username,
+					session.accessToken,
+					session.accessTokenSecret,
+					consumerKey,
+					consumerSecret,
+				)
 
 				let text = `**Collection Statistics for ${userProfile.username}**\n\n`
 				text += `Total Releases: ${stats.totalReleases}\n`
@@ -573,7 +617,7 @@ async function handleAuthenticatedToolsCall(params: unknown, session: SessionPay
 
 				text += `**Top Genres:**\n`
 				const topGenres = Object.entries(stats.genreBreakdown)
-					.sort(([,a], [,b]) => b - a)
+					.sort(([, a], [, b]) => b - a)
 					.slice(0, 5)
 				topGenres.forEach(([genre, count]) => {
 					text += `• ${genre}: ${count} releases\n`
@@ -581,7 +625,7 @@ async function handleAuthenticatedToolsCall(params: unknown, session: SessionPay
 
 				text += `\n**By Decade:**\n`
 				const topDecades = Object.entries(stats.decadeBreakdown)
-					.sort(([,a], [,b]) => b - a)
+					.sort(([, a], [, b]) => b - a)
 					.slice(0, 5)
 				topDecades.forEach(([decade, count]) => {
 					text += `• ${decade}s: ${count} releases\n`
@@ -589,7 +633,7 @@ async function handleAuthenticatedToolsCall(params: unknown, session: SessionPay
 
 				text += `\n**Top Formats:**\n`
 				const topFormats = Object.entries(stats.formatBreakdown)
-					.sort(([,a], [,b]) => b - a)
+					.sort(([, a], [, b]) => b - a)
 					.slice(0, 5)
 				topFormats.forEach(([format, count]) => {
 					text += `• ${format}: ${count} releases\n`
@@ -599,9 +643,9 @@ async function handleAuthenticatedToolsCall(params: unknown, session: SessionPay
 					content: [
 						{
 							type: 'text',
-							text
-						}
-					]
+							text,
+						},
+					],
 				}
 			} catch (error) {
 				throw new Error(`Failed to get collection stats: ${error instanceof Error ? error.message : 'Unknown error'}`)
@@ -614,24 +658,30 @@ async function handleAuthenticatedToolsCall(params: unknown, session: SessionPay
 			try {
 				const consumerKey = env?.DISCOGS_CONSUMER_KEY || ''
 				const consumerSecret = env?.DISCOGS_CONSUMER_SECRET || ''
-				
+
 				const userProfile = await discogsClient.getUserProfile(session.accessToken, session.accessTokenSecret, consumerKey, consumerSecret)
-				const stats = await discogsClient.getCollectionStats(userProfile.username, session.accessToken, session.accessTokenSecret, consumerKey, consumerSecret)
+				const stats = await discogsClient.getCollectionStats(
+					userProfile.username,
+					session.accessToken,
+					session.accessTokenSecret,
+					consumerKey,
+					consumerSecret,
+				)
 
 				// Simple recommendation algorithm: suggest releases from top genres that user doesn't have
 				const topGenres = Object.entries(stats.genreBreakdown)
-					.sort(([,a], [,b]) => b - a)
+					.sort(([, a], [, b]) => b - a)
 					.slice(0, 3)
 					.map(([genre]) => genre)
 
 				let text = `**Music Recommendations Based on Your Collection**\n\n`
 				text += `Based on your collection of ${stats.totalReleases} releases, here are some recommendations:\n\n`
-				
+
 				text += `**Your Top Genres:** ${topGenres.join(', ')}\n\n`
 				text += `**Recommendations:**\n`
 				text += `• Explore more releases from your favorite genres\n`
 				text += `• Look for releases from the ${Object.keys(stats.decadeBreakdown).sort().reverse()[0]}s era\n`
-				const topFormat = Object.entries(stats.formatBreakdown).sort(([,a], [,b]) => b - a)[0]?.[0] || 'vinyl'
+				const topFormat = Object.entries(stats.formatBreakdown).sort(([, a], [, b]) => b - a)[0]?.[0] || 'vinyl'
 				text += `• Consider adding more ${topFormat} releases\n`
 				text += `• Search for releases from labels you already collect from\n\n`
 				text += `Use the search_collection tool to find specific artists or albums you might want to add!`
@@ -640,9 +690,9 @@ async function handleAuthenticatedToolsCall(params: unknown, session: SessionPay
 					content: [
 						{
 							type: 'text',
-							text
-						}
-					]
+							text,
+						},
+					],
 				}
 			} catch (error) {
 				throw new Error(`Failed to get recommendations: ${error instanceof Error ? error.message : 'Unknown error'}`)
@@ -658,34 +708,25 @@ async function handleAuthenticatedToolsCall(params: unknown, session: SessionPay
  * Type guard for ToolsCallParams
  */
 function isToolsCallParams(params: unknown): params is ToolsCallParams {
-	return (
-		typeof params === 'object' &&
-		params !== null &&
-		'name' in params &&
-		typeof (params as Record<string, unknown>).name === 'string'
-	)
+	return typeof params === 'object' && params !== null && 'name' in params && typeof (params as Record<string, unknown>).name === 'string'
 }
 
 /**
  * Type guard for ResourcesReadParams
  */
 
-
 /**
  * Type guard for PromptsListParams
  */
 function isPromptsListParams(params: unknown): params is PromptsListParams {
 	return (
-		typeof params === 'object' &&
-		params !== null &&
-		(!('cursor' in params) || typeof (params as PromptsListParams).cursor === 'string')
+		typeof params === 'object' && params !== null && (!('cursor' in params) || typeof (params as PromptsListParams).cursor === 'string')
 	)
 }
 
 /**
  * Type guard for PromptsGetParams
  */
-
 
 /**
  * Main method router
@@ -752,11 +793,11 @@ export async function handleMethod(request: JSONRPCRequest, httpRequest?: Reques
 							message: {
 								type: 'string',
 								description: 'Message to echo back',
-								default: 'Hello from Discogs MCP!'
-							}
+								default: 'Hello from Discogs MCP!',
+							},
 						},
-						required: []
-					}
+						required: [],
+					},
 				},
 				{
 					name: 'server_info',
@@ -764,29 +805,29 @@ export async function handleMethod(request: JSONRPCRequest, httpRequest?: Reques
 					inputSchema: {
 						type: 'object',
 						properties: {},
-						required: []
-					}
+						required: [],
+					},
 				},
 				{
 					name: 'search_collection',
-					description: 'Search through the user\'s Discogs collection',
+					description: "Search through the user's Discogs collection",
 					inputSchema: {
 						type: 'object',
 						properties: {
 							query: {
 								type: 'string',
-								description: 'Search query (artist, album, track, etc.)'
+								description: 'Search query (artist, album, track, etc.)',
 							},
 							per_page: {
 								type: 'number',
 								description: 'Number of results per page (1-100)',
 								default: 50,
 								minimum: 1,
-								maximum: 100
-							}
+								maximum: 100,
+							},
 						},
-						required: ['query']
-					}
+						required: ['query'],
+					},
 				},
 				{
 					name: 'get_release',
@@ -796,24 +837,24 @@ export async function handleMethod(request: JSONRPCRequest, httpRequest?: Reques
 						properties: {
 							release_id: {
 								type: 'string',
-								description: 'The Discogs release ID'
-							}
+								description: 'The Discogs release ID',
+							},
 						},
-						required: ['release_id']
-					}
+						required: ['release_id'],
+					},
 				},
 				{
 					name: 'get_collection_stats',
-					description: 'Get statistics about the user\'s collection',
+					description: "Get statistics about the user's collection",
 					inputSchema: {
 						type: 'object',
 						properties: {},
-						required: []
-					}
+						required: [],
+					},
 				},
 				{
 					name: 'get_recommendations',
-					description: 'Get music recommendations based on the user\'s collection',
+					description: "Get music recommendations based on the user's collection",
 					inputSchema: {
 						type: 'object',
 						properties: {
@@ -822,12 +863,12 @@ export async function handleMethod(request: JSONRPCRequest, httpRequest?: Reques
 								description: 'Number of recommendations to return',
 								default: 10,
 								minimum: 1,
-								maximum: 50
-							}
+								maximum: 50,
+							},
 						},
-						required: []
-					}
-				}
+						required: [],
+					},
+				},
 			]
 			return hasId(request) ? createResponse(id!, { tools }) : null
 		}
@@ -841,7 +882,7 @@ export async function handleMethod(request: JSONRPCRequest, httpRequest?: Reques
 				// If it's an unknown tool error, it might be an authenticated tool
 				if (error instanceof Error && error.message.includes('Unknown tool') && error.message.includes('authentication')) {
 					console.log('Attempting authenticated tool call for:', params)
-					
+
 					// Check if we have authentication context
 					if (!httpRequest || !jwtSecret) {
 						console.log('Missing authentication context')
@@ -851,9 +892,11 @@ export async function handleMethod(request: JSONRPCRequest, httpRequest?: Reques
 					console.log('Verifying authentication...')
 					const session = await verifyAuthentication(httpRequest, jwtSecret)
 					console.log('Session verification result:', session ? 'SUCCESS' : 'FAILED')
-					
+
 					if (!session) {
-						return hasId(request) ? createError(id!, MCPErrorCode.Unauthorized, 'Authentication required. Please visit /login to authenticate with Discogs.') : null
+						return hasId(request)
+							? createError(id!, MCPErrorCode.Unauthorized, 'Authentication required. Please visit /login to authenticate with Discogs.')
+							: null
 					}
 
 					try {
@@ -931,8 +974,6 @@ export async function handleMethod(request: JSONRPCRequest, httpRequest?: Reques
 			return null
 	}
 }
-
-
 
 /**
  * Reset initialization state (for testing)

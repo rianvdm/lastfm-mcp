@@ -8,8 +8,8 @@ function createMockAuthenticatedRequest(): Request {
 	return new Request('http://localhost:8787/', {
 		method: 'POST',
 		headers: {
-			'Cookie': 'session=mock.jwt.token'
-		}
+			Cookie: 'session=mock.jwt.token',
+		},
 	})
 }
 
@@ -23,8 +23,8 @@ vi.mock('../../src/auth/jwt', () => ({
 		accessToken: 'test-token',
 		accessTokenSecret: 'test-secret',
 		iat: Math.floor(Date.now() / 1000),
-		exp: Math.floor(Date.now() / 1000) + 3600
-	})
+		exp: Math.floor(Date.now() / 1000) + 3600,
+	}),
 }))
 
 describe('MCP Protocol Handlers', () => {
@@ -182,9 +182,9 @@ describe('MCP Protocol Handlers', () => {
 						expect.objectContaining({
 							uri: expect.stringMatching(/^discogs:\/\//),
 							name: expect.any(String),
-							mimeType: 'application/json'
-						})
-					])
+							mimeType: 'application/json',
+						}),
+					]),
 				},
 			})
 
@@ -198,19 +198,19 @@ describe('MCP Protocol Handlers', () => {
 			expect(toolsResponse).toEqual({
 				jsonrpc: '2.0',
 				id: 3,
-				result: { 
+				result: {
 					tools: expect.arrayContaining([
 						expect.objectContaining({
 							name: 'ping',
 							description: expect.any(String),
-							inputSchema: expect.any(Object)
+							inputSchema: expect.any(Object),
 						}),
 						expect.objectContaining({
 							name: 'server_info',
 							description: expect.any(String),
-							inputSchema: expect.any(Object)
-						})
-					])
+							inputSchema: expect.any(Object),
+						}),
+					]),
 				},
 			})
 
@@ -224,11 +224,11 @@ describe('MCP Protocol Handlers', () => {
 			expect(promptsResponse).toMatchObject({
 				jsonrpc: '2.0',
 				id: 4,
-				result: { 
+				result: {
 					prompts: expect.arrayContaining([
 						expect.objectContaining({
 							name: 'browse_collection',
-							description: expect.any(String)
+							description: expect.any(String),
 						}),
 						expect.objectContaining({
 							name: 'find_music',
@@ -236,15 +236,15 @@ describe('MCP Protocol Handlers', () => {
 							arguments: expect.arrayContaining([
 								expect.objectContaining({
 									name: 'query',
-									required: true
-								})
-							])
+									required: true,
+								}),
+							]),
 						}),
 						expect.objectContaining({
 							name: 'collection_insights',
-							description: expect.any(String)
-						})
-					])
+							description: expect.any(String),
+						}),
+					]),
 				},
 			})
 		})
@@ -306,11 +306,15 @@ describe('MCP Protocol Handlers', () => {
 			})
 
 			// Then call unknown method with authentication
-			const response = await handleMethod({
-				jsonrpc: '2.0',
-				method: 'unknown/method',
-				id: 2,
-			}, createMockAuthenticatedRequest(), mockJwtSecret)
+			const response = await handleMethod(
+				{
+					jsonrpc: '2.0',
+					method: 'unknown/method',
+					id: 2,
+				},
+				createMockAuthenticatedRequest(),
+				mockJwtSecret,
+			)
 
 			expect(response).toEqual({
 				jsonrpc: '2.0',
@@ -345,67 +349,79 @@ describe('MCP Protocol Handlers', () => {
 			const mockRequest = createMockAuthenticatedRequest()
 
 			// Test resources/list
-			const resourcesResponse = await handleMethod({
-				jsonrpc: '2.0',
-				method: 'resources/list',
-				id: 2,
-			}, mockRequest, mockJwtSecret)
+			const resourcesResponse = await handleMethod(
+				{
+					jsonrpc: '2.0',
+					method: 'resources/list',
+					id: 2,
+				},
+				mockRequest,
+				mockJwtSecret,
+			)
 
 			expect(resourcesResponse).toEqual({
 				jsonrpc: '2.0',
 				id: 2,
-				result: { 
+				result: {
 					resources: expect.arrayContaining([
 						expect.objectContaining({
 							uri: expect.stringMatching(/^discogs:\/\//),
 							name: expect.any(String),
-							mimeType: 'application/json'
-						})
-					])
+							mimeType: 'application/json',
+						}),
+					]),
 				},
 			})
 
 			// Test tools/list (now has ping and server_info tools)
-			const toolsResponse = await handleMethod({
-				jsonrpc: '2.0',
-				method: 'tools/list',
-				id: 3,
-			}, mockRequest, mockJwtSecret)
+			const toolsResponse = await handleMethod(
+				{
+					jsonrpc: '2.0',
+					method: 'tools/list',
+					id: 3,
+				},
+				mockRequest,
+				mockJwtSecret,
+			)
 
 			expect(toolsResponse).toEqual({
 				jsonrpc: '2.0',
 				id: 3,
-				result: { 
+				result: {
 					tools: expect.arrayContaining([
 						expect.objectContaining({
 							name: 'ping',
 							description: expect.any(String),
-							inputSchema: expect.any(Object)
+							inputSchema: expect.any(Object),
 						}),
 						expect.objectContaining({
 							name: 'server_info',
 							description: expect.any(String),
-							inputSchema: expect.any(Object)
-						})
-					])
+							inputSchema: expect.any(Object),
+						}),
+					]),
 				},
 			})
 
 			// Test prompts/list (now has actual prompts)
-			const promptsResponse = await handleMethod({
-				jsonrpc: '2.0',
-				method: 'prompts/list',
-				id: 4,
-			}, mockRequest, mockJwtSecret)
+			const promptsResponse = await handleMethod(
+				{
+					jsonrpc: '2.0',
+					method: 'prompts/list',
+					id: 4,
+				},
+				mockRequest,
+				mockJwtSecret,
+			)
 
 			expect(promptsResponse).toEqual({
 				jsonrpc: '2.0',
 				id: 4,
-				result: { 
+				result: {
 					prompts: expect.arrayContaining([
 						expect.objectContaining({
 							name: 'browse_collection',
-							description: expect.any(String)
+							description: expect.any(String),
 						}),
 						expect.objectContaining({
 							name: 'find_music',
@@ -413,15 +429,15 @@ describe('MCP Protocol Handlers', () => {
 							arguments: expect.arrayContaining([
 								expect.objectContaining({
 									name: 'query',
-									required: true
-								})
-							])
+									required: true,
+								}),
+							]),
 						}),
 						expect.objectContaining({
 							name: 'collection_insights',
-							description: expect.any(String)
-						})
-					])
+							description: expect.any(String),
+						}),
+					]),
 				},
 			})
 		})
