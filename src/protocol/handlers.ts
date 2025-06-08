@@ -187,6 +187,56 @@ export async function handleResourcesRead(params: unknown, session: SessionPaylo
 }
 
 /**
+ * Handle tools/call request
+ */
+async function handleToolsCall(params: unknown): Promise<any> {
+	// Validate params
+	if (!isToolsCallParams(params)) {
+		throw new Error('Invalid tools/call params - name and arguments are required')
+	}
+
+	const { name, arguments: args } = params
+
+	switch (name) {
+		case 'ping': {
+			const message = args?.message || 'Hello from Discogs MCP!'
+			return {
+				content: [
+					{
+						type: 'text',
+						text: `Pong! You said: ${message}`
+					}
+				]
+			}
+		}
+		case 'server_info': {
+			return {
+				content: [
+					{
+						type: 'text',
+						text: `Discogs MCP Server v1.0.0\n\nStatus: Running\nProtocol: MCP 2024-11-05\nFeatures:\n- Resources: Collection, Releases, Search\n- Authentication: OAuth 1.0a\n- Rate Limiting: Enabled\n\nTo get started, authenticate at http://localhost:8787/login`
+					}
+				]
+			}
+		}
+		default:
+			throw new Error(`Unknown tool: ${name}`)
+	}
+}
+
+/**
+ * Type guard for ToolsCallParams
+ */
+function isToolsCallParams(params: unknown): params is { name: string; arguments?: any } {
+	return (
+		typeof params === 'object' &&
+		params !== null &&
+		'name' in params &&
+		typeof (params as any).name === 'string'
+	)
+}
+
+/**
  * Type guard for ResourcesReadParams
  */
 function isResourcesReadParams(params: unknown): params is ResourcesReadParams {
@@ -224,6 +274,119 @@ export async function handleMethod(request: JSONRPCRequest, httpRequest?: Reques
 		return null
 	}
 
+	// Some methods don't require authentication
+	switch (method) {
+		case 'resources/list': {
+			const resourcesResult = handleResourcesList()
+			return hasId(request) ? createResponse(id!, resourcesResult) : null
+		}
+
+		case 'tools/list':
+			// Return all available Discogs tools
+			const tools = [
+				{
+					name: 'ping',
+					description: 'Test connectivity to the Discogs MCP server',
+					inputSchema: {
+						type: 'object',
+						properties: {
+							message: {
+								type: 'string',
+								description: 'Message to echo back',
+								default: 'Hello from Discogs MCP!'
+							}
+						},
+						required: []
+					}
+				},
+				{
+					name: 'server_info',
+					description: 'Get information about the Discogs MCP server',
+					inputSchema: {
+						type: 'object',
+						properties: {},
+						required: []
+					}
+				},
+				{
+					name: 'search_collection',
+					description: 'Search through the user\'s Discogs collection',
+					inputSchema: {
+						type: 'object',
+						properties: {
+							query: {
+								type: 'string',
+								description: 'Search query (artist, album, track, etc.)'
+							},
+							per_page: {
+								type: 'number',
+								description: 'Number of results per page (1-100)',
+								default: 50,
+								minimum: 1,
+								maximum: 100
+							}
+						},
+						required: ['query']
+					}
+				},
+				{
+					name: 'get_release',
+					description: 'Get detailed information about a specific Discogs release',
+					inputSchema: {
+						type: 'object',
+						properties: {
+							release_id: {
+								type: 'string',
+								description: 'The Discogs release ID'
+							}
+						},
+						required: ['release_id']
+					}
+				},
+				{
+					name: 'get_collection_stats',
+					description: 'Get statistics about the user\'s collection',
+					inputSchema: {
+						type: 'object',
+						properties: {},
+						required: []
+					}
+				},
+				{
+					name: 'get_recommendations',
+					description: 'Get music recommendations based on the user\'s collection',
+					inputSchema: {
+						type: 'object',
+						properties: {
+							limit: {
+								type: 'number',
+								description: 'Number of recommendations to return',
+								default: 10,
+								minimum: 1,
+								maximum: 50
+							}
+						},
+						required: []
+					}
+				}
+			]
+			return hasId(request) ? createResponse(id!, { tools }) : null
+
+		case 'tools/call': {
+			try {
+				const result = await handleToolsCall(params)
+				return hasId(request) ? createResponse(id!, result) : null
+			} catch (error) {
+				const message = error instanceof Error ? error.message : 'Failed to call tool'
+				return hasId(request) ? createError(id!, -32603, message) : null
+			}
+		}
+
+		case 'prompts/list':
+			// TODO: Implement in G1
+			return hasId(request) ? createResponse(id!, { prompts: [] }) : null
+	}
+
 	// All other methods require authentication
 	if (!httpRequest || !jwtSecret) {
 		if (hasId(request)) {
@@ -240,13 +403,9 @@ export async function handleMethod(request: JSONRPCRequest, httpRequest?: Reques
 		return null
 	}
 
-	// Route to appropriate handler
+	// Route to appropriate handler for authenticated methods
 	switch (method) {
 		// Resources
-		case 'resources/list': {
-			const resourcesResult = handleResourcesList()
-			return hasId(request) ? createResponse(id!, resourcesResult) : null
-		}
 
 		case 'resources/read': {
 			try {
@@ -258,20 +417,9 @@ export async function handleMethod(request: JSONRPCRequest, httpRequest?: Reques
 			}
 		}
 
-		// Tools
-		case 'tools/list':
-			// TODO: Implement in F1
-			return hasId(request) ? createResponse(id!, { tools: [] }) : null
-
-		case 'tools/call':
-			// TODO: Implement in F2-F4
-			return hasId(request) ? createError(id!, -32601, 'Not implemented yet') : null
+		// Tools (authenticated tools would go here in the future)
 
 		// Prompts
-		case 'prompts/list':
-			// TODO: Implement in G1
-			return hasId(request) ? createResponse(id!, { prompts: [] }) : null
-
 		case 'prompts/get':
 			// TODO: Implement in G2-G3
 			return hasId(request) ? createError(id!, -32601, 'Not implemented yet') : null

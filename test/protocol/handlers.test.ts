@@ -146,7 +146,7 @@ describe('MCP Protocol Handlers', () => {
 			})
 		})
 
-		it('should require authentication for non-initialize methods', async () => {
+		it('should allow list methods without authentication', async () => {
 			// Initialize first
 			await handleMethod({
 				jsonrpc: '2.0',
@@ -159,10 +159,85 @@ describe('MCP Protocol Handlers', () => {
 				id: 1,
 			})
 
-			// Try to call method without authentication
-			const response = await handleMethod({
+			// resources/list should work without authentication
+			const resourcesResponse = await handleMethod({
 				jsonrpc: '2.0',
 				method: 'resources/list',
+				id: 2,
+			})
+
+			expect(resourcesResponse).toMatchObject({
+				jsonrpc: '2.0',
+				id: 2,
+				result: {
+					resources: expect.arrayContaining([
+						expect.objectContaining({
+							uri: expect.stringMatching(/^discogs:\/\//),
+							name: expect.any(String),
+							mimeType: 'application/json'
+						})
+					])
+				},
+			})
+
+			// tools/list should work without authentication
+			const toolsResponse = await handleMethod({
+				jsonrpc: '2.0',
+				method: 'tools/list',
+				id: 3,
+			})
+
+			expect(toolsResponse).toMatchObject({
+				jsonrpc: '2.0',
+				id: 3,
+				result: { 
+					tools: expect.arrayContaining([
+						expect.objectContaining({
+							name: 'ping',
+							description: expect.any(String),
+							inputSchema: expect.any(Object)
+						}),
+						expect.objectContaining({
+							name: 'server_info',
+							description: expect.any(String),
+							inputSchema: expect.any(Object)
+						})
+					])
+				},
+			})
+
+			// prompts/list should work without authentication
+			const promptsResponse = await handleMethod({
+				jsonrpc: '2.0',
+				method: 'prompts/list',
+				id: 4,
+			})
+
+			expect(promptsResponse).toMatchObject({
+				jsonrpc: '2.0',
+				id: 4,
+				result: { prompts: [] },
+			})
+		})
+
+		it('should require authentication for data methods', async () => {
+			// Initialize first
+			await handleMethod({
+				jsonrpc: '2.0',
+				method: 'initialize',
+				params: {
+					protocolVersion: '2024-11-05',
+					capabilities: {},
+					clientInfo: { name: 'Test', version: '1.0' },
+				},
+				id: 1,
+			})
+
+			// resources/read should require authentication
+			const response = await handleMethod({
+				jsonrpc: '2.0',
+				method: 'resources/read',
+				params: { uri: 'discogs://collection' },
 				id: 2,
 			})
 
@@ -243,7 +318,7 @@ describe('MCP Protocol Handlers', () => {
 				},
 			})
 
-			// Test tools/list (still empty for now)
+			// Test tools/list (now has ping and server_info tools)
 			const toolsResponse = await handleMethod({
 				jsonrpc: '2.0',
 				method: 'tools/list',
@@ -253,7 +328,20 @@ describe('MCP Protocol Handlers', () => {
 			expect(toolsResponse).toMatchObject({
 				jsonrpc: '2.0',
 				id: 3,
-				result: { tools: [] },
+				result: { 
+					tools: expect.arrayContaining([
+						expect.objectContaining({
+							name: 'ping',
+							description: expect.any(String),
+							inputSchema: expect.any(Object)
+						}),
+						expect.objectContaining({
+							name: 'server_info',
+							description: expect.any(String),
+							inputSchema: expect.any(Object)
+						})
+					])
+				},
 			})
 
 			// Test prompts/list (still empty for now)

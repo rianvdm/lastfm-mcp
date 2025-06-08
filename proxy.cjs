@@ -25,11 +25,18 @@ rl.on('line', (line) => {
     let body = '';
     res.on('data', chunk => body += chunk);
     res.on('end', () => {
+      // Handle empty responses (like 204 No Content for notifications)
+      if (body.trim() === '') {
+        // For notifications, don't output anything
+        return;
+      }
+      
       try {
         const jsonResponse = JSON.parse(body);
         process.stdout.write(JSON.stringify(jsonResponse) + '\n');
       } catch (err) {
         console.error('Error parsing JSON response:', err);
+        console.error('Response body:', body);
       }
     });
   });
