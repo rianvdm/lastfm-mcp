@@ -4,11 +4,13 @@
  */
 
 import { parseMessage, createError, serializeResponse } from './protocol/parser'
-import { handleMethod } from './protocol/handlers'
+import { handleMethod, verifyAuthentication } from './protocol/handlers'
 import { ErrorCode, JSONRPCError } from './types/jsonrpc'
 import { createSSEResponse, getConnection } from './transport/sse'
 import { DiscogsAuth } from './auth/discogs'
 import { createSessionToken } from './auth/jwt'
+import { KVLogger } from './utils/kvLogger'
+import { RateLimiter } from './utils/rateLimit'
 import type { Env } from './types/env'
 import type { ExecutionContext } from '@cloudflare/workers-types'
 
@@ -194,6 +196,18 @@ function handleSSEConnection(): Response {
  * Handle MCP JSON-RPC request
  */
 async function handleMCPRequest(request: Request, env?: Env): Promise<Response> {
+	const startTime = Date.now()
+	let userId = 'anonymous'
+	let method = 'unknown'
+	let params: unknown = null
+	
+	// Initialize utilities
+	const logger = env?.MCP_LOGS ? new KVLogger(env.MCP_LOGS) : null
+	const rateLimiter = env?.MCP_RL ? new RateLimiter(env.MCP_RL, {
+		requestsPerMinute: 60,  // TODO: Make configurable via env vars
+		requestsPerHour: 1000
+	}) : null
+
 	try {
 		// Check for connection ID header (for SSE-connected clients)
 		const connectionId = request.headers.get('X-Connection-ID')
@@ -210,6 +224,18 @@ async function handleMCPRequest(request: Request, env?: Env): Promise<Response> 
 		// Handle empty body
 		if (!body) {
 			const errorResponse = createError(null, ErrorCode.InvalidRequest, 'Empty request body')
+			
+			// Log the error
+			if (logger) {
+				const latency = Date.now() - startTime
+				await logger.log(userId, method, params, {
+					status: 'error',
+					latency,
+					errorCode: ErrorCode.InvalidRequest,
+					errorMessage: 'Empty request body'
+				})
+			}
+			
 			return new Response(serializeResponse(errorResponse), {
 				headers: { 'Content-Type': 'application/json' },
 			})
@@ -219,17 +245,83 @@ async function handleMCPRequest(request: Request, env?: Env): Promise<Response> 
 		let jsonrpcRequest
 		try {
 			jsonrpcRequest = parseMessage(body)
+			method = jsonrpcRequest.method
+			params = jsonrpcRequest.params
 		} catch (error) {
 			// Parse error or invalid request
 			const jsonrpcError = error as JSONRPCError
 			const errorResponse = createError(null, jsonrpcError.code || ErrorCode.ParseError, jsonrpcError.message || 'Parse error')
+			
+			// Log the parse error
+			if (logger) {
+				const latency = Date.now() - startTime
+				await logger.log(userId, method, params, {
+					status: 'error',
+					latency,
+					errorCode: jsonrpcError.code || ErrorCode.ParseError,
+					errorMessage: jsonrpcError.message || 'Parse error'
+				})
+			}
+			
 			return new Response(serializeResponse(errorResponse), {
 				headers: { 'Content-Type': 'application/json' },
 			})
 		}
 
+		// Get user ID for rate limiting and logging
+		if (env?.JWT_SECRET) {
+			const session = await verifyAuthentication(request, env.JWT_SECRET)
+			if (session) {
+				userId = session.userId
+			}
+		}
+
+		// Apply rate limiting (skip for initialize method)
+		if (rateLimiter && method !== 'initialize' && method !== 'initialized') {
+			const rateLimitResult = await rateLimiter.checkLimit(userId)
+			
+			if (!rateLimitResult.allowed) {
+				const errorResponse = createError(
+					jsonrpcRequest.id || null,
+					rateLimitResult.errorCode || -32000,
+					rateLimitResult.errorMessage || 'Rate limit exceeded'
+				)
+				
+				// Log the rate limit error
+				if (logger) {
+					const latency = Date.now() - startTime
+					await logger.log(userId, method, params, {
+						status: 'error',
+						latency,
+						errorCode: rateLimitResult.errorCode || -32000,
+						errorMessage: rateLimitResult.errorMessage || 'Rate limit exceeded'
+					})
+				}
+				
+				return new Response(serializeResponse(errorResponse), {
+					status: 429,
+					headers: { 
+						'Content-Type': 'application/json',
+						'Retry-After': rateLimitResult.resetTime ? 
+							Math.ceil((rateLimitResult.resetTime - Date.now()) / 1000).toString() : '60'
+					},
+				})
+			}
+		}
+
 		// Handle the method
 		const response = await handleMethod(jsonrpcRequest, request, env?.JWT_SECRET)
+
+		// Calculate latency
+		const latency = Date.now() - startTime
+
+		// Log successful request
+		if (logger) {
+			await logger.log(userId, method, params, {
+				status: 'success',
+				latency
+			})
+		}
 
 		// If no response (notification), return 204 No Content
 		if (!response) {
@@ -244,6 +336,18 @@ async function handleMCPRequest(request: Request, env?: Env): Promise<Response> 
 		// Internal server error
 		console.error('Internal error:', error)
 		const errorResponse = createError(null, ErrorCode.InternalError, 'Internal server error')
+		
+		// Log the internal error
+		if (logger) {
+			const latency = Date.now() - startTime
+			await logger.log(userId, method, params, {
+				status: 'error',
+				latency,
+				errorCode: ErrorCode.InternalError,
+				errorMessage: error instanceof Error ? error.message : 'Internal server error'
+			})
+		}
+		
 		return new Response(serializeResponse(errorResponse), {
 			status: 500,
 			headers: { 'Content-Type': 'application/json' },
