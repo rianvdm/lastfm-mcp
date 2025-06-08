@@ -1,5 +1,7 @@
 // Discogs API client for interacting with user collections and releases
 
+import { DiscogsAuth } from '../auth/discogs'
+
 export interface DiscogsRelease {
   id: number
   title: string
@@ -129,14 +131,53 @@ export class DiscogsClient {
   private userAgent = 'discogs-mcp/1.0.0'
 
   /**
+   * Create OAuth 1.0a authorization header using proper HMAC-SHA1 signature
+   */
+  private async createOAuthHeader(
+    url: string,
+    method: string,
+    accessToken: string, 
+    accessTokenSecret: string, 
+    consumerKey: string, 
+    consumerSecret: string
+  ): Promise<string> {
+    if (!consumerKey || !consumerSecret) {
+      throw new Error('Consumer key and secret are required for OAuth authentication')
+    }
+    
+    const auth = new DiscogsAuth(consumerKey, consumerSecret)
+    const headers = await auth.getAuthHeaders(url, method, {
+      key: accessToken,
+      secret: accessTokenSecret
+    })
+    
+    return headers.Authorization
+  }
+
+  /**
    * Get detailed information about a specific release
    */
-  async getRelease(releaseId: string, token: string): Promise<DiscogsRelease> {
-    const response = await fetch(`${this.baseUrl}/releases/${releaseId}`, {
-      headers: {
-        'Authorization': `Discogs token=${token}`,
-        'User-Agent': this.userAgent,
-      },
+  async getRelease(
+    releaseId: string, 
+    accessToken: string, 
+    accessTokenSecret?: string,
+    consumerKey?: string,
+    consumerSecret?: string
+  ): Promise<DiscogsRelease> {
+    const url = `${this.baseUrl}/releases/${releaseId}`
+    const headers: Record<string, string> = {
+      'User-Agent': this.userAgent,
+    }
+
+    // Use OAuth 1.0a if we have all required parameters, otherwise fall back to simple token auth
+    if (accessTokenSecret && consumerKey && consumerSecret) {
+      headers['Authorization'] = await this.createOAuthHeader(url, 'GET', accessToken, accessTokenSecret, consumerKey, consumerSecret)
+    } else {
+      headers['Authorization'] = `Discogs token=${accessToken}`
+    }
+
+    const response = await fetch(url, {
+      headers,
     })
 
     if (!response.ok) {
@@ -151,14 +192,17 @@ export class DiscogsClient {
    */
   async searchCollection(
     username: string,
-    token: string,
+    accessToken: string,
+    accessTokenSecret: string,
     options: {
       query?: string
       page?: number
       per_page?: number
       sort?: 'added' | 'artist' | 'title' | 'year'
       sort_order?: 'asc' | 'desc'
-    } = {}
+    } = {},
+    consumerKey: string,
+    consumerSecret: string
   ): Promise<DiscogsCollectionResponse> {
     const params = new URLSearchParams()
     
@@ -170,9 +214,11 @@ export class DiscogsClient {
 
     const url = `${this.baseUrl}/users/${username}/collection/folders/0/releases?${params.toString()}`
     
+    const authHeader = await this.createOAuthHeader(url, 'GET', accessToken, accessTokenSecret, consumerKey, consumerSecret)
+    
     const response = await fetch(url, {
       headers: {
-        'Authorization': `Discogs token=${token}`,
+        'Authorization': authHeader,
         'User-Agent': this.userAgent,
       },
     })
@@ -187,17 +233,17 @@ export class DiscogsClient {
   /**
    * Get user's collection statistics
    */
-  async getCollectionStats(username: string, token: string): Promise<DiscogsCollectionStats> {
+  async getCollectionStats(username: string, accessToken: string, accessTokenSecret: string, consumerKey: string, consumerSecret: string): Promise<DiscogsCollectionStats> {
     // Get all collection items (we'll need to paginate through all pages)
     let allReleases: DiscogsCollectionItem[] = []
     let page = 1
     let totalPages = 1
 
     do {
-      const response = await this.searchCollection(username, token, {
+      const response = await this.searchCollection(username, accessToken, accessTokenSecret, {
         page,
         per_page: 100, // Max per page
-      })
+      }, consumerKey, consumerSecret)
       
       allReleases = allReleases.concat(response.releases)
       totalPages = response.pagination.pages
@@ -259,15 +305,24 @@ export class DiscogsClient {
   /**
    * Get user profile to extract username
    */
-  async getUserProfile(token: string): Promise<{ username: string; id: number }> {
-    const response = await fetch(`${this.baseUrl}/oauth/identity`, {
+  async getUserProfile(accessToken: string, accessTokenSecret: string, consumerKey: string, consumerSecret: string): Promise<{ username: string; id: number }> {
+    console.log('Making OAuth request to /oauth/identity with token:', accessToken.substring(0, 10) + '...')
+    
+    const url = `${this.baseUrl}/oauth/identity`
+    const authHeader = await this.createOAuthHeader(url, 'GET', accessToken, accessTokenSecret, consumerKey, consumerSecret)
+    
+    const response = await fetch(url, {
       headers: {
-        'Authorization': `Discogs token=${token}`,
+        'Authorization': authHeader,
         'User-Agent': this.userAgent,
       },
     })
 
+    console.log('Response status:', response.status, response.statusText)
+    
     if (!response.ok) {
+      const errorText = await response.text()
+      console.log('Error response body:', errorText)
       throw new Error(`Failed to get user profile: ${response.status} ${response.statusText}`)
     }
 
@@ -279,12 +334,15 @@ export class DiscogsClient {
    */
   async searchDatabase(
     query: string,
-    token: string,
+    accessToken: string,
+    accessTokenSecret?: string,
     options: {
       type?: 'release' | 'master' | 'artist' | 'label'
       page?: number
       per_page?: number
-    } = {}
+    } = {},
+    consumerKey?: string,
+    consumerSecret?: string
   ): Promise<DiscogsSearchResponse> {
     const params = new URLSearchParams()
     params.append('q', query)
@@ -293,11 +351,20 @@ export class DiscogsClient {
     if (options.page) params.append('page', options.page.toString())
     if (options.per_page) params.append('per_page', options.per_page.toString())
 
-    const response = await fetch(`${this.baseUrl}/database/search?${params.toString()}`, {
-      headers: {
-        'Authorization': `Discogs token=${token}`,
-        'User-Agent': this.userAgent,
-      },
+    const url = `${this.baseUrl}/database/search?${params.toString()}`
+    const headers: Record<string, string> = {
+      'User-Agent': this.userAgent,
+    }
+
+    // Use OAuth 1.0a if we have all required parameters, otherwise fall back to simple token auth
+    if (accessTokenSecret && consumerKey && consumerSecret) {
+      headers['Authorization'] = await this.createOAuthHeader(url, 'GET', accessToken, accessTokenSecret, consumerKey, consumerSecret)
+    } else {
+      headers['Authorization'] = `Discogs token=${accessToken}`
+    }
+
+    const response = await fetch(url, {
+      headers,
     })
 
     if (!response.ok) {

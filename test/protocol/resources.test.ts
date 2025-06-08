@@ -108,10 +108,10 @@ describe('MCP Resources', () => {
 			const parsedContent = JSON.parse(result.contents[0].text!)
 			expect(parsedContent).toEqual(mockCollection)
 
-			expect(mockDiscogsClient.getUserProfile).toHaveBeenCalledWith('test-token')
-			expect(mockDiscogsClient.searchCollection).toHaveBeenCalledWith('testuser', 'test-token', {
-				per_page: 100,
-			})
+					expect(mockDiscogsClient.getUserProfile).toHaveBeenCalledWith('test-token', 'test-secret', '', '')
+		expect(mockDiscogsClient.searchCollection).toHaveBeenCalledWith('testuser', 'test-token', 'test-secret', {
+			per_page: 100,
+		}, '', '')
 		})
 
 		it('should read release resource', async () => {
@@ -186,11 +186,11 @@ describe('MCP Resources', () => {
 			const parsedContent = JSON.parse(result.contents[0].text!)
 			expect(parsedContent).toEqual(mockSearchResults)
 
-			expect(mockDiscogsClient.getUserProfile).toHaveBeenCalledWith('test-token')
-			expect(mockDiscogsClient.searchCollection).toHaveBeenCalledWith('testuser', 'test-token', {
-				query: 'rock',
-				per_page: 50,
-			})
+					expect(mockDiscogsClient.getUserProfile).toHaveBeenCalledWith('test-token', 'test-secret', '', '')
+		expect(mockDiscogsClient.searchCollection).toHaveBeenCalledWith('testuser', 'test-token', 'test-secret', {
+			query: 'rock',
+			per_page: 50,
+		}, '', '')
 		})
 
 		it('should throw error for invalid params', async () => {

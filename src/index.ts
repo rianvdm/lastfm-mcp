@@ -5,10 +5,10 @@
 
 import { parseMessage, createError, serializeResponse } from './protocol/parser'
 import { handleMethod, verifyAuthentication } from './protocol/handlers'
+import { createSessionToken } from './auth/jwt'
 import { ErrorCode, JSONRPCError } from './types/jsonrpc'
 import { createSSEResponse, getConnection } from './transport/sse'
 import { DiscogsAuth } from './auth/discogs'
-import { createSessionToken } from './auth/jwt'
 import { KVLogger } from './utils/kvLogger'
 import { RateLimiter } from './utils/rateLimit'
 import type { Env } from './types/env'
@@ -59,6 +59,13 @@ export default {
 					return new Response('Method not allowed', { status: 405 })
 				}
 				return handleCallback(request, env)
+
+			case '/mcp-auth':
+				// MCP authentication endpoint for programmatic access
+				if (request.method !== 'GET') {
+					return new Response('Method not allowed', { status: 405 })
+				}
+				return handleMCPAuth(request, env)
 
 			default:
 				return new Response('Not found', { status: 404 })
@@ -157,6 +164,25 @@ async function handleCallback(request: Request, env: Env): Promise<Response> {
 			env.JWT_SECRET,
 			24 // expires in 24 hours
 		)
+		
+		// Store session in KV for MCP proxy access
+		if (env.MCP_SESSIONS) {
+			try {
+				const sessionData = {
+					token: sessionToken,
+					userId: accessToken,
+					accessToken,
+					accessTokenSecret,
+					timestamp: Date.now(),
+					expiresAt: Date.now() + (24 * 60 * 60 * 1000) // 24 hours
+				};
+				await env.MCP_SESSIONS.put('latest-session', JSON.stringify(sessionData), {
+					expirationTtl: 24 * 60 * 60 // 24 hours
+				});
+			} catch (error) {
+				console.warn('Could not save session to KV:', error);
+			}
+		}
 		
 		// Set secure HTTP-only cookie
 		const cookieOptions = [
@@ -310,7 +336,7 @@ async function handleMCPRequest(request: Request, env?: Env): Promise<Response> 
 		}
 
 		// Handle the method
-		const response = await handleMethod(jsonrpcRequest, request, env?.JWT_SECRET)
+		const response = await handleMethod(jsonrpcRequest, request, env?.JWT_SECRET, env)
 
 		// Calculate latency
 		const latency = Date.now() - startTime
@@ -351,6 +377,74 @@ async function handleMCPRequest(request: Request, env?: Env): Promise<Response> 
 		return new Response(serializeResponse(errorResponse), {
 			status: 500,
 			headers: { 'Content-Type': 'application/json' },
+		})
+	}
+}
+
+/**
+ * Handle MCP authentication endpoint - returns latest session token
+ */
+async function handleMCPAuth(request: Request, env: Env): Promise<Response> {
+	try {
+		// Try to get the latest session from KV storage
+		if (env.MCP_SESSIONS) {
+			const sessionDataStr = await env.MCP_SESSIONS.get('latest-session')
+			if (sessionDataStr) {
+				const sessionData = JSON.parse(sessionDataStr)
+				
+				// Return the session token (KV TTL handles expiration)
+				return new Response(JSON.stringify({
+					session_token: sessionData.token,
+					user_id: sessionData.userId,
+					message: 'Use this token in the Cookie header as: session=' + sessionData.token,
+					expires_at: new Date(sessionData.expiresAt).toISOString()
+				}), {
+					headers: { 'Content-Type': 'application/json' }
+				})
+			}
+		}
+
+		// Fallback: check if user has a valid session cookie
+		const session = await verifyAuthentication(request, env.JWT_SECRET)
+		if (session) {
+			// Extract session token from cookie
+			const cookieHeader = request.headers.get('Cookie')
+			if (cookieHeader) {
+				const cookies = cookieHeader.split(';').reduce((acc, cookie) => {
+					const [key, value] = cookie.trim().split('=')
+					if (key && value) {
+						acc[key] = value
+					}
+					return acc
+				}, {} as Record<string, string>)
+
+				const sessionToken = cookies.session
+				if (sessionToken) {
+					return new Response(JSON.stringify({
+						session_token: sessionToken,
+						user_id: session.userId,
+						message: 'Use this token in the Cookie header as: session=' + sessionToken
+					}), {
+						headers: { 'Content-Type': 'application/json' }
+					})
+				}
+			}
+		}
+
+		return new Response(JSON.stringify({
+			error: 'Not authenticated',
+			message: 'Please visit /login to authenticate with Discogs first'
+		}), {
+			status: 401,
+			headers: { 'Content-Type': 'application/json' }
+		})
+	} catch (error) {
+		console.error('MCP auth error:', error)
+		return new Response(JSON.stringify({
+			error: 'Authentication check failed'
+		}), {
+			status: 500,
+			headers: { 'Content-Type': 'application/json' }
 		})
 	}
 }

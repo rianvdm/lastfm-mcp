@@ -183,11 +183,11 @@ describe('MCP Tools', () => {
 				}
 			})
 
-			expect(mockDiscogsClient.getUserProfile).toHaveBeenCalledWith('test-token')
-			expect(mockDiscogsClient.searchCollection).toHaveBeenCalledWith('testuser', 'test-token', {
+			expect(mockDiscogsClient.getUserProfile).toHaveBeenCalledWith('test-token', 'test-secret', '', '')
+			expect(mockDiscogsClient.searchCollection).toHaveBeenCalledWith('testuser', 'test-token', 'test-secret', {
 				query: 'rock',
 				per_page: 25,
-			})
+			}, '', '')
 		})
 
 		it('should handle get_release tool', async () => {
@@ -299,13 +299,13 @@ describe('MCP Tools', () => {
 						}
 					]
 				}
-			})
+					})
 
-			expect(mockDiscogsClient.getUserProfile).toHaveBeenCalledWith('test-token')
-			expect(mockDiscogsClient.getCollectionStats).toHaveBeenCalledWith('testuser', 'test-token')
-		})
+		expect(mockDiscogsClient.getUserProfile).toHaveBeenCalledWith('test-token', 'test-secret', '', '')
+		expect(mockDiscogsClient.getCollectionStats).toHaveBeenCalledWith('testuser', 'test-token', 'test-secret', '', '')
+	})
 
-		it('should handle get_recommendations tool', async () => {
+	it('should handle get_recommendations tool', async () => {
 			const mockUserProfile = { username: 'testuser', id: 123 }
 			const mockStats = {
 				totalReleases: 100,
@@ -354,13 +354,13 @@ describe('MCP Tools', () => {
 						}
 					]
 				}
-			})
+					})
 
-			expect(mockDiscogsClient.getUserProfile).toHaveBeenCalledWith('test-token')
-			expect(mockDiscogsClient.getCollectionStats).toHaveBeenCalledWith('testuser', 'test-token')
-		})
+		expect(mockDiscogsClient.getUserProfile).toHaveBeenCalledWith('test-token', 'test-secret', '', '')
+		expect(mockDiscogsClient.getCollectionStats).toHaveBeenCalledWith('testuser', 'test-token', 'test-secret', '', '')
+	})
 
-		it('should require authentication for authenticated tools', async () => {
+	it('should require authentication for authenticated tools', async () => {
 			// Initialize first
 			await handleMethod({
 				jsonrpc: '2.0',

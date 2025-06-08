@@ -43,9 +43,9 @@
 ## Chunk F – MCP Tools
 
 - [x] **F1** Add tools/list handler
-- [ ] **F2** Implement search_collection tool
-- [ ] **F3** Implement get_release and get_collection_stats tools
-- [ ] **F4** Implement get_recommendations tool
+- [x] **F2** Implement search_collection tool
+- [x] **F3** Implement get_release and get_collection_stats tools
+- [x] **F4** Implement get_recommendations tool
 
 ## Chunk G – MCP Prompts
 

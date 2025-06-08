@@ -109,7 +109,7 @@ export function handleResourcesList(): ResourcesListResult {
 /**
  * Handle resources/read request
  */
-export async function handleResourcesRead(params: unknown, session: SessionPayload): Promise<ResourcesReadResult> {
+export async function handleResourcesRead(params: unknown, session: SessionPayload, env?: any): Promise<ResourcesReadResult> {
 	// Validate params
 	if (!isResourcesReadParams(params)) {
 		throw createInvalidParamsError('Invalid resources/read params - uri is required')
@@ -121,10 +121,13 @@ export async function handleResourcesRead(params: unknown, session: SessionPaylo
 		// Parse the URI to determine what resource is being requested
 		if (uri === 'discogs://collection') {
 			// Get user's complete collection
-			const userProfile = await discogsClient.getUserProfile(session.accessToken)
-			const collection = await discogsClient.searchCollection(userProfile.username, session.accessToken, {
+			const consumerKey = env?.DISCOGS_CONSUMER_KEY || ''
+			const consumerSecret = env?.DISCOGS_CONSUMER_SECRET || ''
+			
+			const userProfile = await discogsClient.getUserProfile(session.accessToken, session.accessTokenSecret, consumerKey, consumerSecret)
+			const collection = await discogsClient.searchCollection(userProfile.username, session.accessToken, session.accessTokenSecret, {
 				per_page: 100, // Start with first 100 items
-			})
+			}, consumerKey, consumerSecret)
 
 			return {
 				contents: [
@@ -162,11 +165,14 @@ export async function handleResourcesRead(params: unknown, session: SessionPaylo
 				throw new Error('Invalid search URI - query parameter is required')
 			}
 
-			const userProfile = await discogsClient.getUserProfile(session.accessToken)
-			const searchResults = await discogsClient.searchCollection(userProfile.username, session.accessToken, {
+			const consumerKey = env?.DISCOGS_CONSUMER_KEY || ''
+			const consumerSecret = env?.DISCOGS_CONSUMER_SECRET || ''
+			
+			const userProfile = await discogsClient.getUserProfile(session.accessToken, session.accessTokenSecret, consumerKey, consumerSecret)
+			const searchResults = await discogsClient.searchCollection(userProfile.username, session.accessToken, session.accessTokenSecret, {
 				query,
 				per_page: 50,
-			})
+			}, consumerKey, consumerSecret)
 
 			return {
 				contents: [
@@ -245,7 +251,7 @@ async function handleToolsCall(params: unknown): Promise<ToolCallResult> {
 /**
  * Handle authenticated tools
  */
-async function handleAuthenticatedToolsCall(params: unknown, session: SessionPayload): Promise<ToolCallResult> {
+async function handleAuthenticatedToolsCall(params: unknown, session: SessionPayload, env?: any): Promise<ToolCallResult> {
 	// Validate params
 	if (!isToolsCallParams(params)) {
 		throw new Error('Invalid tools/call params - name and arguments are required')
@@ -263,11 +269,14 @@ async function handleAuthenticatedToolsCall(params: unknown, session: SessionPay
 			const perPage = Math.min(Math.max((args?.per_page as number) || 50, 1), 100)
 
 			try {
-				const userProfile = await discogsClient.getUserProfile(session.accessToken)
-				const results = await discogsClient.searchCollection(userProfile.username, session.accessToken, {
+				const consumerKey = env?.DISCOGS_CONSUMER_KEY || ''
+				const consumerSecret = env?.DISCOGS_CONSUMER_SECRET || ''
+				
+				const userProfile = await discogsClient.getUserProfile(session.accessToken, session.accessTokenSecret, consumerKey, consumerSecret)
+				const results = await discogsClient.searchCollection(userProfile.username, session.accessToken, session.accessTokenSecret, {
 					query,
 					per_page: perPage,
-				})
+				}, consumerKey, consumerSecret)
 
 				const summary = `Found ${results.pagination.items} results for "${query}" in your collection (showing ${results.releases.length} items):`
 				const releaseList = results.releases.map(release => {
@@ -297,7 +306,7 @@ async function handleAuthenticatedToolsCall(params: unknown, session: SessionPay
 			}
 
 			try {
-				const release = await discogsClient.getRelease(releaseId, session.accessToken)
+				const release = await discogsClient.getRelease(releaseId, session.accessToken, session.accessTokenSecret)
 				
 				const artists = release.artists.map(a => a.name).join(', ')
 				const formats = release.formats.map(f => `${f.name} (${f.qty})`).join(', ')
@@ -337,8 +346,11 @@ async function handleAuthenticatedToolsCall(params: unknown, session: SessionPay
 
 		case 'get_collection_stats': {
 			try {
-				const userProfile = await discogsClient.getUserProfile(session.accessToken)
-				const stats = await discogsClient.getCollectionStats(userProfile.username, session.accessToken)
+				const consumerKey = env?.DISCOGS_CONSUMER_KEY || ''
+				const consumerSecret = env?.DISCOGS_CONSUMER_SECRET || ''
+				
+				const userProfile = await discogsClient.getUserProfile(session.accessToken, session.accessTokenSecret, consumerKey, consumerSecret)
+				const stats = await discogsClient.getCollectionStats(userProfile.username, session.accessToken, session.accessTokenSecret, consumerKey, consumerSecret)
 
 				let text = `**Collection Statistics for ${userProfile.username}**\n\n`
 				text += `Total Releases: ${stats.totalReleases}\n`
@@ -385,8 +397,11 @@ async function handleAuthenticatedToolsCall(params: unknown, session: SessionPay
 			const _limit = Math.min(Math.max((args?.limit as number) || 10, 1), 50)
 
 			try {
-				const userProfile = await discogsClient.getUserProfile(session.accessToken)
-				const stats = await discogsClient.getCollectionStats(userProfile.username, session.accessToken)
+				const consumerKey = env?.DISCOGS_CONSUMER_KEY || ''
+				const consumerSecret = env?.DISCOGS_CONSUMER_SECRET || ''
+				
+				const userProfile = await discogsClient.getUserProfile(session.accessToken, session.accessTokenSecret, consumerKey, consumerSecret)
+				const stats = await discogsClient.getCollectionStats(userProfile.username, session.accessToken, session.accessTokenSecret, consumerKey, consumerSecret)
 
 				// Simple recommendation algorithm: suggest releases from top genres that user doesn't have
 				const topGenres = Object.entries(stats.genreBreakdown)
@@ -451,7 +466,7 @@ function isResourcesReadParams(params: unknown): params is ResourcesReadParams {
 /**
  * Main method router
  */
-export async function handleMethod(request: JSONRPCRequest, httpRequest?: Request, jwtSecret?: string) {
+export async function handleMethod(request: JSONRPCRequest, httpRequest?: Request, jwtSecret?: string, env?: any) {
 	const { method, params, id } = request
 
 	// Special case: initialize can be called before initialization
@@ -581,18 +596,24 @@ export async function handleMethod(request: JSONRPCRequest, httpRequest?: Reques
 			} catch (error) {
 				// If it's an unknown tool error, it might be an authenticated tool
 				if (error instanceof Error && error.message.includes('Unknown tool') && error.message.includes('authentication')) {
+					console.log('Attempting authenticated tool call for:', params)
+					
 					// Check if we have authentication context
 					if (!httpRequest || !jwtSecret) {
+						console.log('Missing authentication context')
 						return hasId(request) ? createError(id!, -32603, 'Internal error: Missing authentication context for authenticated tool') : null
 					}
 
+					console.log('Verifying authentication...')
 					const session = await verifyAuthentication(httpRequest, jwtSecret)
+					console.log('Session verification result:', session ? 'SUCCESS' : 'FAILED')
+					
 					if (!session) {
 						return hasId(request) ? createError(id!, -32001, 'Authentication required. Please visit /login to authenticate with Discogs.') : null
 					}
 
 					try {
-						const authenticatedResult = await handleAuthenticatedToolsCall(params, session)
+						const authenticatedResult = await handleAuthenticatedToolsCall(params, session, env)
 						return hasId(request) ? createResponse(id!, authenticatedResult) : null
 					} catch (authError) {
 						const message = authError instanceof Error ? authError.message : 'Failed to call authenticated tool'
@@ -632,7 +653,7 @@ export async function handleMethod(request: JSONRPCRequest, httpRequest?: Reques
 
 		case 'resources/read': {
 			try {
-				const result = await handleResourcesRead(params, session)
+				const result = await handleResourcesRead(params, session, env)
 				return hasId(request) ? createResponse(id!, result) : null
 			} catch (error) {
 				const message = error instanceof Error ? error.message : 'Failed to read resource'
