@@ -383,7 +383,7 @@ describe('MCP Client Integration Tests', () => {
 				id: 2,
 				error: {
 					code: -32001, // Unauthorized
-					message: 'Authentication required. Please visit https://discogs-mcp-prod.rian-db8.workers.dev/login to authenticate with Discogs.',
+					message: 'Authentication required. Please use the "auth_status" tool for detailed authentication instructions, or visit https://discogs-mcp-prod.rian-db8.workers.dev/login to authenticate with Discogs.',
 				},
 			})
 		})
@@ -406,7 +406,7 @@ describe('MCP Client Integration Tests', () => {
 
 			// Test tools
 			const toolsList = await client.listTools()
-			expect(toolsList.result.tools).toHaveLength(6) // ping, server_info, search_collection, get_release, get_collection_stats, get_recommendations
+			expect(toolsList.result.tools).toHaveLength(7) // ping, server_info, auth_status, search_collection, get_release, get_collection_stats, get_recommendations
 
 			const searchResult = await client.callTool('search_collection', { query: 'Beatles' })
 			console.log('Search result:', JSON.stringify(searchResult, null, 2))
