@@ -1,11 +1,11 @@
 {
   "mcpServers": {
     "discogs": {
-      "command": "node",
-      "args": ["/path/to/discogs-mcp/proxy.cjs"],
-      "env": {
-        "MCP_SERVER_URL": "https://your-worker-domain.workers.dev"
-      }
+      "command": "npx",
+      "args": [
+        "mcp-remote",
+        "https://discogs-mcp-prod.rian-db8.workers.dev/sse"
+      ]
     }
   }
 } 

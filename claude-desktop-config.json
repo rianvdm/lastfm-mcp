@@ -1,8 +1,11 @@
 {
 	"mcpServers": {
 		"discogs-local": {
-			"command": "node",
-			"args": ["/Users/rian/Documents/GitHub/discogs-mcp/proxy.cjs"]
+			"command": "npx",
+			"args": [
+				"mcp-remote",
+				"http://localhost:8787/sse"
+			]
 		}
 	}
 }

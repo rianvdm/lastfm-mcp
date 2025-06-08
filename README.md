@@ -41,6 +41,41 @@ Built on Cloudflare Workers with:
 
 This project uses Wrangler for Cloudflare Workers development.
 
+### Local Development
+
+```bash
+npm install
+npm run dev
+```
+
+### Claude Desktop Configuration
+
+For local development:
+```json
+{
+  "mcpServers": {
+    "discogs-local": {
+      "command": "npx",
+      "args": ["mcp-remote", "http://localhost:8787/sse"]
+    }
+  }
+}
+```
+
+For production:
+```json
+{
+  "mcpServers": {
+    "discogs": {
+      "command": "npx",
+      "args": ["mcp-remote", "https://your-worker-domain.workers.dev/sse"]
+    }
+  }
+}
+```
+
+### Setup
+
 ```bash
 npm install
 npm run dev    # Start local development server

@@ -25,15 +25,15 @@ name = "discogs-mcp-prod"
 
 [[env.production.kv_namespaces]]
 binding = "MCP_LOGS"
-id = "prod-logs-namespace-id"  # Replace with actual production KV namespace ID
+id = "768f383bd9a54f8c837decbaeb869b68"
 
 [[env.production.kv_namespaces]]
 binding = "MCP_RL"
-id = "prod-rl-namespace-id"    # Replace with actual production KV namespace ID
+id = "bfc831cedceb4a08a6d997909c3899ce"
 
 [[env.production.kv_namespaces]]
 binding = "MCP_SESSIONS"
-id = "prod-sessions-namespace-id"  # Replace with actual production KV namespace ID
+id = "e45edcc5347e4b409169c1d0a9b2ed5d"
 
 # Secrets (set via wrangler secret put):
 # - DISCOGS_CONSUMER_KEY

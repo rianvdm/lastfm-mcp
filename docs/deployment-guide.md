@@ -143,11 +143,11 @@ Add the MCP server to your Claude Desktop configuration file:
 {
   "mcpServers": {
     "discogs": {
-      "command": "node",
-      "args": ["/path/to/discogs-mcp/proxy.cjs"],
-      "env": {
-        "MCP_SERVER_URL": "https://your-worker-domain.workers.dev"
-      }
+      "command": "npx",
+      "args": [
+        "mcp-remote",
+        "https://your-worker-domain.workers.dev/sse"
+      ]
     }
   }
 }
@@ -225,7 +225,7 @@ Use this checklist to verify your production deployment:
 **4. Claude Desktop doesn't see the server**
 - Verify claude_desktop_config.json syntax
 - Restart Claude Desktop after configuration changes
-- Check proxy.cjs has correct MCP_SERVER_URL
+- Verify the SSE endpoint URL is correct
 
 ### Debug Commands
 

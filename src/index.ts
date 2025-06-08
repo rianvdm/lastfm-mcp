@@ -71,7 +71,7 @@ export default {
 				if (request.method !== 'GET') {
 					return new Response('Method not allowed', { status: 405 })
 				}
-				return handleLogin(env)
+				return handleLogin(request, env)
 
 			case '/callback':
 				// OAuth callback - exchange tokens
@@ -114,7 +114,7 @@ export default {
 /**
  * Handle OAuth login request
  */
-async function handleLogin(env: Env): Promise<Response> {
+async function handleLogin(request: Request, env: Env): Promise<Response> {
 	try {
 		// Debug: Log environment variables (without secrets)
 		console.log('Environment check:', {
@@ -131,8 +131,9 @@ async function handleLogin(env: Env): Promise<Response> {
 
 		const auth = new DiscogsAuth(env.DISCOGS_CONSUMER_KEY, env.DISCOGS_CONSUMER_SECRET)
 
-		// Get callback URL (in production, use proper domain)
-		const callbackUrl = 'http://localhost:8787/callback'
+		// Get callback URL based on the current request URL
+		const url = new URL(request.url)
+		const callbackUrl = `${url.protocol}//${url.host}/callback`
 
 		console.log('Requesting OAuth token from Discogs...')
 
