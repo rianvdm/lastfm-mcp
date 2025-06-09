@@ -505,18 +505,22 @@ async function handleMCPAuth(request: Request, env: Env): Promise<Response> {
 			}
 		}
 
-		const baseUrl = 'https://discogs-mcp-prod.rian-db8.workers.dev'
-		
-		return new Response(
-			JSON.stringify({
-				error: 'Not authenticated',
-				message: `Please visit ${baseUrl}/login to authenticate with Discogs first`,
-			}),
-			{
-				status: 401,
-				headers: { 'Content-Type': 'application/json' },
-			},
-		)
+			const baseUrl = 'https://discogs-mcp-prod.rian-db8.workers.dev'
+	
+	// Check for connection ID to provide connection-specific login URL
+	const connectionId = request.headers.get('X-Connection-ID')
+	const loginUrl = connectionId ? `${baseUrl}/login?connection_id=${connectionId}` : `${baseUrl}/login`
+	
+	return new Response(
+		JSON.stringify({
+			error: 'Not authenticated',
+			message: `Please visit ${loginUrl} to authenticate with Discogs first`,
+		}),
+		{
+			status: 401,
+			headers: { 'Content-Type': 'application/json' },
+		},
+	)
 	} catch (error) {
 		console.error('MCP auth error:', error)
 		return new Response(

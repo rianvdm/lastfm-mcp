@@ -479,11 +479,16 @@ async function handleToolsCall(params: unknown, httpRequest?: Request): Promise<
 			}
 		}
 		case 'server_info': {
+			// Provide connection-specific authentication URL if available
+			const connectionId = httpRequest?.headers.get('X-Connection-ID')
+			const baseUrl = 'https://discogs-mcp-prod.rian-db8.workers.dev'
+			const authUrl = connectionId ? `${baseUrl}/login?connection_id=${connectionId}` : `${baseUrl}/login`
+			
 			return {
 				content: [
 					{
 						type: 'text',
-						text: `Discogs MCP Server v1.0.0\n\nStatus: Running\nProtocol: MCP 2024-11-05\nFeatures:\n- Resources: Collection, Releases, Search\n- Authentication: OAuth 1.0a\n- Rate Limiting: Enabled\n\nTo get started, authenticate at https://discogs-mcp-prod.rian-db8.workers.dev/login`,
+						text: `Discogs MCP Server v1.0.0\n\nStatus: Running\nProtocol: MCP 2024-11-05\nFeatures:\n- Resources: Collection, Releases, Search\n- Authentication: OAuth 1.0a\n- Rate Limiting: Enabled\n\nTo get started, authenticate at ${authUrl}`,
 					},
 				],
 			}
