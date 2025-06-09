@@ -2,6 +2,7 @@
 
 import { DiscogsAuth } from '../auth/discogs'
 import { fetchWithRetry, RetryOptions } from '../utils/retry'
+import { hasMoodContent, analyzeMoodQuery } from '../utils/moodMapping'
 
 export interface DiscogsRelease {
 	id: number
@@ -452,7 +453,7 @@ export class DiscogsClient {
 
 				const searchableText = searchableFields.join(' ').toLowerCase()
 
-				// Check if this looks like a genre/style query (common genre/style terms)
+				// Check if this looks like a genre/style or mood query
 				const genreStyleTerms = [
 					'ambient', 'drone', 'progressive', 'rock', 'jazz', 'blues', 'electronic', 'techno', 'house',
 					'metal', 'punk', 'folk', 'country', 'classical', 'hip', 'hop', 'rap', 'soul', 'funk', 'disco',
@@ -461,6 +462,9 @@ export class DiscogsClient {
 					'new wave', 'synthpop', 'industrial', 'gothic', 'darkwave', 'shoegaze', 'grunge', 'hardcore'
 				]
 				
+				// Check if this is a mood-based query that should use different filtering logic
+				const isMoodQuery = hasMoodContent(filteredQuery)
+				
 				const isGenreStyleQuery = nonDecadeTerms.some(term => 
 					genreStyleTerms.includes(term.toLowerCase()) ||
 					// Also check if the term appears in the release's genres or styles
@@ -468,13 +472,37 @@ export class DiscogsClient {
 					release.styles?.some(s => s.toLowerCase().includes(term.toLowerCase()))
 				)
 
-				// Check non-decade terms using OR logic for genre/style queries, AND logic for others
+				// Check non-decade terms using OR logic for genre/style/mood queries, AND logic for others
 				let nonDecadeMatch = false
 				if (nonDecadeTerms.length === 0) {
 					nonDecadeMatch = true
-				} else if (isGenreStyleQuery) {
-					// Use OR logic for genre/style queries - at least one term must match
-					nonDecadeMatch = nonDecadeTerms.some((term) => searchableText.includes(term))
+				} else if (isGenreStyleQuery || isMoodQuery) {
+					// Use OR logic for genre/style/mood queries - at least one term must match
+					// For mood queries, also check against mood-mapped genres/styles
+					if (isMoodQuery) {
+						const moodAnalysis = analyzeMoodQuery(filteredQuery)
+						if (moodAnalysis.confidence >= 0.3) {
+							const releaseGenres = release.genres?.map(g => g.toLowerCase()) || []
+							const releaseStyles = release.styles?.map(s => s.toLowerCase()) || []
+							const suggestedGenres = moodAnalysis.suggestedGenres.map(g => g.toLowerCase())
+							const suggestedStyles = moodAnalysis.suggestedStyles.map(s => s.toLowerCase())
+							
+							// Check if release matches any mood-suggested genres/styles
+							const moodMatch = 
+								releaseGenres.some(rg => suggestedGenres.some(sg => rg.includes(sg) || sg.includes(rg))) ||
+								releaseStyles.some(rs => suggestedStyles.some(ss => rs.includes(ss) || ss.includes(rs)))
+							
+							// Also check original term matching as fallback
+							const termMatch = nonDecadeTerms.some((term) => searchableText.includes(term))
+							
+							nonDecadeMatch = moodMatch || termMatch
+						} else {
+							nonDecadeMatch = nonDecadeTerms.some((term) => searchableText.includes(term))
+						}
+					} else {
+						// Regular genre/style query - use OR logic
+						nonDecadeMatch = nonDecadeTerms.some((term) => searchableText.includes(term))
+					}
 				} else {
 					// Use AND logic for other queries - all terms must match (original behavior)
 					nonDecadeMatch = nonDecadeTerms.every((term) => searchableText.includes(term))
@@ -501,8 +529,15 @@ export class DiscogsClient {
 		if (filteredQuery.trim() && filteredQuery.includes(' ') && !hasRecent && !hasOld) {
 			const queryTerms = filteredQuery.split(/\s+/).filter((term) => term.length > 2)
 			
+			// Check if this is a mood-based query
+			const isMoodQuery = hasMoodContent(filteredQuery)
+			let moodAnalysis = null
+			if (isMoodQuery) {
+				moodAnalysis = analyzeMoodQuery(filteredQuery)
+			}
+			
 			// Add relevance scores to releases
-			type ReleaseWithRelevance = DiscogsCollectionItem & { relevanceScore: number }
+			type ReleaseWithRelevance = DiscogsCollectionItem & { relevanceScore: number; moodScore?: number }
 			const releasesWithRelevance: ReleaseWithRelevance[] = filteredReleases.map((item) => {
 				const release = item.basic_information
 				
@@ -532,22 +567,98 @@ export class DiscogsClient {
 				const matchingTerms = queryTerms.filter((term) => searchableText.includes(term)).length
 				const relevanceScore = matchingTerms / queryTerms.length
 				
-				return { ...item, relevanceScore }
+				// Calculate mood-based relevance if this is a mood query
+				let moodScore = 0
+				if (isMoodQuery && moodAnalysis && moodAnalysis.confidence >= 0.3) {
+					const releaseGenres = release.genres?.map(g => g.toLowerCase()) || []
+					const releaseStyles = release.styles?.map(s => s.toLowerCase()) || []
+					
+					// Score based on mood-suggested genres/styles
+					const suggestedGenres = moodAnalysis.suggestedGenres.map(g => g.toLowerCase())
+					const suggestedStyles = moodAnalysis.suggestedStyles.map(s => s.toLowerCase())
+					
+					let genreMatches = 0
+					let styleMatches = 0
+					
+					// Count genre matches with weight
+					for (const genre of suggestedGenres) {
+						if (releaseGenres.some(rg => rg.includes(genre.toLowerCase()) || genre.toLowerCase().includes(rg))) {
+							genreMatches += 1.0
+						}
+					}
+					
+					// Count style matches with weight  
+					for (const style of suggestedStyles) {
+						if (releaseStyles.some(rs => rs.includes(style.toLowerCase()) || style.toLowerCase().includes(rs))) {
+							styleMatches += 0.8 // Styles weighted slightly less than genres
+						}
+					}
+					
+					// Bonus scoring for contextual factors
+					let contextBonus = 0
+					if (filteredQuery.includes('background') || filteredQuery.includes('ambient')) {
+						// Prefer instrumental/ambient music for background
+						if (releaseGenres.includes('ambient') || releaseStyles.includes('instrumental')) {
+							contextBonus += 0.3
+						}
+					}
+					
+					if (filteredQuery.includes('dinner') || filteredQuery.includes('cooking')) {
+						// Prefer mellower, non-aggressive music for dining
+						const aggressiveGenres = ['metal', 'hardcore', 'punk', 'industrial']
+						const aggressiveStyles = ['death metal', 'black metal', 'grindcore', 'noise']
+						const isAggressive = releaseGenres.some(g => aggressiveGenres.includes(g)) || 
+											releaseStyles.some(s => aggressiveStyles.some(ag => s.includes(ag)))
+						if (!isAggressive) {
+							contextBonus += 0.2
+						}
+						
+						// Bonus for jazz/classical/folk for dining
+						if (releaseGenres.some(g => ['jazz', 'classical', 'folk'].includes(g))) {
+							contextBonus += 0.3
+						}
+					}
+					
+					// Calculate total mood score (normalize to 0-1 range)
+					const totalMatches = genreMatches + styleMatches + contextBonus
+					const maxPossibleMatches = suggestedGenres.length + suggestedStyles.length * 0.8 + 0.6 // max context bonus
+					moodScore = maxPossibleMatches > 0 ? totalMatches / maxPossibleMatches : 0
+				}
+				
+				return { ...item, relevanceScore, moodScore }
 			})
 			
-			// Sort by relevance first, then rating, then date
+			// Sort based on query type
 			releasesWithRelevance.sort((a, b) => {
-				if (a.relevanceScore !== b.relevanceScore) {
-					return b.relevanceScore - a.relevanceScore
+				if (isMoodQuery && moodAnalysis && moodAnalysis.confidence >= 0.3) {
+					// For mood queries: prioritize mood relevance, then general relevance, then rating
+					const aMoodScore = a.moodScore || 0
+					const bMoodScore = b.moodScore || 0
+					
+					if (aMoodScore !== bMoodScore) {
+						return bMoodScore - aMoodScore
+					}
+					if (a.relevanceScore !== b.relevanceScore) {
+						return b.relevanceScore - a.relevanceScore
+					}
+					if (a.rating !== b.rating) {
+						return b.rating - a.rating
+					}
+					return new Date(b.date_added).getTime() - new Date(a.date_added).getTime()
+				} else {
+					// For regular queries: sort by relevance first, then rating, then date
+					if (a.relevanceScore !== b.relevanceScore) {
+						return b.relevanceScore - a.relevanceScore
+					}
+					if (a.rating !== b.rating) {
+						return b.rating - a.rating
+					}
+					return new Date(b.date_added).getTime() - new Date(a.date_added).getTime()
 				}
-				if (a.rating !== b.rating) {
-					return b.rating - a.rating
-				}
-				return new Date(b.date_added).getTime() - new Date(a.date_added).getTime()
 			})
 			
-			// Convert back to regular releases (remove relevanceScore)
-			filteredReleases = releasesWithRelevance.map(({ relevanceScore: _relevanceScore, ...release }) => release)
+			// Convert back to regular releases (remove scoring properties)
+			filteredReleases = releasesWithRelevance.map(({ relevanceScore: _relevanceScore, moodScore: _moodScore, ...release }) => release)
 		} else if (hasRecent || hasOld) {
 			// Keep the API sorting since we specified it above
 		} else {

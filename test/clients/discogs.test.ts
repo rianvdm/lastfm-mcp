@@ -1129,6 +1129,125 @@ describe('Discogs Client', () => {
 			expect(result.pagination.items).toBe(3)
 		})
 
+		it('should prioritize mood-relevant releases for contextual queries like "cooking dinner mellow upbeat background"', async () => {
+			const mockResponse = {
+				pagination: { pages: 1, page: 1, per_page: 100, items: 4, urls: {} },
+				releases: [
+					{
+						id: 1,
+						instance_id: 1,
+						date_added: '2023-01-01T00:00:00-08:00',
+						rating: 3, // Lower rating but perfect mood match
+						basic_information: {
+							id: 1,
+							title: 'Dinner Jazz Collection',
+							year: 2020,
+							artists: [{ name: 'Jazz Ensemble', id: 1 }],
+							genres: ['Jazz'], // Perfect for mood query
+							styles: ['Smooth Jazz', 'Lounge'], // Perfect for background/dining
+							formats: [{ name: 'CD', qty: '1' }],
+							labels: [{ name: 'Jazz Records', catno: 'JR001' }],
+							resource_url: 'https://api.discogs.com/releases/1',
+							thumb: '',
+							cover_image: '',
+						},
+					},
+					{
+						id: 2,
+						instance_id: 2,
+						date_added: '2023-01-02T00:00:00-08:00',
+						rating: 5, // High rating but poor mood match
+						basic_information: {
+							id: 2,
+							title: 'Aggressive Metal',
+							year: 2021,
+							artists: [{ name: 'Metal Band', id: 2 }],
+							genres: ['Rock'], // Generic match
+							styles: ['Death Metal', 'Hardcore'], // Poor for dining context
+							formats: [{ name: 'Vinyl', qty: '1' }],
+							labels: [{ name: 'Metal Records', catno: 'MR001' }],
+							resource_url: 'https://api.discogs.com/releases/2',
+							thumb: '',
+							cover_image: '',
+						},
+					},
+					{
+						id: 3,
+						instance_id: 3,
+						date_added: '2023-01-03T00:00:00-08:00',
+						rating: 4, // Good rating and decent mood match
+						basic_information: {
+							id: 3,
+							title: 'Ambient Soundscapes',
+							year: 2019,
+							artists: [{ name: 'Ambient Artist', id: 3 }],
+							genres: ['Electronic'], // Some match
+							styles: ['Ambient', 'Instrumental'], // Good for background
+							formats: [{ name: 'Vinyl', qty: '1' }],
+							labels: [{ name: 'Ambient Records', catno: 'AR001' }],
+							resource_url: 'https://api.discogs.com/releases/3',
+							thumb: '',
+							cover_image: '',
+						},
+					},
+					{
+						id: 4,
+						instance_id: 4,
+						date_added: '2023-01-04T00:00:00-08:00',
+						rating: 4, // Same rating as #3 but no mood relevance
+						basic_information: {
+							id: 4,
+							title: 'Random Pop Album',
+							year: 2022,
+							artists: [{ name: 'Pop Artist', id: 4 }],
+							genres: ['Pop'], // Doesn't match mood
+							styles: ['Dance Pop'], // Not suitable for dining
+							formats: [{ name: 'CD', qty: '1' }],
+							labels: [{ name: 'Pop Records', catno: 'PR001' }],
+							resource_url: 'https://api.discogs.com/releases/4',
+							thumb: '',
+							cover_image: '',
+						},
+					},
+				],
+			}
+
+			mockFetch.mockResolvedValueOnce({
+				ok: true,
+				json: () => Promise.resolve(mockResponse),
+			})
+
+			// Search for mood-based query - should prioritize mood relevance over rating
+			const result = await discogsClient.searchCollection(
+				mockAuth.username,
+				mockAuth.accessToken,
+				mockAuth.accessTokenSecret,
+				{ query: 'cooking dinner mellow upbeat background', per_page: 50 },
+				mockAuth.consumerKey,
+				mockAuth.consumerSecret,
+			)
+
+			// The mood filtering should now work - we expect jazz and ambient to match mood-mapped genres
+			expect(result.releases.length).toBeGreaterThan(0)
+			
+			// Should be sorted by mood relevance first - mood-relevant releases come first
+			// The Jazz release should be first (perfect match for "mellow" + "cooking dinner")
+			expect(result.releases[0].basic_information.title).toBe('Dinner Jazz Collection')
+			
+			// The system should prioritize mood-relevant releases over non-relevant ones
+			// Jazz is mood-mapped for "mellow" and "cooking dinner" contexts
+			const hasJazzGenre = result.releases.some(r => r.basic_information.genres.includes('Jazz'))
+			expect(hasJazzGenre).toBe(true)
+			
+			// Aggressive metal should be filtered out for dining context
+			const hasAggressiveMetal = result.releases.some(r => 
+				r.basic_information.styles?.some(s => s.includes('Death Metal') || s.includes('Hardcore'))
+			)
+			expect(hasAggressiveMetal).toBe(false)
+			
+			expect(result.pagination.items).toBe(result.releases.length)
+		})
+
 		it('should not trigger mood detection for specific album searches like "Dark Side of the Moon"', async () => {
 			const mockResponse = {
 				pagination: { pages: 1, page: 1, per_page: 100, items: 2, urls: {} },
