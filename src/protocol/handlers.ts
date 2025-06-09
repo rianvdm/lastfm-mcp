@@ -88,9 +88,13 @@ async function getConnectionSession(request: Request, jwtSecret: string, env?: E
 		return null
 	}
 
-	// Check if SSE connection is authenticated
-	if (!isConnectionAuthenticated(connectionId)) {
-		return null
+	// For mcp-remote connections, skip the SSE connection check
+	// mcp-remote uses deterministic connection IDs and doesn't establish SSE connections
+	if (!connectionId.startsWith('mcp-remote-')) {
+		// Check if SSE connection is authenticated
+		if (!isConnectionAuthenticated(connectionId)) {
+			return null
+		}
 	}
 
 	try {

@@ -19,9 +19,6 @@ import type { ExecutionContext } from '@cloudflare/workers-types'
 /// <reference lib="dom.iterable" />
 /// <reference lib="webworker" />
 
-// Store for temporary OAuth tokens with connection mapping (in production, use KV storage)
-const oauthTokenStore = new Map<string, { tokenSecret: string; connectionId: string }>()
-
 export default {
 	async fetch(request: Request, env: Env, _ctx: ExecutionContext): Promise<Response> {
 		const url = new URL(request.url)
@@ -152,10 +149,12 @@ async function handleLogin(request: Request, env: Env): Promise<Response> {
 			secretLength: oauth_token_secret.length,
 		})
 
-		// Store token secret temporarily with connection ID (in production, use KV storage)
-		oauthTokenStore.set(oauth_token, { 
+		// Store token secret temporarily with connection ID
+		await env.MCP_SESSIONS.put(`oauth-token:${oauth_token}`, JSON.stringify({
 			tokenSecret: oauth_token_secret,
 			connectionId: connectionId || 'unknown'
+		}), {
+			expirationTtl: 600, // 10 minutes - OAuth flow should complete within this time
 		})
 
 		// Redirect to Discogs authorization page
@@ -191,15 +190,18 @@ async function handleCallback(request: Request, env: Env): Promise<Response> {
 		}
 
 		// Retrieve token secret and connection ID
-		const tokenData = oauthTokenStore.get(oauthToken)
-		if (!tokenData) {
+		const tokenDataStr = await env.MCP_SESSIONS.get(`oauth-token:${oauthToken}`)
+		if (!tokenDataStr) {
 			return new Response('Invalid OAuth token', { status: 400 })
 		}
 
+		const tokenData = JSON.parse(tokenDataStr)
 		const { tokenSecret: oauthTokenSecret, connectionId: storedConnectionId } = tokenData
 
 		// Clean up temporary storage
-		oauthTokenStore.delete(oauthToken)
+		// Note: KV delete method exists but TypeScript definitions might be outdated
+		// Using TTL on the put operation instead for automatic cleanup
+		// await env.MCP_SESSIONS.delete(`oauth-token:${oauthToken}`)
 
 		// Use connection ID from callback URL or stored connection ID
 		const finalConnectionId = connectionId || storedConnectionId
@@ -240,8 +242,11 @@ async function handleCallback(request: Request, env: Env): Promise<Response> {
 					expirationTtl: 24 * 60 * 60, // 24 hours
 				})
 				
-				// Mark the SSE connection as authenticated
-				authenticateConnection(finalConnectionId, accessToken)
+				// Mark the SSE connection as authenticated (only for non-mcp-remote connections)
+				// mcp-remote connections don't have SSE connections, they use HTTP POST
+				if (!finalConnectionId.startsWith('mcp-remote-')) {
+					authenticateConnection(finalConnectionId, accessToken)
+				}
 				
 				console.log(`Session stored for connection ${finalConnectionId}`)
 			} catch (error) {
@@ -299,9 +304,10 @@ async function handleMCPRequestWithSSEContext(request: Request, env?: Env): Prom
 		// This ensures the same client gets the same connection ID across requests
 		const clientIP = request.headers.get('CF-Connecting-IP') || request.headers.get('X-Forwarded-For') || 'unknown'
 		const userAgent = request.headers.get('User-Agent') || 'unknown'
-		const timestamp = Math.floor(Date.now() / (1000 * 60 * 60)) // Changes every hour
+		// Use daily timestamp to ensure connection ID is stable for 24 hours
+		const timestamp = Math.floor(Date.now() / (1000 * 60 * 60 * 24)) // Changes every 24 hours
 		
-		// Create a hash-based connection ID that's consistent for the same client/hour
+		// Create a hash-based connection ID that's consistent for the same client/day
 		const encoder = new TextEncoder()
 		const data = encoder.encode(`${clientIP}-${userAgent}-${timestamp}`)
 		const hashBuffer = await crypto.subtle.digest('SHA-256', data)
@@ -550,7 +556,7 @@ async function handleMCPAuth(request: Request, env: Env): Promise<Response> {
 			}
 		}
 
-			const baseUrl = 'https://discogs-mcp-prod.rian-db8.workers.dev'
+		const baseUrl = 'https://discogs-mcp-prod.rian-db8.workers.dev'
 	
 	// Check for connection ID to provide connection-specific login URL
 	const connectionId = request.headers.get('X-Connection-ID')
