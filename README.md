@@ -91,7 +91,7 @@ npm run dev
 
 ### Claude Desktop Configuration
 
-For local development:
+For local development, use the configuration in `config/claude-desktop-config.json`:
 
 ```json
 {
@@ -104,7 +104,7 @@ For local development:
 }
 ```
 
-For production:
+For production, use the configuration in `config/claude-desktop-config-production.json`:
 
 ```json
 {
