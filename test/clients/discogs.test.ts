@@ -1036,5 +1036,97 @@ describe('Discogs Client', () => {
 			expect(result.releases.map((r) => r.basic_information.title)).not.toContain('Jazz Fusion')
 			expect(result.pagination.items).toBe(4)
 		})
+
+		it('should prioritize releases with more matching terms using relevance scoring', async () => {
+			const mockResponse = {
+				pagination: { pages: 1, page: 1, per_page: 100, items: 3, urls: {} },
+				releases: [
+					{
+						id: 1,
+						instance_id: 1,
+						date_added: '2023-01-01T00:00:00-08:00',
+						rating: 3, // Lower rating but more term matches
+						basic_information: {
+							id: 1,
+							title: 'Ambient Drone Progressive Masterpiece',
+							year: 2020,
+							artists: [{ name: 'Electronic Artist', id: 1 }],
+							genres: ['Electronic'],
+							styles: ['Ambient', 'Drone', 'Progressive'], // Matches ALL 3 terms
+							formats: [{ name: 'Digital', qty: '1' }],
+							labels: [{ name: 'Experimental Records', catno: 'EXP001' }],
+							resource_url: 'https://api.discogs.com/releases/1',
+							thumb: '',
+							cover_image: '',
+						},
+					},
+					{
+						id: 2,
+						instance_id: 2,
+						date_added: '2023-01-02T00:00:00-08:00',
+						rating: 5, // Higher rating but fewer term matches
+						basic_information: {
+							id: 2,
+							title: 'Pure Ambient',
+							year: 2021,
+							artists: [{ name: 'Ambient Artist', id: 2 }],
+							genres: ['Electronic'],
+							styles: ['Ambient'], // Matches only 1 term
+							formats: [{ name: 'Vinyl', qty: '1' }],
+							labels: [{ name: 'Ambient Records', catno: 'AMB001' }],
+							resource_url: 'https://api.discogs.com/releases/2',
+							thumb: '',
+							cover_image: '',
+						},
+					},
+					{
+						id: 3,
+						instance_id: 3,
+						date_added: '2023-01-03T00:00:00-08:00',
+						rating: 4, // Medium rating and medium term matches
+						basic_information: {
+							id: 3,
+							title: 'Drone Ambient Soundscape',
+							year: 2019,
+							artists: [{ name: 'Drone Artist', id: 3 }],
+							genres: ['Electronic'],
+							styles: ['Drone', 'Ambient'], // Matches 2 terms
+							formats: [{ name: 'CD', qty: '1' }],
+							labels: [{ name: 'Drone Records', catno: 'DR001' }],
+							resource_url: 'https://api.discogs.com/releases/3',
+							thumb: '',
+							cover_image: '',
+						},
+					},
+				],
+			}
+
+			mockFetch.mockResolvedValueOnce({
+				ok: true,
+				json: () => Promise.resolve(mockResponse),
+			})
+
+			// Search for "ambient drone progressive" - should prioritize by relevance (match count) first, then rating
+			const result = await discogsClient.searchCollection(
+				mockAuth.username,
+				mockAuth.accessToken,
+				mockAuth.accessTokenSecret,
+				{ query: 'ambient drone progressive', per_page: 50 },
+				mockAuth.consumerKey,
+				mockAuth.consumerSecret,
+			)
+
+			expect(result.releases).toHaveLength(3)
+			
+			// Should be sorted by relevance first:
+			// 1. "Ambient Drone Progressive Masterpiece" (3/3 = 100% match, rating 3)
+			// 2. "Drone Ambient Soundscape" (2/3 = 67% match, rating 4) 
+			// 3. "Pure Ambient" (1/3 = 33% match, rating 5)
+			expect(result.releases[0].basic_information.title).toBe('Ambient Drone Progressive Masterpiece')
+			expect(result.releases[1].basic_information.title).toBe('Drone Ambient Soundscape')
+			expect(result.releases[2].basic_information.title).toBe('Pure Ambient')
+			
+			expect(result.pagination.items).toBe(3)
+		})
 	})
 })

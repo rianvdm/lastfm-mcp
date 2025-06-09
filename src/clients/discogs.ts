@@ -497,9 +497,58 @@ export class DiscogsClient {
 			})
 		}
 
-		// Results are already sorted by the API call parameters, so we don't need to re-sort
-		// unless we filtered out temporal terms and need to fall back to default sorting
-		if (hasRecent || hasOld) {
+		// Apply relevance scoring for multi-word queries to prioritize better matches
+		if (filteredQuery.trim() && filteredQuery.includes(' ') && !hasRecent && !hasOld) {
+			const queryTerms = filteredQuery.split(/\s+/).filter((term) => term.length > 2)
+			
+			// Add relevance scores to releases
+			type ReleaseWithRelevance = DiscogsCollectionItem & { relevanceScore: number }
+			const releasesWithRelevance: ReleaseWithRelevance[] = filteredReleases.map((item) => {
+				const release = item.basic_information
+				
+				// Create searchable text from all release information
+				const searchableFields = [
+					...(release.artists?.map((artist) => artist.name) || []),
+					release.title,
+					...(release.genres || []),
+					...(release.styles || []),
+					...(release.labels?.map((label) => label.name) || []),
+					...(release.labels?.map((label) => label.catno) || []),
+					...(release.formats?.map((format) => format.name) || []),
+					release.year?.toString() || '',
+					item.id.toString(),
+					release.id.toString(),
+				]
+				
+				// Add decade representation if we have a year
+				if (release.year) {
+					const decade = `${Math.floor(release.year / 10) * 10}s`
+					searchableFields.push(decade)
+				}
+				
+				const searchableText = searchableFields.join(' ').toLowerCase()
+				
+				// Count matching terms for relevance scoring
+				const matchingTerms = queryTerms.filter((term) => searchableText.includes(term)).length
+				const relevanceScore = matchingTerms / queryTerms.length
+				
+				return { ...item, relevanceScore }
+			})
+			
+			// Sort by relevance first, then rating, then date
+			releasesWithRelevance.sort((a, b) => {
+				if (a.relevanceScore !== b.relevanceScore) {
+					return b.relevanceScore - a.relevanceScore
+				}
+				if (a.rating !== b.rating) {
+					return b.rating - a.rating
+				}
+				return new Date(b.date_added).getTime() - new Date(a.date_added).getTime()
+			})
+			
+			// Convert back to regular releases (remove relevanceScore)
+			filteredReleases = releasesWithRelevance.map(({ relevanceScore: _relevanceScore, ...release }) => release)
+		} else if (hasRecent || hasOld) {
 			// Keep the API sorting since we specified it above
 		} else {
 			// Fall back to default sorting (by rating and date)
