@@ -819,5 +819,95 @@ describe('Discogs Client', () => {
 			expect(result.releases[0].basic_information.year).toBe(1967)
 			expect(result.pagination.items).toBe(1)
 		})
+
+		it('should handle temporal queries like "rock vinyl recent"', async () => {
+			const mockResponse = {
+				pagination: { pages: 1, page: 1, per_page: 100, items: 3, urls: {} },
+				releases: [
+					{
+						id: 1,
+						instance_id: 1,
+						date_added: '2023-12-01T00:00:00-08:00', // Most recent
+						rating: 4,
+						basic_information: {
+							id: 1,
+							title: 'Recent Rock Album',
+							year: 2023,
+							artists: [{ name: 'New Rock Band', id: 1 }],
+							genres: ['Rock'],
+							styles: ['Alternative Rock'],
+							formats: [{ name: 'Vinyl', qty: '1' }],
+							labels: [{ name: 'Modern Records', catno: 'MR001' }],
+							resource_url: 'https://api.discogs.com/releases/1',
+							thumb: '',
+							cover_image: '',
+						},
+					},
+					{
+						id: 2,
+						instance_id: 2,
+						date_added: '2023-06-01T00:00:00-08:00', // Middle
+						rating: 5,
+						basic_information: {
+							id: 2,
+							title: 'Classic Rock Album',
+							year: 1975,
+							artists: [{ name: 'Classic Rock Band', id: 2 }],
+							genres: ['Rock'],
+							styles: ['Classic Rock'],
+							formats: [{ name: 'Vinyl', qty: '1' }],
+							labels: [{ name: 'Classic Records', catno: 'CR001' }],
+							resource_url: 'https://api.discogs.com/releases/2',
+							thumb: '',
+							cover_image: '',
+						},
+					},
+					{
+						id: 3,
+						instance_id: 3,
+						date_added: '2023-01-01T00:00:00-08:00', // Oldest
+						rating: 3,
+						basic_information: {
+							id: 3,
+							title: 'Old Rock Album',
+							year: 1968,
+							artists: [{ name: 'Vintage Rock Band', id: 3 }],
+							genres: ['Rock'],
+							styles: ['Psychedelic Rock'],
+							formats: [{ name: 'Vinyl', qty: '1' }],
+							labels: [{ name: 'Vintage Records', catno: 'VR001' }],
+							resource_url: 'https://api.discogs.com/releases/3',
+							thumb: '',
+							cover_image: '',
+						},
+					},
+				],
+			}
+
+			mockFetch.mockResolvedValueOnce({
+				ok: true,
+				json: () => Promise.resolve(mockResponse),
+			})
+
+			// Search for "rock vinyl recent" - should match all rock vinyl releases but sorted by most recent first
+			const result = await discogsClient.searchCollection(
+				mockAuth.username,
+				mockAuth.accessToken,
+				mockAuth.accessTokenSecret,
+				{ query: 'rock vinyl recent', per_page: 50 },
+				mockAuth.consumerKey,
+				mockAuth.consumerSecret,
+			)
+
+			expect(result.releases).toHaveLength(3)
+			// Should be sorted by date added (most recent first) due to "recent" keyword
+			expect(result.releases[0].basic_information.title).toBe('Recent Rock Album') // Most recent (2023-12-01)
+			expect(result.releases[1].basic_information.title).toBe('Classic Rock Album') // Middle (2023-06-01)
+			expect(result.releases[2].basic_information.title).toBe('Old Rock Album') // Oldest (2023-01-01)
+			// All should be vinyl and rock
+			expect(result.releases.every((r) => r.basic_information.formats.some((f) => f.name === 'Vinyl'))).toBe(true)
+			expect(result.releases.every((r) => r.basic_information.genres.includes('Rock'))).toBe(true)
+			expect(result.pagination.items).toBe(3)
+		})
 	})
 })

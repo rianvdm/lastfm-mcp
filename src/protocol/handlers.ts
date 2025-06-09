@@ -557,6 +557,18 @@ If the problem persists, please check that your Discogs account is accessible.`,
 
 				const userProfile = await discogsClient.getUserProfile(session.accessToken, session.accessTokenSecret, consumerKey, consumerSecret)
 
+				// Check for temporal terms to provide better user feedback
+				const queryWords = query.toLowerCase().split(/\s+/)
+				const hasRecent = queryWords.some(word => ['recent', 'recently', 'new', 'newest', 'latest'].includes(word))
+				const hasOld = queryWords.some(word => ['old', 'oldest', 'earliest'].includes(word))
+				
+				let temporalInfo = ''
+				if (hasRecent) {
+					temporalInfo = `\n**Search Strategy:** Interpreted "${query}" as searching for items with "recent" meaning "most recently added". Sorting by date added (newest first).\n`
+				} else if (hasOld) {
+					temporalInfo = `\n**Search Strategy:** Interpreted "${query}" as searching for items with "old/oldest" meaning "earliest added". Sorting by date added (oldest first).\n`
+				}
+
 				// Check if query contains mood/contextual language
 				const searchQueries: string[] = [query] // Start with original query
 				let moodInfo = ''
@@ -600,13 +612,15 @@ If the problem persists, please check that your Discogs account is accessible.`,
 					}
 				}
 
-				// Sort combined results by rating and date
-				allResults.sort((a: DiscogsCollectionItem, b: DiscogsCollectionItem) => {
-					if (a.rating !== b.rating) {
-						return b.rating - a.rating
-					}
-					return new Date(b.date_added).getTime() - new Date(a.date_added).getTime()
-				})
+				// Sort combined results by rating and date (unless temporal sorting was applied)
+				if (!hasRecent && !hasOld) {
+					allResults.sort((a: DiscogsCollectionItem, b: DiscogsCollectionItem) => {
+						if (a.rating !== b.rating) {
+							return b.rating - a.rating
+						}
+						return new Date(b.date_added).getTime() - new Date(a.date_added).getTime()
+					})
+				}
 
 				// Limit to requested page size
 				const finalResults = allResults.slice(0, perPage)
@@ -631,7 +645,7 @@ If the problem persists, please check that your Discogs account is accessible.`,
 					content: [
 						{
 							type: 'text',
-							text: `${summary}${moodInfo}\n${releaseList}\n\n**Tip:** Use the release IDs with the get_release tool for detailed information about specific albums.`,
+							text: `${summary}${temporalInfo}${moodInfo}\n${releaseList}\n\n**Tip:** Use the release IDs with the get_release tool for detailed information about specific albums.`,
 						},
 					],
 				}

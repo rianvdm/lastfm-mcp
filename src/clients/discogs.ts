@@ -299,6 +299,29 @@ export class DiscogsClient {
 		const requestedPage = options.page || 1
 		const requestedPerPage = options.per_page || 50
 
+		// Extract temporal terms that should affect sorting rather than filtering
+		const temporalTerms = ['recent', 'recently', 'new', 'newest', 'latest', 'old', 'oldest', 'earliest']
+		const queryWords = query.split(/\s+/)
+		const hasRecent = queryWords.some(word => ['recent', 'recently', 'new', 'newest', 'latest'].includes(word))
+		const hasOld = queryWords.some(word => ['old', 'oldest', 'earliest'].includes(word))
+		
+		// Remove temporal terms from the actual search query
+		const filteredQuery = queryWords
+			.filter(word => !temporalTerms.includes(word))
+			.join(' ')
+
+		// Determine sorting based on temporal terms
+		let sortBy: 'added' | 'artist' | 'title' | 'year' = options.sort || 'added'
+		let sortOrder: 'asc' | 'desc' = options.sort_order || 'desc'
+		
+		if (hasRecent) {
+			sortBy = 'added'  // Sort by date added
+			sortOrder = 'desc'  // Most recent first
+		} else if (hasOld) {
+			sortBy = 'added'  // Sort by date added
+			sortOrder = 'asc'   // Oldest first
+		}
+
 		// Fetch all collection items (we need to paginate through all pages)
 		let allReleases: DiscogsCollectionItem[] = []
 		let page = 1
@@ -308,8 +331,8 @@ export class DiscogsClient {
 			const params = new URLSearchParams()
 			params.append('page', page.toString())
 			params.append('per_page', '100') // Max per page to minimize requests
-			if (options.sort) params.append('sort', options.sort)
-			if (options.sort_order) params.append('sort_order', options.sort_order)
+			params.append('sort', sortBy)
+			params.append('sort_order', sortOrder)
 
 			const url = `${this.baseUrl}/users/${username}/collection/folders/0/releases?${params.toString()}`
 			const authHeader = await this.createOAuthHeader(url, 'GET', accessToken, accessTokenSecret, consumerKey, consumerSecret)
@@ -339,111 +362,129 @@ export class DiscogsClient {
 			}
 		} while (page <= totalPages)
 
-		// Filter releases based on query
-		const filteredReleases = allReleases.filter((item) => {
-			const release = item.basic_information
+		// Filter releases based on the cleaned query (without temporal terms)
+		let filteredReleases = allReleases
+		
+		if (filteredQuery.trim()) {
+			filteredReleases = allReleases.filter((item) => {
+				const release = item.basic_information
 
-			// For single word queries or exact ID searches, use simple includes
-			if (!query.includes(' ') || /^\d+$/.test(query)) {
-				// Search by release ID (exact match or partial)
-				const releaseIdMatch = item.id.toString().includes(query) || release.id.toString().includes(query)
+				// For single word queries or exact ID searches, use simple includes
+				if (!filteredQuery.includes(' ') || /^\d+$/.test(filteredQuery)) {
+					// Search by release ID (exact match or partial)
+					const releaseIdMatch = item.id.toString().includes(filteredQuery) || release.id.toString().includes(filteredQuery)
 
-				// Search in artist names
-				const artistMatch = release.artists?.some((artist) => artist.name.toLowerCase().includes(query)) || false
+					// Search in artist names
+					const artistMatch = release.artists?.some((artist) => artist.name.toLowerCase().includes(filteredQuery)) || false
 
-				// Search in title
-				const titleMatch = release.title?.toLowerCase().includes(query) || false
+					// Search in title
+					const titleMatch = release.title?.toLowerCase().includes(filteredQuery) || false
 
-				// Search in genres
-				const genreMatch = release.genres?.some((genre) => genre.toLowerCase().includes(query)) || false
+					// Search in genres
+					const genreMatch = release.genres?.some((genre) => genre.toLowerCase().includes(filteredQuery)) || false
 
-				// Search in styles
-				const styleMatch = release.styles?.some((style) => style.toLowerCase().includes(query)) || false
+					// Search in styles
+					const styleMatch = release.styles?.some((style) => style.toLowerCase().includes(filteredQuery)) || false
 
-				// Search in label names and catalog numbers
-				const labelMatch =
-					release.labels?.some((label) => label.name.toLowerCase().includes(query) || label.catno.toLowerCase().includes(query)) || false
+					// Search in label names and catalog numbers
+					const labelMatch =
+						release.labels?.some((label) => label.name.toLowerCase().includes(filteredQuery) || label.catno.toLowerCase().includes(filteredQuery)) || false
 
-				// Search in formats
-				const formatMatch = release.formats?.some((format) => format.name.toLowerCase().includes(query)) || false
+					// Search in formats
+					const formatMatch = release.formats?.some((format) => format.name.toLowerCase().includes(filteredQuery)) || false
 
-				// Search by year - enhanced to handle decade matching
-				let yearMatch = false
-				if (release.year) {
-					const yearStr = release.year.toString()
-					// Direct year match
-					if (yearStr.includes(query)) {
-						yearMatch = true
-					}
-					// Decade matching (e.g., "1960s" matches years 1960-1969)
-					const decadeMatch = query.match(/(\d{4})s$/)
-					if (decadeMatch) {
-						const startDecade = parseInt(decadeMatch[1])
-						if (release.year >= startDecade && release.year < startDecade + 10) {
+					// Search by year - enhanced to handle decade matching
+					let yearMatch = false
+					if (release.year) {
+						const yearStr = release.year.toString()
+						// Direct year match
+						if (yearStr.includes(filteredQuery)) {
 							yearMatch = true
 						}
+						// Decade matching (e.g., "1960s" matches years 1960-1969)
+						const decadeMatch = filteredQuery.match(/(\d{4})s$/)
+						if (decadeMatch) {
+							const startDecade = parseInt(decadeMatch[1])
+							if (release.year >= startDecade && release.year < startDecade + 10) {
+								yearMatch = true
+							}
+						}
 					}
+
+					return releaseIdMatch || artistMatch || titleMatch || genreMatch || styleMatch || labelMatch || formatMatch || yearMatch
 				}
 
-				return releaseIdMatch || artistMatch || titleMatch || genreMatch || styleMatch || labelMatch || formatMatch || yearMatch
-			}
+				// For multi-word queries, use smart matching logic
+				const queryTerms = filteredQuery.split(/\s+/).filter((term) => term.length > 2) // Split into words, ignore short words
 
-			// For multi-word queries, use smart matching logic
-			const queryTerms = query.split(/\s+/).filter((term) => term.length > 2) // Split into words, ignore short words
+				// Separate decade terms from other terms
+				const decadeTerms: string[] = []
+				const nonDecadeTerms: string[] = []
 
-			// Separate decade terms from other terms
-			const decadeTerms: string[] = []
-			const nonDecadeTerms: string[] = []
-
-			queryTerms.forEach((term) => {
-				const decadeMatch = term.match(/^(\d{4})s$/)
-				if (decadeMatch) {
-					decadeTerms.push(term)
-				} else {
-					nonDecadeTerms.push(term)
-				}
-			})
-
-			// Create searchable text from all release information (including decade)
-			const searchableFields = [
-				...(release.artists?.map((artist) => artist.name) || []),
-				release.title,
-				...(release.genres || []),
-				...(release.styles || []),
-				...(release.labels?.map((label) => label.name) || []),
-				...(release.labels?.map((label) => label.catno) || []),
-				...(release.formats?.map((format) => format.name) || []),
-				release.year?.toString() || '',
-				item.id.toString(),
-				release.id.toString(),
-			]
-
-			// Add decade representation if we have a year
-			if (release.year) {
-				const decade = `${Math.floor(release.year / 10) * 10}s`
-				searchableFields.push(decade)
-			}
-
-			const searchableText = searchableFields.join(' ').toLowerCase()
-
-			// Check non-decade terms (all must match)
-			const nonDecadeMatch = nonDecadeTerms.length === 0 || nonDecadeTerms.every((term) => searchableText.includes(term))
-
-			// Check decade terms (at least one must match - OR logic for conflicting decades)
-			const decadeMatch =
-				decadeTerms.length === 0 ||
-				decadeTerms.some((term) => {
-					// Direct decade string match (e.g., "1960s")
-					if (searchableText.includes(term)) {
-						return true
+				queryTerms.forEach((term) => {
+					const decadeMatch = term.match(/^(\d{4})s$/)
+					if (decadeMatch) {
+						decadeTerms.push(term)
+					} else {
+						nonDecadeTerms.push(term)
 					}
-					// Manual decade range check as fallback
-					const decadeYear = parseInt(term.replace('s', ''))
-					return release.year && release.year >= decadeYear && release.year < decadeYear + 10
 				})
 
-			return nonDecadeMatch && decadeMatch
-		})
+				// Create searchable text from all release information (including decade)
+				const searchableFields = [
+					...(release.artists?.map((artist) => artist.name) || []),
+					release.title,
+					...(release.genres || []),
+					...(release.styles || []),
+					...(release.labels?.map((label) => label.name) || []),
+					...(release.labels?.map((label) => label.catno) || []),
+					...(release.formats?.map((format) => format.name) || []),
+					release.year?.toString() || '',
+					item.id.toString(),
+					release.id.toString(),
+				]
+
+				// Add decade representation if we have a year
+				if (release.year) {
+					const decade = `${Math.floor(release.year / 10) * 10}s`
+					searchableFields.push(decade)
+				}
+
+				const searchableText = searchableFields.join(' ').toLowerCase()
+
+				// Check non-decade terms (all must match)
+				const nonDecadeMatch = nonDecadeTerms.length === 0 || nonDecadeTerms.every((term) => searchableText.includes(term))
+
+				// Check decade terms (at least one must match - OR logic for conflicting decades)
+				const decadeMatch =
+					decadeTerms.length === 0 ||
+					decadeTerms.some((term) => {
+						// Direct decade string match (e.g., "1960s")
+						if (searchableText.includes(term)) {
+							return true
+						}
+						// Manual decade range check as fallback
+						const decadeYear = parseInt(term.replace('s', ''))
+						return release.year && release.year >= decadeYear && release.year < decadeYear + 10
+					})
+
+				return nonDecadeMatch && decadeMatch
+			})
+		}
+
+		// Results are already sorted by the API call parameters, so we don't need to re-sort
+		// unless we filtered out temporal terms and need to fall back to default sorting
+		if (hasRecent || hasOld) {
+			// Keep the API sorting since we specified it above
+		} else {
+			// Fall back to default sorting (by rating and date)
+			filteredReleases.sort((a: DiscogsCollectionItem, b: DiscogsCollectionItem) => {
+				if (a.rating !== b.rating) {
+					return b.rating - a.rating
+				}
+				return new Date(b.date_added).getTime() - new Date(a.date_added).getTime()
+			})
+		}
 
 		// Implement pagination on filtered results
 		const totalItems = filteredReleases.length

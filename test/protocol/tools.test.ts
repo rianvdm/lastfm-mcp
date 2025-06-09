@@ -1002,5 +1002,126 @@ describe('MCP Tools', () => {
 				'',
 			)
 		})
+
+		it('should handle temporal search query "rock vinyl recent"', async () => {
+			const mockUserProfile = { username: 'testuser', id: 123 }
+			const mockSearchResults = {
+				pagination: { pages: 1, page: 1, per_page: 50, items: 2, urls: {} },
+				releases: [
+					{
+						id: 1,
+						instance_id: 1,
+						date_added: '2023-12-01T00:00:00-08:00', // Most recent
+						rating: 5,
+						basic_information: {
+							id: 1,
+							title: 'Recent Rock Album',
+							year: 2023,
+							artists: [{ name: 'Test Artist', id: 1 }],
+							genres: ['Rock'],
+							styles: ['Alternative'],
+							formats: [{ name: 'Vinyl', qty: '1' }],
+							labels: [{ name: 'Test Label', catno: 'TEST001' }],
+							resource_url: 'https://api.discogs.com/releases/1',
+							thumb: '',
+							cover_image: '',
+						},
+					},
+					{
+						id: 2,
+						instance_id: 2,
+						date_added: '2023-01-01T00:00:00-08:00', // Older
+						rating: 4,
+						basic_information: {
+							id: 2,
+							title: 'Classic Rock Album',
+							year: 1975,
+							artists: [{ name: 'Classic Artist', id: 2 }],
+							genres: ['Rock'],
+							styles: ['Classic Rock'],
+							formats: [{ name: 'Vinyl', qty: '1' }],
+							labels: [{ name: 'Classic Label', catno: 'CLASSIC001' }],
+							resource_url: 'https://api.discogs.com/releases/2',
+							thumb: '',
+							cover_image: '',
+						},
+					},
+				],
+			}
+
+			mockDiscogsClient.getUserProfile.mockResolvedValue(mockUserProfile)
+			mockDiscogsClient.searchCollection.mockResolvedValue(mockSearchResults)
+
+			// Initialize first
+			await handleMethod({
+				jsonrpc: '2.0',
+				method: 'initialize',
+				params: {
+					protocolVersion: '2024-11-05',
+					capabilities: {},
+					clientInfo: { name: 'Test', version: '1.0' },
+				},
+				id: 1,
+			})
+
+			// Send initialized notification
+			await handleMethod({
+				jsonrpc: '2.0',
+				method: 'initialized',
+			})
+
+			// Test the exact query that was failing: "rock vinyl recent"
+			const response = await handleMethod(
+				{
+					jsonrpc: '2.0',
+					method: 'tools/call',
+					params: {
+						name: 'search_collection',
+						arguments: { query: 'rock vinyl recent', per_page: 25 },
+					},
+					id: 2,
+				},
+				await createMockAuthenticatedRequest(),
+				mockJwtSecret,
+			)
+
+			expect(response).toMatchObject({
+				jsonrpc: '2.0',
+				id: 2,
+				result: {
+					content: [
+						{
+							type: 'text',
+							text: expect.stringContaining('Found 2 results for "rock vinyl recent"'),
+						},
+					],
+				},
+			})
+
+			// Verify the response includes temporal search strategy explanation
+			const result = response?.result as { content: Array<{ type: string; text: string }> }
+			const responseText = result.content[0].text
+			expect(responseText).toContain('Search Strategy:')
+			expect(responseText).toContain('recent')
+			expect(responseText).toContain('most recently added')
+			expect(responseText).toContain('Recent Rock Album') // Should show the more recent one first
+			expect(responseText).toContain('Genre: Rock')
+			expect(responseText).toContain('Format: Vinyl')
+			expect(responseText).toContain('[ID: 1]')
+			expect(responseText).toContain('[ID: 2]')
+
+			expect(mockDiscogsClient.getUserProfile).toHaveBeenCalledWith('test-token', 'test-secret', '', '')
+			expect(mockDiscogsClient.searchCollection).toHaveBeenCalledWith(
+				'testuser',
+				'test-token',
+				'test-secret',
+				{
+					query: 'rock vinyl recent',
+					per_page: 25,
+				},
+				'',
+				'',
+			)
+		})
 	})
 })
