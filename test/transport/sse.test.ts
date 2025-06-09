@@ -144,8 +144,8 @@ describe('SSE Transport', () => {
 			const { connectionId } = createSSEResponse()
 			const connection = getConnection(connectionId)!
 
-			// Set last activity to old timestamp (6 minutes ago)
-			connection.lastActivity = Date.now() - 6 * 60 * 1000
+			// Set last activity to old timestamp (31 minutes ago, exceeding the 30-minute inactive timeout)
+			connection.lastActivity = Date.now() - 31 * 60 * 1000
 
 			cleanupConnections()
 

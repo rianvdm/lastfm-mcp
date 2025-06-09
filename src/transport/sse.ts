@@ -1,11 +1,11 @@
 /**
  * Server-Sent Events (SSE) Transport for MCP
- * Manages bidirectional communication with clients
+ * Manages bidirectional communication with clients and per-connection authentication
  */
 
 import { JSONRPCResponse } from '../types/jsonrpc'
 
-// Store active SSE connections
+// Store active SSE connections with enhanced tracking
 const connections = new Map<string, SSEConnection>()
 
 interface SSEConnection {
@@ -13,6 +13,9 @@ interface SSEConnection {
 	writer: WritableStreamDefaultWriter<Uint8Array>
 	encoder: TextEncoder
 	lastActivity: number
+	isAuthenticated: boolean
+	userId?: string
+	createdAt: number
 }
 
 /**
@@ -26,19 +29,23 @@ export function createSSEResponse(): { response: Response; connectionId: string 
 	const { readable, writable } = new TransformStream()
 	const writer = writable.getWriter()
 
-	// Store connection
+	// Store connection with authentication tracking
 	const connection: SSEConnection = {
 		id: connectionId,
 		writer,
 		encoder,
 		lastActivity: Date.now(),
+		isAuthenticated: false,
+		createdAt: Date.now()
 	}
 	connections.set(connectionId, connection)
 
-	// Send initial connection event with endpoint info
+	// Send initial connection event with authentication info
 	sendSSEMessage(connection, 'endpoint', {
 		endpoint: '/', // Main JSON-RPC endpoint
 		connectionId,
+		requiresAuth: true,
+		authUrl: `/login?connection_id=${connectionId}`
 	})
 
 	// Set up keepalive
@@ -76,6 +83,7 @@ export function createSSEResponse(): { response: Response; connectionId: string 
 			'Cache-Control': 'no-cache',
 			Connection: 'keep-alive',
 			'Access-Control-Allow-Origin': '*',
+			'X-Connection-ID': connectionId // Include connection ID in headers
 		},
 	})
 
@@ -117,6 +125,45 @@ export function getConnection(connectionId: string): SSEConnection | undefined {
 }
 
 /**
+ * Update connection authentication status
+ */
+export function authenticateConnection(connectionId: string, userId: string): boolean {
+	const connection = connections.get(connectionId)
+	if (!connection) {
+		return false
+	}
+
+	connection.isAuthenticated = true
+	connection.userId = userId
+	connection.lastActivity = Date.now()
+
+	// Send authentication success event
+	sendSSEMessage(connection, 'authenticated', {
+		connectionId,
+		userId,
+		message: 'Authentication successful'
+	})
+
+	return true
+}
+
+/**
+ * Check if connection is authenticated
+ */
+export function isConnectionAuthenticated(connectionId: string): boolean {
+	const connection = connections.get(connectionId)
+	return connection?.isAuthenticated ?? false
+}
+
+/**
+ * Get user ID for authenticated connection
+ */
+export function getConnectionUserId(connectionId: string): string | undefined {
+	const connection = connections.get(connectionId)
+	return connection?.isAuthenticated ? connection.userId : undefined
+}
+
+/**
  * Close a connection
  */
 export function closeConnection(connectionId: string): void {
@@ -139,15 +186,32 @@ export function getActiveConnectionCount(): number {
 }
 
 /**
- * Clean up stale connections (for testing)
+ * Get all active connections (for debugging/monitoring)
+ */
+export function getActiveConnections(): Array<{ id: string; isAuthenticated: boolean; userId?: string; lastActivity: number }> {
+	return Array.from(connections.values()).map(conn => ({
+		id: conn.id,
+		isAuthenticated: conn.isAuthenticated,
+		userId: conn.userId,
+		lastActivity: conn.lastActivity
+	}))
+}
+
+/**
+ * Clean up stale connections
  */
 export function cleanupConnections(): void {
 	const now = Date.now()
-	const timeout = 5 * 60 * 1000 // 5 minutes
+	const INACTIVE_TIMEOUT = 30 * 60 * 1000 // 30 minutes
+	const MAX_AGE = 24 * 60 * 60 * 1000 // 24 hours
 
-	for (const [id, connection] of connections) {
-		if (now - connection.lastActivity > timeout) {
-			closeConnection(id)
+	for (const [connectionId, connection] of connections) {
+		const inactive = (now - connection.lastActivity) > INACTIVE_TIMEOUT
+		const expired = (now - connection.createdAt) > MAX_AGE
+
+		if (inactive || expired) {
+			console.log(`Cleaning up connection ${connectionId} - inactive: ${inactive}, expired: ${expired}`)
+			closeConnection(connectionId)
 		}
 	}
 }

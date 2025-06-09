@@ -7,7 +7,7 @@ import { parseMessage, createError, serializeResponse } from './protocol/parser'
 import { handleMethod, verifyAuthentication } from './protocol/handlers'
 import { createSessionToken } from './auth/jwt'
 import { ErrorCode, JSONRPCError } from './types/jsonrpc'
-import { createSSEResponse, getConnection } from './transport/sse'
+import { createSSEResponse, getConnection, authenticateConnection } from './transport/sse'
 import { DiscogsAuth } from './auth/discogs'
 import { KVLogger } from './utils/kvLogger'
 import { RateLimiter } from './utils/rateLimit'
@@ -19,8 +19,8 @@ import type { ExecutionContext } from '@cloudflare/workers-types'
 /// <reference lib="dom.iterable" />
 /// <reference lib="webworker" />
 
-// Store for temporary OAuth tokens (in production, use KV storage)
-const oauthTokenStore = new Map<string, string>()
+// Store for temporary OAuth tokens with connection mapping (in production, use KV storage)
+const oauthTokenStore = new Map<string, { tokenSecret: string; connectionId: string }>()
 
 export default {
 	async fetch(request: Request, env: Env, _ctx: ExecutionContext): Promise<Response> {
@@ -137,9 +137,10 @@ async function handleLogin(request: Request, env: Env): Promise<Response> {
 
 		// Get callback URL based on the current request URL
 		const url = new URL(request.url)
-		const callbackUrl = `${url.protocol}//${url.host}/callback`
+		const connectionId = url.searchParams.get('connection_id')
+		const callbackUrl = `${url.protocol}//${url.host}/callback${connectionId ? `?connection_id=${connectionId}` : ''}`
 
-		console.log('Requesting OAuth token from Discogs...')
+		console.log('Requesting OAuth token from Discogs...', { connectionId })
 
 		// Get request token
 		const { oauth_token, oauth_token_secret } = await auth.getRequestToken(callbackUrl)
@@ -149,8 +150,11 @@ async function handleLogin(request: Request, env: Env): Promise<Response> {
 			secretLength: oauth_token_secret.length,
 		})
 
-		// Store token secret temporarily (in production, use KV storage)
-		oauthTokenStore.set(oauth_token, oauth_token_secret)
+		// Store token secret temporarily with connection ID (in production, use KV storage)
+		oauthTokenStore.set(oauth_token, { 
+			tokenSecret: oauth_token_secret,
+			connectionId: connectionId || 'unknown'
+		})
 
 		// Redirect to Discogs authorization page
 		const authorizeUrl = auth.getAuthorizeUrl(oauth_token)
@@ -178,19 +182,25 @@ async function handleCallback(request: Request, env: Env): Promise<Response> {
 		const url = new URL(request.url)
 		const oauthToken = url.searchParams.get('oauth_token')
 		const oauthVerifier = url.searchParams.get('oauth_verifier')
+		const connectionId = url.searchParams.get('connection_id')
 
 		if (!oauthToken || !oauthVerifier) {
 			return new Response('Missing OAuth parameters', { status: 400 })
 		}
 
-		// Retrieve token secret
-		const oauthTokenSecret = oauthTokenStore.get(oauthToken)
-		if (!oauthTokenSecret) {
+		// Retrieve token secret and connection ID
+		const tokenData = oauthTokenStore.get(oauthToken)
+		if (!tokenData) {
 			return new Response('Invalid OAuth token', { status: 400 })
 		}
 
+		const { tokenSecret: oauthTokenSecret, connectionId: storedConnectionId } = tokenData
+
 		// Clean up temporary storage
 		oauthTokenStore.delete(oauthToken)
+
+		// Use connection ID from callback URL or stored connection ID
+		const finalConnectionId = connectionId || storedConnectionId
 
 		// Exchange for access token
 		const auth = new DiscogsAuth(env.DISCOGS_CONSUMER_KEY, env.DISCOGS_CONSUMER_SECRET)
@@ -211,8 +221,8 @@ async function handleCallback(request: Request, env: Env): Promise<Response> {
 			24, // expires in 24 hours
 		)
 
-		// Store session in KV for MCP proxy access
-		if (env.MCP_SESSIONS) {
+		// Store session in KV with connection-specific key
+		if (env.MCP_SESSIONS && finalConnectionId !== 'unknown') {
 			try {
 				const sessionData = {
 					token: sessionToken,
@@ -221,10 +231,17 @@ async function handleCallback(request: Request, env: Env): Promise<Response> {
 					accessTokenSecret,
 					timestamp: Date.now(),
 					expiresAt: Date.now() + 24 * 60 * 60 * 1000, // 24 hours
+					connectionId: finalConnectionId,
 				}
-				await env.MCP_SESSIONS.put('latest-session', JSON.stringify(sessionData), {
+				// Store with connection-specific key
+				await env.MCP_SESSIONS.put(`session:${finalConnectionId}`, JSON.stringify(sessionData), {
 					expirationTtl: 24 * 60 * 60, // 24 hours
 				})
+				
+				// Mark the SSE connection as authenticated
+				authenticateConnection(finalConnectionId, accessToken)
+				
+				console.log(`Session stored for connection ${finalConnectionId}`)
 			} catch (error) {
 				console.warn('Could not save session to KV:', error)
 			}
@@ -239,7 +256,11 @@ async function handleCallback(request: Request, env: Env): Promise<Response> {
 			'Max-Age=86400', // 24 hours in seconds
 		].join('; ')
 
-		return new Response(`Authentication successful! You can now use the MCP server to access your Discogs collection.`, {
+		const responseMessage = finalConnectionId !== 'unknown' 
+			? `Authentication successful! Your MCP connection is now authenticated and ready to use.`
+			: `Authentication successful! You can now use the MCP server to access your Discogs collection.`
+
+		return new Response(responseMessage, {
 			status: 200,
 			headers: {
 				'Content-Type': 'text/plain',

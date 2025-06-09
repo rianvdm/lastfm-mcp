@@ -133,7 +133,7 @@ describe('MCP Tools', () => {
 			})
 		})
 
-		it('should require authentication for auth_status tool', async () => {
+		it('should provide authentication instructions for auth_status tool', async () => {
 			// Initialize first
 			await handleMethod({
 				jsonrpc: '2.0',
@@ -152,7 +152,7 @@ describe('MCP Tools', () => {
 				method: 'initialized',
 			})
 
-			// auth_status now requires authentication context
+			// auth_status now provides helpful instructions for unauthenticated users
 			const response = await handleMethod({
 				jsonrpc: '2.0',
 				method: 'tools/call',
@@ -163,15 +163,26 @@ describe('MCP Tools', () => {
 				id: 2,
 			})
 
-			// Should return an internal error since no authentication context provided for testing
+			// Should return helpful authentication instructions
 			expect(response).toMatchObject({
 				jsonrpc: '2.0',
 				id: 2,
-				error: {
-					code: -32603,
-					message: 'Internal error: Missing authentication context for authenticated tool',
+				result: {
+					content: [
+						{
+							type: 'text',
+							text: expect.stringContaining('Authentication Status: Not Authenticated'),
+						},
+					],
 				},
 			})
+
+			// Verify it contains authentication instructions
+			const result = response?.result as { content: Array<{ type: string; text: string }> }
+			const responseText = result.content[0].text
+			expect(responseText).toContain('How to authenticate:')
+			expect(responseText).toContain('Visit: /login')
+			expect(responseText).toContain('What you\'ll be able to do after authentication:')
 		})
 	})
 

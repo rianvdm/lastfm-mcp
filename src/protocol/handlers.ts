@@ -33,6 +33,7 @@ import {
 import { verifySessionToken, SessionPayload } from '../auth/jwt'
 import { discogsClient, type DiscogsCollectionItem } from '../clients/discogs'
 import { analyzeMoodQuery, hasMoodContent, generateMoodSearchTerms } from '../utils/moodMapping'
+import { isConnectionAuthenticated } from '../transport/sse'
 
 /**
  * Extract and verify session token from request
@@ -67,6 +68,72 @@ export async function verifyAuthentication(request: Request, jwtSecret: string):
 	} catch (error) {
 		console.error('Authentication verification error:', error)
 		return null
+	}
+}
+
+/**
+ * Get connection-specific authentication session
+ */
+async function getConnectionSession(request: Request, jwtSecret: string, env?: Env): Promise<SessionPayload | null> {
+	// First try standard authentication via cookie
+	const cookieSession = await verifyAuthentication(request, jwtSecret)
+	if (cookieSession) {
+		return cookieSession
+	}
+
+	// Try connection-specific authentication only if we have a connection ID and KV storage
+	const connectionId = request.headers.get('X-Connection-ID')
+	if (!connectionId || !env?.MCP_SESSIONS) {
+		// No connection ID or KV storage, but cookie auth failed, so return null
+		return null
+	}
+
+	// Check if SSE connection is authenticated
+	if (!isConnectionAuthenticated(connectionId)) {
+		return null
+	}
+
+	try {
+		// Try to get connection-specific session from KV storage
+		const sessionDataStr = await env.MCP_SESSIONS.get(`session:${connectionId}`)
+		if (!sessionDataStr) {
+			return null
+		}
+
+		const sessionData = JSON.parse(sessionDataStr)
+		
+		// Verify the stored session is still valid
+		if (!sessionData.expiresAt || new Date(sessionData.expiresAt) <= new Date()) {
+			console.log('Connection session has expired')
+			return null
+		}
+
+		// Return session payload
+		return {
+			userId: sessionData.userId,
+			accessToken: sessionData.accessToken,
+			accessTokenSecret: sessionData.accessTokenSecret,
+			iat: Math.floor(Date.now() / 1000),
+			exp: Math.floor(new Date(sessionData.expiresAt).getTime() / 1000),
+		}
+	} catch (error) {
+		console.error('Error retrieving connection session:', error)
+		return null
+	}
+}
+
+/**
+ * Generate authentication instructions for unauthenticated requests
+ */
+function generateAuthInstructions(request: Request): string {
+	const connectionId = request.headers.get('X-Connection-ID')
+	
+	if (connectionId) {
+		// Connection-specific auth instructions
+		return `visit /login?connection_id=${connectionId} to authenticate with your Discogs account`
+	} else {
+		// Generic auth instructions
+		return 'visit /login to authenticate with Discogs'
 	}
 }
 
@@ -360,7 +427,7 @@ interface ToolCallResult {
 /**
  * Handle non-authenticated tools
  */
-async function handleToolsCall(params: unknown): Promise<ToolCallResult> {
+async function handleToolsCall(params: unknown, httpRequest?: Request): Promise<ToolCallResult> {
 	// Validate params
 	if (!isToolsCallParams(params)) {
 		throw new Error('Invalid tools/call params - name and arguments are required')
@@ -421,9 +488,42 @@ async function handleToolsCall(params: unknown): Promise<ToolCallResult> {
 			}
 		}
 		case 'auth_status': {
-			// This tool needs to check actual authentication status
-			// We need the request context to check for session
-			throw new Error('Unknown tool: auth_status. This tool may require authentication.')
+			// Provide unauthenticated status with connection-specific instructions
+			const connectionId = httpRequest?.headers.get('X-Connection-ID')
+			const connectionInfo = connectionId ? `\n🔗 **Connection ID:** ${connectionId}` : ''
+			const loginUrl = connectionId ? `/login?connection_id=${connectionId}` : '/login'
+			
+			return {
+				content: [
+					{
+						type: 'text',
+						text: `🔐 **Authentication Status: Not Authenticated**${connectionInfo}
+
+You are not currently authenticated with Discogs. To access your personal music collection, you need to authenticate first.
+
+**How to authenticate:**
+1. Visit: ${loginUrl}
+2. Sign in with your Discogs account
+3. Authorize access to your collection
+4. Return here and try your query again
+
+**What you'll be able to do after authentication:**
+• Search your music collection with natural language queries
+• Get detailed information about your releases
+• View collection statistics and insights  
+• Get personalized music recommendations
+• Use mood-based queries like "mellow Sunday evening music"
+• Find music by contextual cues like "energetic workout songs"
+
+Your authentication will be secure and connection-specific - only you will have access to your collection data.
+
+**Available without authentication:**
+• \`ping\` - Test server connectivity
+• \`server_info\` - Get server information
+• \`auth_status\` - Check authentication status (this tool)`,
+					},
+				],
+			}
 		}
 		default:
 			throw new Error(`Unknown tool: ${name}. This tool may require authentication.`)
@@ -433,7 +533,7 @@ async function handleToolsCall(params: unknown): Promise<ToolCallResult> {
 /**
  * Handle authenticated tools
  */
-async function handleAuthenticatedToolsCall(params: unknown, session: SessionPayload, env?: Env): Promise<ToolCallResult> {
+async function handleAuthenticatedToolsCall(params: unknown, session: SessionPayload, env?: Env, httpRequest?: Request): Promise<ToolCallResult> {
 	// Validate params
 	if (!isToolsCallParams(params)) {
 		throw new Error('Invalid tools/call params - name and arguments are required')
@@ -488,6 +588,10 @@ async function handleAuthenticatedToolsCall(params: unknown, session: SessionPay
 
 	switch (name) {
 		case 'auth_status': {
+			// Get connection information if available
+			const connectionId = httpRequest?.headers.get('X-Connection-ID')
+			const connectionInfo = connectionId ? `\n🔗 **Connection ID:** ${connectionId}` : ''
+			
 			try {
 				const consumerKey = env?.DISCOGS_CONSUMER_KEY || ''
 				const consumerSecret = env?.DISCOGS_CONSUMER_SECRET || ''
@@ -502,36 +606,44 @@ async function handleAuthenticatedToolsCall(params: unknown, session: SessionPay
 							text: `✅ **Authentication Status: Authenticated**
 
 🎵 **Connected Discogs Account:** ${userProfile.username}
-🆔 **User ID:** ${userProfile.id}
+🆔 **User ID:** ${userProfile.id}${connectionInfo}
 
 You're all set! You can now use all collection tools:
 
 **Available Tools:**
-- **search_collection**: Search your Discogs collection
+- **search_collection**: Search your Discogs collection with mood and contextual awareness
 - **get_release**: Get detailed release information  
 - **get_collection_stats**: Get collection statistics
-- **get_recommendations**: Get personalized recommendations
+- **get_recommendations**: Get personalized recommendations with mood support
 - **ping**: Test server connectivity
 - **server_info**: Get server information
 
-Try asking something like:
+**Examples to try:**
 - "Search my collection for Beatles albums"
 - "What are my collection stats?"
-- "Recommend some jazz albums from my collection"`,
+- "Recommend some mellow jazz for Sunday evening"
+- "Find energetic workout music in my collection"
+- "Show me melancholy music from the 1970s"
+
+Your authentication is secure and tied to your specific session.`,
 						},
 					],
 				}
 			} catch (error) {
+				const loginUrl = connectionId 
+					? `/login?connection_id=${connectionId}` 
+					: '/login'
+				
 				return {
 					content: [
 						{
 							type: 'text',
 							text: `🔐 **Authentication Status: Authentication Error**
 
-There was an issue verifying your authentication: ${error instanceof Error ? error.message : 'Unknown error'}
+There was an issue verifying your authentication: ${error instanceof Error ? error.message : 'Unknown error'}${connectionInfo}
 
 **How to re-authenticate:**
-1. Visit: https://discogs-mcp-prod.rian-db8.workers.dev/login
+1. Visit: ${loginUrl}
 2. Click "Authorize" to allow access to your Discogs collection
 3. You'll be redirected back and your session will be saved
 4. Try again
@@ -1306,9 +1418,31 @@ export async function handleMethod(request: JSONRPCRequest, httpRequest?: Reques
 		}
 
 		case 'tools/call': {
+			// For tools that exist in both authenticated and non-authenticated handlers (like auth_status),
+			// check authentication first to determine which handler to use
+			const toolName = (params as ToolsCallParams)?.name
+			const dualHandlerTools = ['auth_status'] // Tools that exist in both handlers
+			
+			if (dualHandlerTools.includes(toolName) && httpRequest && jwtSecret) {
+				// Check if user is authenticated first
+				const session = await getConnectionSession(httpRequest, jwtSecret, env)
+				
+				if (session) {
+					// User is authenticated, use authenticated handler
+					try {
+						const authenticatedResult = await handleAuthenticatedToolsCall(params, session, env, httpRequest)
+						return hasId(request) ? createResponse(id!, authenticatedResult) : null
+					} catch (authError) {
+						const errorInfo = mapErrorToJSONRPC(authError)
+						return hasId(request) ? createError(id!, errorInfo.code, errorInfo.message, errorInfo.data) : null
+					}
+				}
+				// Fall through to non-authenticated handler if not authenticated
+			}
+
 			try {
-				// First try non-authenticated tools
-				const result = await handleToolsCall(params)
+				// Try non-authenticated tools
+				const result = await handleToolsCall(params, httpRequest)
 				return hasId(request) ? createResponse(id!, result) : null
 			} catch (error) {
 				// If it's an unknown tool error, it might be an authenticated tool
@@ -1322,47 +1456,22 @@ export async function handleMethod(request: JSONRPCRequest, httpRequest?: Reques
 					}
 
 					console.log('Verifying authentication...')
-					let session = await verifyAuthentication(httpRequest, jwtSecret)
+					const session = await getConnectionSession(httpRequest, jwtSecret, env)
 					console.log('Session verification result:', session ? 'SUCCESS' : 'FAILED')
 
-					// If no session from request, try to get the latest session from KV storage
-					if (!session && env?.MCP_SESSIONS) {
-						console.log('No session in request, checking for stored session...')
-						try {
-							const sessionDataStr = await env.MCP_SESSIONS.get('latest-session')
-							if (sessionDataStr) {
-								const sessionData = JSON.parse(sessionDataStr)
-								// Verify the stored session is still valid
-								if (sessionData.expiresAt && new Date(sessionData.expiresAt) > new Date()) {
-									session = {
-										userId: sessionData.userId,
-										accessToken: sessionData.accessToken,
-										accessTokenSecret: sessionData.accessTokenSecret,
-										iat: Math.floor(Date.now() / 1000),
-										exp: Math.floor(new Date(sessionData.expiresAt).getTime() / 1000),
-									}
-									console.log('Using stored session for user:', session.userId)
-								} else {
-									console.log('Stored session has expired')
-								}
-							}
-						} catch (error) {
-							console.error('Error retrieving stored session:', error)
-						}
-					}
-
 					if (!session) {
+						const authInstructions = generateAuthInstructions(httpRequest)
 						return hasId(request)
 							? createError(
 									id!,
 									MCPErrorCode.Unauthorized,
-									'Authentication required. Please use the "auth_status" tool for detailed authentication instructions, or visit https://discogs-mcp-prod.rian-db8.workers.dev/login to authenticate with Discogs.',
+									`Authentication required. Please use the "auth_status" tool for detailed authentication instructions, or ${authInstructions}`,
 								)
 							: null
 					}
 
 					try {
-						const authenticatedResult = await handleAuthenticatedToolsCall(params, session, env)
+						const authenticatedResult = await handleAuthenticatedToolsCall(params, session, env, httpRequest)
 						return hasId(request) ? createResponse(id!, authenticatedResult) : null
 					} catch (authError) {
 						const errorInfo = mapErrorToJSONRPC(authError)
@@ -1404,36 +1513,15 @@ export async function handleMethod(request: JSONRPCRequest, httpRequest?: Reques
 		return null
 	}
 
-	let session = await verifyAuthentication(httpRequest, jwtSecret)
-
-	// If no session from request, try to get the latest session from KV storage
-	if (!session && env?.MCP_SESSIONS) {
-		try {
-			const sessionDataStr = await env.MCP_SESSIONS.get('latest-session')
-			if (sessionDataStr) {
-				const sessionData = JSON.parse(sessionDataStr)
-				// Verify the stored session is still valid
-				if (sessionData.expiresAt && new Date(sessionData.expiresAt) > new Date()) {
-					session = {
-						userId: sessionData.userId,
-						accessToken: sessionData.accessToken,
-						accessTokenSecret: sessionData.accessTokenSecret,
-						iat: Math.floor(Date.now() / 1000),
-						exp: Math.floor(new Date(sessionData.expiresAt).getTime() / 1000),
-					}
-				}
-			}
-		} catch (error) {
-			console.error('Error retrieving stored session:', error)
-		}
-	}
+	const session = await getConnectionSession(httpRequest, jwtSecret, env)
 
 	if (!session) {
 		if (hasId(request)) {
+			const authInstructions = generateAuthInstructions(httpRequest)
 			return createError(
 				id!,
 				MCPErrorCode.Unauthorized,
-				'Authentication required. Please use the "auth_status" tool for detailed authentication instructions, or visit https://discogs-mcp-prod.rian-db8.workers.dev/login to authenticate with Discogs.',
+				`Authentication required. Please use the "auth_status" tool for detailed authentication instructions, or ${authInstructions}`,
 			)
 		}
 		return null
