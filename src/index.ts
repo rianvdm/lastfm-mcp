@@ -65,7 +65,9 @@ export default {
 					return handleSSEConnection()
 				} else if (request.method === 'POST') {
 					// Handle JSON-RPC requests on SSE endpoint for mcp-remote compatibility
-					return handleMCPRequest(request, env)
+					// For mcp-remote, we need to infer the connection ID from the request context
+					// since it doesn't always include the X-Connection-ID header properly
+					return handleMCPRequestWithSSEContext(request, env)
 				} else {
 					return new Response('Method not allowed', { status: 405 })
 				}
@@ -280,6 +282,49 @@ function handleSSEConnection(): Response {
 	const { response, connectionId } = createSSEResponse()
 	console.log(`New SSE connection established: ${connectionId}`)
 	return response as unknown as Response
+}
+
+/**
+ * Handle MCP JSON-RPC request with SSE context for mcp-remote compatibility
+ * This handles the case where mcp-remote makes POST requests to /sse without proper connection headers
+ */
+async function handleMCPRequestWithSSEContext(request: Request, env?: Env): Promise<Response> {
+	// Check if we already have a connection ID header
+	let connectionId = request.headers.get('X-Connection-ID')
+	
+	// If no connection ID, create a consistent one for this client session
+	// This enables mcp-remote to work properly by providing stable connection-specific URLs
+	if (!connectionId) {
+		// Create a deterministic connection ID based on client characteristics
+		// This ensures the same client gets the same connection ID across requests
+		const clientIP = request.headers.get('CF-Connecting-IP') || request.headers.get('X-Forwarded-For') || 'unknown'
+		const userAgent = request.headers.get('User-Agent') || 'unknown'
+		const timestamp = Math.floor(Date.now() / (1000 * 60 * 60)) // Changes every hour
+		
+		// Create a hash-based connection ID that's consistent for the same client/hour
+		const encoder = new TextEncoder()
+		const data = encoder.encode(`${clientIP}-${userAgent}-${timestamp}`)
+		const hashBuffer = await crypto.subtle.digest('SHA-256', data)
+		const hashArray = new Uint8Array(hashBuffer)
+		const hashHex = Array.from(hashArray).map(b => b.toString(16).padStart(2, '0')).join('')
+		
+		connectionId = `mcp-remote-${hashHex.substring(0, 16)}`
+		
+		// Create a new request with the connection ID header
+		const newHeaders = new Headers(request.headers)
+		newHeaders.set('X-Connection-ID', connectionId)
+		
+		const newRequest = new Request(request.url, {
+			method: request.method,
+			headers: newHeaders,
+			body: request.body,
+		})
+		
+		return handleMCPRequest(newRequest, env)
+	}
+	
+	// If we have a connection ID, use the normal handler
+	return handleMCPRequest(request, env)
 }
 
 /**
