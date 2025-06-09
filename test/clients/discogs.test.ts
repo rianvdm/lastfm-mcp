@@ -909,5 +909,132 @@ describe('Discogs Client', () => {
 			expect(result.releases.every((r) => r.basic_information.genres.includes('Rock'))).toBe(true)
 			expect(result.pagination.items).toBe(3)
 		})
+
+		it('should use OR logic for multi-word genre searches like "ambient drone progressive"', async () => {
+			const mockResponse = {
+				pagination: { pages: 1, page: 1, per_page: 100, items: 5, urls: {} },
+				releases: [
+					{
+						id: 1,
+						instance_id: 1,
+						date_added: '2023-01-01T00:00:00-08:00',
+						rating: 4,
+						basic_information: {
+							id: 1,
+							title: 'Pure Ambient',
+							year: 2020,
+							artists: [{ name: 'Ambient Artist', id: 1 }],
+							genres: ['Electronic'],
+							styles: ['Ambient'], // Has "ambient" only
+							formats: [{ name: 'Digital', qty: '1' }],
+							labels: [{ name: 'Ambient Records', catno: 'AMB001' }],
+							resource_url: 'https://api.discogs.com/releases/1',
+							thumb: '',
+							cover_image: '',
+						},
+					},
+					{
+						id: 2,
+						instance_id: 2,
+						date_added: '2023-01-02T00:00:00-08:00',
+						rating: 5,
+						basic_information: {
+							id: 2,
+							title: 'Drone Meditation',
+							year: 2019,
+							artists: [{ name: 'Drone Collective', id: 2 }],
+							genres: ['Electronic'],
+							styles: ['Drone'], // Has "drone" only
+							formats: [{ name: 'Vinyl', qty: '1' }],
+							labels: [{ name: 'Drone Records', catno: 'DR001' }],
+							resource_url: 'https://api.discogs.com/releases/2',
+							thumb: '',
+							cover_image: '',
+						},
+					},
+					{
+						id: 3,
+						instance_id: 3,
+						date_added: '2023-01-03T00:00:00-08:00',
+						rating: 4,
+						basic_information: {
+							id: 3,
+							title: 'Progressive Journey',
+							year: 2021,
+							artists: [{ name: 'Prog Band', id: 3 }],
+							genres: ['Rock'],
+							styles: ['Progressive Rock'], // Has "progressive" only
+							formats: [{ name: 'CD', qty: '1' }],
+							labels: [{ name: 'Prog Records', catno: 'PR001' }],
+							resource_url: 'https://api.discogs.com/releases/3',
+							thumb: '',
+							cover_image: '',
+						},
+					},
+					{
+						id: 4,
+						instance_id: 4,
+						date_added: '2023-01-04T00:00:00-08:00',
+						rating: 3,
+						basic_information: {
+							id: 4,
+							title: 'Jazz Fusion',
+							year: 1975,
+							artists: [{ name: 'Jazz Artist', id: 4 }],
+							genres: ['Jazz'],
+							styles: ['Fusion'], // Has none of the search terms
+							formats: [{ name: 'Vinyl', qty: '1' }],
+							labels: [{ name: 'Jazz Records', catno: 'JZ001' }],
+							resource_url: 'https://api.discogs.com/releases/4',
+							thumb: '',
+							cover_image: '',
+						},
+					},
+					{
+						id: 5,
+						instance_id: 5,
+						date_added: '2023-01-05T00:00:00-08:00',
+						rating: 5,
+						basic_information: {
+							id: 5,
+							title: 'Ambient Drone Soundscape',
+							year: 2022,
+							artists: [{ name: 'Experimental Artist', id: 5 }],
+							genres: ['Electronic'],
+							styles: ['Ambient', 'Drone'], // Has both "ambient" and "drone"
+							formats: [{ name: 'Digital', qty: '1' }],
+							labels: [{ name: 'Experimental Records', catno: 'EXP001' }],
+							resource_url: 'https://api.discogs.com/releases/5',
+							thumb: '',
+							cover_image: '',
+						},
+					},
+				],
+			}
+
+			mockFetch.mockResolvedValueOnce({
+				ok: true,
+				json: () => Promise.resolve(mockResponse),
+			})
+
+			// Search for "ambient drone progressive" - should use OR logic and match releases with ANY of these terms
+			const result = await discogsClient.searchCollection(
+				mockAuth.username,
+				mockAuth.accessToken,
+				mockAuth.accessTokenSecret,
+				{ query: 'ambient drone progressive', per_page: 50 },
+				mockAuth.consumerKey,
+				mockAuth.consumerSecret,
+			)
+
+			// Should match: Pure Ambient, Drone Meditation, Progressive Journey, Ambient Drone Soundscape
+			// Should NOT match: Jazz Fusion (has no matching terms)
+			expect(result.releases).toHaveLength(4)
+			expect(result.releases.map((r) => r.basic_information.title)).toEqual(
+				expect.arrayContaining(['Pure Ambient', 'Drone Meditation', 'Progressive Journey', 'Ambient Drone Soundscape']),
+			)
+			expect(result.releases.map((r) => r.basic_information.title)).not.toContain('Jazz Fusion')
+			expect(result.pagination.items).toBe(4)
+		})
 	})
 })

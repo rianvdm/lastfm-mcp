@@ -452,8 +452,33 @@ export class DiscogsClient {
 
 				const searchableText = searchableFields.join(' ').toLowerCase()
 
-				// Check non-decade terms (all must match)
-				const nonDecadeMatch = nonDecadeTerms.length === 0 || nonDecadeTerms.every((term) => searchableText.includes(term))
+				// Check if this looks like a genre/style query (common genre/style terms)
+				const genreStyleTerms = [
+					'ambient', 'drone', 'progressive', 'rock', 'jazz', 'blues', 'electronic', 'techno', 'house',
+					'metal', 'punk', 'folk', 'country', 'classical', 'hip', 'hop', 'rap', 'soul', 'funk', 'disco',
+					'reggae', 'ska', 'indie', 'alternative', 'psychedelic', 'experimental', 'avant-garde',
+					'minimal', 'downtempo', 'chillout', 'trance', 'dubstep', 'garage', 'post-rock', 'post-punk',
+					'new wave', 'synthpop', 'industrial', 'gothic', 'darkwave', 'shoegaze', 'grunge', 'hardcore'
+				]
+				
+				const isGenreStyleQuery = nonDecadeTerms.some(term => 
+					genreStyleTerms.includes(term.toLowerCase()) ||
+					// Also check if the term appears in the release's genres or styles
+					release.genres?.some(g => g.toLowerCase().includes(term.toLowerCase())) ||
+					release.styles?.some(s => s.toLowerCase().includes(term.toLowerCase()))
+				)
+
+				// Check non-decade terms using OR logic for genre/style queries, AND logic for others
+				let nonDecadeMatch = false
+				if (nonDecadeTerms.length === 0) {
+					nonDecadeMatch = true
+				} else if (isGenreStyleQuery) {
+					// Use OR logic for genre/style queries - at least one term must match
+					nonDecadeMatch = nonDecadeTerms.some((term) => searchableText.includes(term))
+				} else {
+					// Use AND logic for other queries - all terms must match (original behavior)
+					nonDecadeMatch = nonDecadeTerms.every((term) => searchableText.includes(term))
+				}
 
 				// Check decade terms (at least one must match - OR logic for conflicting decades)
 				const decadeMatch =
