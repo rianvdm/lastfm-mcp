@@ -32,6 +32,7 @@ import {
 } from './validation'
 import { verifySessionToken, SessionPayload } from '../auth/jwt'
 import { discogsClient, type DiscogsCollectionItem } from '../clients/discogs'
+import { analyzeMoodQuery, hasMoodContent, generateMoodSearchTerms } from '../utils/moodMapping'
 
 /**
  * Extract and verify session token from request
@@ -555,26 +556,69 @@ If the problem persists, please check that your Discogs account is accessible.`,
 				const consumerSecret = env?.DISCOGS_CONSUMER_SECRET || ''
 
 				const userProfile = await discogsClient.getUserProfile(session.accessToken, session.accessTokenSecret, consumerKey, consumerSecret)
-				const results = await discogsClient.searchCollection(
-					userProfile.username,
-					session.accessToken,
-					session.accessTokenSecret,
-					{
-						query,
-						per_page: perPage,
-					},
-					consumerKey,
-					consumerSecret,
-				)
+				
+				// Check if query contains mood/contextual language
+				const searchQueries: string[] = [query] // Start with original query
+				let moodInfo = ''
+				
+				if (hasMoodContent(query)) {
+					const moodAnalysis = analyzeMoodQuery(query)
+					if (moodAnalysis.confidence >= 0.3) {
+						// Add mood-based search terms while preserving original query
+						const moodTerms = generateMoodSearchTerms(query)
+						if (moodTerms.length > 0) {
+							searchQueries.push(...moodTerms.slice(0, 3)) // Add top 3 mood-based terms
+							moodInfo = `\n**Mood Analysis:** Detected "${moodAnalysis.detectedMoods.join(', ')}" - searching for ${moodTerms.slice(0, 3).join(', ')}\n`
+						}
+					}
+				}
 
-				const summary = `Found ${results.pagination.items} results for "${query}" in your collection (showing ${results.releases.length} items):`
+				// Perform searches for all query variations and combine results
+				const allResults: DiscogsCollectionItem[] = []
+				const seenReleaseIds = new Set<string>()
+				
+				for (const searchQuery of searchQueries) {
+					const searchResults = await discogsClient.searchCollection(
+						userProfile.username,
+						session.accessToken,
+						session.accessTokenSecret,
+						{
+							query: searchQuery,
+							per_page: perPage,
+						},
+						consumerKey,
+						consumerSecret,
+					)
+					
+					// Add unique results (avoid duplicates)
+					for (const release of searchResults.releases) {
+						const releaseKey = `${release.id}-${release.instance_id}`
+						if (!seenReleaseIds.has(releaseKey)) {
+							seenReleaseIds.add(releaseKey)
+							allResults.push(release)
+						}
+					}
+				}
+
+				// Sort combined results by rating and date
+				allResults.sort((a: DiscogsCollectionItem, b: DiscogsCollectionItem) => {
+					if (a.rating !== b.rating) {
+						return b.rating - a.rating
+					}
+					return new Date(b.date_added).getTime() - new Date(a.date_added).getTime()
+				})
+
+				// Limit to requested page size
+				const finalResults = allResults.slice(0, perPage)
+				
+				const summary = `Found ${allResults.length} results for "${query}" in your collection (showing ${finalResults.length} items):`
 
 				// Create concise formatted list with genres and styles
-				const releaseList = results.releases
-					.map((release) => {
+				const releaseList = finalResults
+					.map((release: DiscogsCollectionItem) => {
 						const info = release.basic_information
-						const artists = info.artists.map((a) => a.name).join(', ')
-						const formats = info.formats.map((f) => f.name).join(', ')
+						const artists = info.artists.map((a: { name: string }) => a.name).join(', ')
+						const formats = info.formats.map((f: { name: string }) => f.name).join(', ')
 						const genres = info.genres?.length ? info.genres.join(', ') : 'Unknown'
 						const styles = info.styles?.length ? ` | Styles: ${info.styles.join(', ')}` : ''
 						const rating = release.rating > 0 ? ` ⭐${release.rating}` : ''
@@ -587,7 +631,7 @@ If the problem persists, please check that your Discogs account is accessible.`,
 					content: [
 						{
 							type: 'text',
-							text: `${summary}\n\n${releaseList}\n\n**Tip:** Use the release IDs with the get_release tool for detailed information about specific albums.`,
+							text: `${summary}${moodInfo}\n${releaseList}\n\n**Tip:** Use the release IDs with the get_release tool for detailed information about specific albums.`,
 						},
 					],
 				}
@@ -706,6 +750,37 @@ If the problem persists, please check that your Discogs account is accessible.`,
 
 			// Type for release with relevance score
 			type ReleaseWithRelevance = DiscogsCollectionItem & { relevanceScore?: number }
+			
+			// Analyze mood content in parameters to enhance filtering
+			let moodGenres: string[] = []
+			let moodStyles: string[] = []
+			let moodInfo = ''
+			
+			// Check for mood content in query parameter
+			if (query && hasMoodContent(query)) {
+				const moodAnalysis = analyzeMoodQuery(query)
+				if (moodAnalysis.confidence >= 0.3) {
+					moodGenres = moodAnalysis.suggestedGenres
+					moodStyles = moodAnalysis.suggestedStyles
+					moodInfo = `\n**Mood Analysis:** Detected "${moodAnalysis.detectedMoods.join(', ')}"${moodAnalysis.contextualHints.length ? ` (${moodAnalysis.contextualHints.join(', ')})` : ''}\n`
+				}
+			}
+			
+			// Also check genre parameter for mood terms
+			if (genre && hasMoodContent(genre)) {
+				const genreMoodAnalysis = analyzeMoodQuery(genre)
+				if (genreMoodAnalysis.confidence >= 0.3) {
+					moodGenres = [...moodGenres, ...genreMoodAnalysis.suggestedGenres]
+					moodStyles = [...moodStyles, ...genreMoodAnalysis.suggestedStyles]
+					if (!moodInfo) {
+						moodInfo = `\n**Mood Analysis:** Detected "${genreMoodAnalysis.detectedMoods.join(', ')}" in genre filter\n`
+					}
+				}
+			}
+			
+			// Remove duplicates from mood mappings
+			moodGenres = [...new Set(moodGenres)]
+			moodStyles = [...new Set(moodStyles)]
 
 			try {
 				const consumerKey = env?.DISCOGS_CONSUMER_KEY || ''
@@ -740,12 +815,39 @@ If the problem persists, please check that your Discogs account is accessible.`,
 				// Filter releases based on context parameters
 				let filteredReleases = allReleases
 
-				// Filter by genre
-				if (genre) {
+				// Filter by genre (enhanced with mood mapping)
+				if (genre || moodGenres.length > 0) {
 					filteredReleases = filteredReleases.filter(
-						(release) =>
-							release.basic_information.genres?.some((g) => g.toLowerCase().includes(genre.toLowerCase())) ||
-							release.basic_information.styles?.some((s) => s.toLowerCase().includes(genre.toLowerCase())),
+						(release) => {
+							const releaseGenres = release.basic_information.genres?.map(g => g.toLowerCase()) || []
+							const releaseStyles = release.basic_information.styles?.map(s => s.toLowerCase()) || []
+							
+							// Original genre matching (if genre parameter provided)
+							let genreMatch = false
+							if (genre) {
+								genreMatch = releaseGenres.some((g) => g.includes(genre.toLowerCase())) ||
+											releaseStyles.some((s) => s.includes(genre.toLowerCase()))
+							}
+							
+							// Mood-based genre matching
+							let moodMatch = false
+							if (moodGenres.length > 0 || moodStyles.length > 0) {
+								const lowerMoodGenres = moodGenres.map(g => g.toLowerCase())
+								const lowerMoodStyles = moodStyles.map(s => s.toLowerCase())
+								
+								moodMatch = releaseGenres.some(g => lowerMoodGenres.some(mg => g.includes(mg) || mg.includes(g))) ||
+										   releaseStyles.some(s => lowerMoodStyles.some(ms => s.includes(ms) || ms.includes(s)))
+							}
+							
+							// Return true if either genre or mood criteria match (when applicable)
+							if (genre && (moodGenres.length > 0 || moodStyles.length > 0)) {
+								return genreMatch || moodMatch
+							} else if (genre) {
+								return genreMatch
+							} else {
+								return moodMatch
+							}
+						}
 					)
 				}
 
@@ -915,14 +1017,19 @@ If the problem persists, please check that your Discogs account is accessible.`,
 				// Build response
 				let text = `**Context-Aware Music Recommendations**\n\n`
 
-				if (genre || decade || similarTo || query || format) {
+				if (genre || decade || similarTo || query || format || moodGenres.length > 0) {
 					text += `**Filters Applied:**\n`
 					if (genre) text += `• Genre: ${genre}\n`
 					if (decade) text += `• Decade: ${decade}\n`
 					if (format) text += `• Format: ${format}\n`
 					if (similarTo) text += `• Similar to: ${similarTo}\n`
 					if (query) text += `• Query: ${query}\n`
+					if (moodGenres.length > 0) text += `• Mood-based genres: ${moodGenres.slice(0, 5).join(', ')}\n`
 					text += `\n`
+				}
+				
+				if (moodInfo) {
+					text += moodInfo
 				}
 
 				text += `Found ${filteredReleases.length} matching releases in your collection (showing top ${recommendations.length}):\n\n`
@@ -932,6 +1039,8 @@ If the problem persists, please check that your Discogs account is accessible.`,
 					text += `• Broadening your search terms\n`
 					text += `• Using different genres or decades\n`
 					text += `• Searching for specific artists you own\n`
+					text += `• Using mood descriptors like "mellow", "energetic", "melancholy"\n`
+					text += `• Trying contextual terms like "Sunday evening", "rainy day", "workout"\n`
 				} else {
 					recommendations.forEach((release, index) => {
 						const info = release.basic_information
@@ -1081,13 +1190,13 @@ export async function handleMethod(request: JSONRPCRequest, httpRequest?: Reques
 				},
 				{
 					name: 'search_collection',
-					description: "Search through the user's Discogs collection",
+					description: "Search through the user's Discogs collection with mood and contextual awareness",
 					inputSchema: {
 						type: 'object',
 						properties: {
 							query: {
 								type: 'string',
-								description: 'Search query (artist, album, track, etc.)',
+								description: 'Search query - supports artist/album names, genres, and mood descriptors like "mellow", "energetic", "Sunday evening", "melancholy"',
 							},
 							per_page: {
 								type: 'number',
@@ -1125,7 +1234,7 @@ export async function handleMethod(request: JSONRPCRequest, httpRequest?: Reques
 				},
 				{
 					name: 'get_recommendations',
-					description: "Get context-aware music recommendations based on the user's collection",
+					description: "Get context-aware music recommendations with mood and emotional understanding",
 					inputSchema: {
 						type: 'object',
 						properties: {
@@ -1138,7 +1247,7 @@ export async function handleMethod(request: JSONRPCRequest, httpRequest?: Reques
 							},
 							genre: {
 								type: 'string',
-								description: 'Filter recommendations by genre (e.g., "Jazz", "Rock", "Electronic")',
+								description: 'Filter by genre or mood - supports both concrete genres ("Jazz", "Rock") and mood descriptors ("mellow", "energetic", "melancholy")',
 							},
 							decade: {
 								type: 'string',
@@ -1150,7 +1259,7 @@ export async function handleMethod(request: JSONRPCRequest, httpRequest?: Reques
 							},
 							query: {
 								type: 'string',
-								description: 'General query for contextual recommendations (e.g., "hard bop albums from the 60s")',
+								description: 'Contextual query with mood support - try "Sunday evening vibes", "energetic workout music", "mellow jazz for studying"',
 							},
 							format: {
 								type: 'string',

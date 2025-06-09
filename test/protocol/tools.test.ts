@@ -259,6 +259,25 @@ describe('MCP Tools', () => {
 							cover_image: '',
 						},
 					},
+					{
+						id: 2,
+						instance_id: 2,
+						date_added: '2023-01-02T00:00:00-08:00',
+						rating: 4,
+						basic_information: {
+							id: 2,
+							title: 'Another Rock Album',
+							year: 2022,
+							artists: [{ name: 'Another Artist', id: 2 }],
+							genres: ['Rock'],
+							styles: ['Classic Rock'],
+							formats: [{ name: 'CD', qty: '1' }],
+							labels: [{ name: 'Another Label', catno: 'TEST002' }],
+							resource_url: 'https://api.discogs.com/releases/2',
+							thumb: '',
+							cover_image: '',
+						},
+					},
 				],
 			}
 
