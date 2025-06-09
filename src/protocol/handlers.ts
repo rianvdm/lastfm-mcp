@@ -494,7 +494,7 @@ async function handleAuthenticatedToolsCall(params: unknown, session: SessionPay
 
 				// Try to get user profile to verify authentication
 				const userProfile = await discogsClient.getUserProfile(session.accessToken, session.accessTokenSecret, consumerKey, consumerSecret)
-				
+
 				return {
 					content: [
 						{
@@ -542,7 +542,7 @@ If the problem persists, please check that your Discogs account is accessible.`,
 				}
 			}
 		}
-		
+
 		case 'search_collection': {
 			const query = args?.query as string
 			if (!query) {
@@ -556,11 +556,11 @@ If the problem persists, please check that your Discogs account is accessible.`,
 				const consumerSecret = env?.DISCOGS_CONSUMER_SECRET || ''
 
 				const userProfile = await discogsClient.getUserProfile(session.accessToken, session.accessTokenSecret, consumerKey, consumerSecret)
-				
+
 				// Check if query contains mood/contextual language
 				const searchQueries: string[] = [query] // Start with original query
 				let moodInfo = ''
-				
+
 				if (hasMoodContent(query)) {
 					const moodAnalysis = analyzeMoodQuery(query)
 					if (moodAnalysis.confidence >= 0.3) {
@@ -576,7 +576,7 @@ If the problem persists, please check that your Discogs account is accessible.`,
 				// Perform searches for all query variations and combine results
 				const allResults: DiscogsCollectionItem[] = []
 				const seenReleaseIds = new Set<string>()
-				
+
 				for (const searchQuery of searchQueries) {
 					const searchResults = await discogsClient.searchCollection(
 						userProfile.username,
@@ -589,7 +589,7 @@ If the problem persists, please check that your Discogs account is accessible.`,
 						consumerKey,
 						consumerSecret,
 					)
-					
+
 					// Add unique results (avoid duplicates)
 					for (const release of searchResults.releases) {
 						const releaseKey = `${release.id}-${release.instance_id}`
@@ -610,7 +610,7 @@ If the problem persists, please check that your Discogs account is accessible.`,
 
 				// Limit to requested page size
 				const finalResults = allResults.slice(0, perPage)
-				
+
 				const summary = `Found ${allResults.length} results for "${query}" in your collection (showing ${finalResults.length} items):`
 
 				// Create concise formatted list with genres and styles
@@ -622,7 +622,7 @@ If the problem persists, please check that your Discogs account is accessible.`,
 						const genres = info.genres?.length ? info.genres.join(', ') : 'Unknown'
 						const styles = info.styles?.length ? ` | Styles: ${info.styles.join(', ')}` : ''
 						const rating = release.rating > 0 ? ` ⭐${release.rating}` : ''
-						
+
 						return `• [ID: ${release.id}] ${artists} - ${info.title} (${info.year})\n  Format: ${formats} | Genre: ${genres}${styles}${rating}`
 					})
 					.join('\n\n')
@@ -750,12 +750,12 @@ If the problem persists, please check that your Discogs account is accessible.`,
 
 			// Type for release with relevance score
 			type ReleaseWithRelevance = DiscogsCollectionItem & { relevanceScore?: number }
-			
+
 			// Analyze mood content in parameters to enhance filtering
 			let moodGenres: string[] = []
 			let moodStyles: string[] = []
 			let moodInfo = ''
-			
+
 			// Check for mood content in query parameter
 			if (query && hasMoodContent(query)) {
 				const moodAnalysis = analyzeMoodQuery(query)
@@ -765,7 +765,7 @@ If the problem persists, please check that your Discogs account is accessible.`,
 					moodInfo = `\n**Mood Analysis:** Detected "${moodAnalysis.detectedMoods.join(', ')}"${moodAnalysis.contextualHints.length ? ` (${moodAnalysis.contextualHints.join(', ')})` : ''}\n`
 				}
 			}
-			
+
 			// Also check genre parameter for mood terms
 			if (genre && hasMoodContent(genre)) {
 				const genreMoodAnalysis = analyzeMoodQuery(genre)
@@ -777,7 +777,7 @@ If the problem persists, please check that your Discogs account is accessible.`,
 					}
 				}
 			}
-			
+
 			// Remove duplicates from mood mappings
 			moodGenres = [...new Set(moodGenres)]
 			moodStyles = [...new Set(moodStyles)]
@@ -817,38 +817,37 @@ If the problem persists, please check that your Discogs account is accessible.`,
 
 				// Filter by genre (enhanced with mood mapping)
 				if (genre || moodGenres.length > 0) {
-					filteredReleases = filteredReleases.filter(
-						(release) => {
-							const releaseGenres = release.basic_information.genres?.map(g => g.toLowerCase()) || []
-							const releaseStyles = release.basic_information.styles?.map(s => s.toLowerCase()) || []
-							
-							// Original genre matching (if genre parameter provided)
-							let genreMatch = false
-							if (genre) {
-								genreMatch = releaseGenres.some((g) => g.includes(genre.toLowerCase())) ||
-											releaseStyles.some((s) => s.includes(genre.toLowerCase()))
-							}
-							
-							// Mood-based genre matching
-							let moodMatch = false
-							if (moodGenres.length > 0 || moodStyles.length > 0) {
-								const lowerMoodGenres = moodGenres.map(g => g.toLowerCase())
-								const lowerMoodStyles = moodStyles.map(s => s.toLowerCase())
-								
-								moodMatch = releaseGenres.some(g => lowerMoodGenres.some(mg => g.includes(mg) || mg.includes(g))) ||
-										   releaseStyles.some(s => lowerMoodStyles.some(ms => s.includes(ms) || ms.includes(s)))
-							}
-							
-							// Return true if either genre or mood criteria match (when applicable)
-							if (genre && (moodGenres.length > 0 || moodStyles.length > 0)) {
-								return genreMatch || moodMatch
-							} else if (genre) {
-								return genreMatch
-							} else {
-								return moodMatch
-							}
+					filteredReleases = filteredReleases.filter((release) => {
+						const releaseGenres = release.basic_information.genres?.map((g) => g.toLowerCase()) || []
+						const releaseStyles = release.basic_information.styles?.map((s) => s.toLowerCase()) || []
+
+						// Original genre matching (if genre parameter provided)
+						let genreMatch = false
+						if (genre) {
+							genreMatch =
+								releaseGenres.some((g) => g.includes(genre.toLowerCase())) || releaseStyles.some((s) => s.includes(genre.toLowerCase()))
 						}
-					)
+
+						// Mood-based genre matching
+						let moodMatch = false
+						if (moodGenres.length > 0 || moodStyles.length > 0) {
+							const lowerMoodGenres = moodGenres.map((g) => g.toLowerCase())
+							const lowerMoodStyles = moodStyles.map((s) => s.toLowerCase())
+
+							moodMatch =
+								releaseGenres.some((g) => lowerMoodGenres.some((mg) => g.includes(mg) || mg.includes(g))) ||
+								releaseStyles.some((s) => lowerMoodStyles.some((ms) => s.includes(ms) || ms.includes(s)))
+						}
+
+						// Return true if either genre or mood criteria match (when applicable)
+						if (genre && (moodGenres.length > 0 || moodStyles.length > 0)) {
+							return genreMatch || moodMatch
+						} else if (genre) {
+							return genreMatch
+						} else {
+							return moodMatch
+						}
+					})
 				}
 
 				// Filter by decade
@@ -865,31 +864,34 @@ If the problem persists, please check that your Discogs account is accessible.`,
 				// Filter by format
 				if (format) {
 					filteredReleases = filteredReleases.filter((release) => {
-						return release.basic_information.formats?.some((f) => 
-							f.name.toLowerCase().includes(format.toLowerCase())
-						)
+						return release.basic_information.formats?.some((f) => f.name.toLowerCase().includes(format.toLowerCase()))
 					})
 				}
 
 				// Filter by similarity to artist/album using musical characteristics
 				if (similarTo) {
 					// Step 1: Find reference release(s) that match the similarTo query
-					const similarTerms = similarTo.toLowerCase().split(/\s+/).filter(term => term.length > 2)
+					const similarTerms = similarTo
+						.toLowerCase()
+						.split(/\s+/)
+						.filter((term) => term.length > 2)
 					const referenceReleases = filteredReleases.filter((release) => {
 						const info = release.basic_information
 						const searchableText = [
-							...info.artists?.map(artist => artist.name) || [],
+							...(info.artists?.map((artist) => artist.name) || []),
 							info.title,
-							...info.genres || [],
-							...info.styles || [],
-							...info.labels?.map(label => label.name) || []
-						].join(' ').toLowerCase()
-						
+							...(info.genres || []),
+							...(info.styles || []),
+							...(info.labels?.map((label) => label.name) || []),
+						]
+							.join(' ')
+							.toLowerCase()
+
 						// Find releases that match the similarTo terms
-						const matchingTerms = similarTerms.filter(term => searchableText.includes(term)).length
+						const matchingTerms = similarTerms.filter((term) => searchableText.includes(term)).length
 						return matchingTerms >= Math.ceil(similarTerms.length * 0.5)
 					})
-					
+
 					if (referenceReleases.length > 0) {
 						// Step 2: Extract musical characteristics from reference releases
 						const refGenres = new Set<string>()
@@ -897,49 +899,49 @@ If the problem persists, please check that your Discogs account is accessible.`,
 						const refArtists = new Set<string>()
 						let refEraStart = Infinity
 						let refEraEnd = 0
-						
-						referenceReleases.forEach(release => {
+
+						referenceReleases.forEach((release) => {
 							const info = release.basic_information
-							info.genres?.forEach(g => refGenres.add(g.toLowerCase()))
-							info.styles?.forEach(s => refStyles.add(s.toLowerCase()))
-							info.artists?.forEach(a => refArtists.add(a.name.toLowerCase()))
+							info.genres?.forEach((g) => refGenres.add(g.toLowerCase()))
+							info.styles?.forEach((s) => refStyles.add(s.toLowerCase()))
+							info.artists?.forEach((a) => refArtists.add(a.name.toLowerCase()))
 							if (info.year) {
 								refEraStart = Math.min(refEraStart, info.year)
 								refEraEnd = Math.max(refEraEnd, info.year)
 							}
 						})
-						
+
 						// Expand era window by ±5 years for similar releases
 						const eraBuffer = 5
 						refEraStart = refEraStart === Infinity ? 0 : refEraStart - eraBuffer
 						refEraEnd = refEraEnd === 0 ? 9999 : refEraEnd + eraBuffer
-						
+
 						// Step 3: Find releases with similar musical characteristics
 						filteredReleases = filteredReleases.filter((release) => {
 							const info = release.basic_information
 							let similarityScore = 0
-							
+
 							// Genre matching (highest weight)
-							const releaseGenres = (info.genres || []).map(g => g.toLowerCase())
-							const genreMatches = releaseGenres.filter(g => refGenres.has(g)).length
+							const releaseGenres = (info.genres || []).map((g) => g.toLowerCase())
+							const genreMatches = releaseGenres.filter((g) => refGenres.has(g)).length
 							if (genreMatches > 0) similarityScore += genreMatches * 3
-							
+
 							// Style matching (high weight)
-							const releaseStyles = (info.styles || []).map(s => s.toLowerCase())
-							const styleMatches = releaseStyles.filter(s => refStyles.has(s)).length
+							const releaseStyles = (info.styles || []).map((s) => s.toLowerCase())
+							const styleMatches = releaseStyles.filter((s) => refStyles.has(s)).length
 							if (styleMatches > 0) similarityScore += styleMatches * 2
-							
+
 							// Era matching (medium weight)
 							const releaseYear = info.year || 0
 							if (releaseYear >= refEraStart && releaseYear <= refEraEnd) {
 								similarityScore += 1
 							}
-							
+
 							// Artist collaboration (bonus points for shared artists)
-							const releaseArtists = (info.artists || []).map(a => a.name.toLowerCase())
-							const artistMatches = releaseArtists.filter(a => refArtists.has(a)).length
+							const releaseArtists = (info.artists || []).map((a) => a.name.toLowerCase())
+							const artistMatches = releaseArtists.filter((a) => refArtists.has(a)).length
 							if (artistMatches > 0) similarityScore += artistMatches * 1
-							
+
 							// Require minimum similarity score (at least genre or style match)
 							return similarityScore >= 2
 						})
@@ -951,56 +953,68 @@ If the problem persists, please check that your Discogs account is accessible.`,
 
 				// Filter by general query with smart term matching
 				if (query) {
-					const queryTerms = query.toLowerCase().split(/\s+/).filter(term => term.length > 2) // Split into words, ignore short words
+					const queryTerms = query
+						.toLowerCase()
+						.split(/\s+/)
+						.filter((term) => term.length > 2) // Split into words, ignore short words
 					filteredReleases = filteredReleases.filter((release) => {
 						const info = release.basic_information
-						
+
 						// Create searchable text from all release information
 						const searchableText = [
-							...info.artists?.map(artist => artist.name) || [],
+							...(info.artists?.map((artist) => artist.name) || []),
 							info.title,
-							...info.genres || [],
-							...info.styles || [],
-							...info.labels?.map(label => label.name) || []
-						].join(' ').toLowerCase()
-						
+							...(info.genres || []),
+							...(info.styles || []),
+							...(info.labels?.map((label) => label.name) || []),
+						]
+							.join(' ')
+							.toLowerCase()
+
 						// For recommendations, require at least 50% of terms to match for relevance
-						const matchingTerms = queryTerms.filter(term => searchableText.includes(term)).length
+						const matchingTerms = queryTerms.filter((term) => searchableText.includes(term)).length
 						return matchingTerms >= Math.ceil(queryTerms.length * 0.5)
 					})
 				}
 
 				// Calculate relevance scores for query-based searches
 				if (query) {
-					const queryTerms = query.toLowerCase().split(/\s+/).filter(term => term.length > 2)
-					
-					filteredReleases = filteredReleases.map((release): ReleaseWithRelevance => {
-						const info = release.basic_information
-						const searchableText = [
-							...info.artists?.map(artist => artist.name) || [],
-							info.title,
-							...info.genres || [],
-							...info.styles || [],
-							...info.labels?.map(label => label.name) || []
-						].join(' ').toLowerCase()
-						
-						// Count matching terms for relevance scoring
-						const matchingTerms = queryTerms.filter(term => searchableText.includes(term)).length
-						const relevanceScore = matchingTerms / queryTerms.length
-						
-						return { ...release, relevanceScore }
-					}).sort((a, b) => {
-						// Sort by relevance first, then rating, then date
-						const aRelevance = a.relevanceScore || 0
-						const bRelevance = b.relevanceScore || 0
-						if (aRelevance !== bRelevance) {
-							return bRelevance - aRelevance
-						}
-						if (a.rating !== b.rating) {
-							return b.rating - a.rating
-						}
-						return new Date(b.date_added).getTime() - new Date(a.date_added).getTime()
-					})
+					const queryTerms = query
+						.toLowerCase()
+						.split(/\s+/)
+						.filter((term) => term.length > 2)
+
+					filteredReleases = filteredReleases
+						.map((release): ReleaseWithRelevance => {
+							const info = release.basic_information
+							const searchableText = [
+								...(info.artists?.map((artist) => artist.name) || []),
+								info.title,
+								...(info.genres || []),
+								...(info.styles || []),
+								...(info.labels?.map((label) => label.name) || []),
+							]
+								.join(' ')
+								.toLowerCase()
+
+							// Count matching terms for relevance scoring
+							const matchingTerms = queryTerms.filter((term) => searchableText.includes(term)).length
+							const relevanceScore = matchingTerms / queryTerms.length
+
+							return { ...release, relevanceScore }
+						})
+						.sort((a, b) => {
+							// Sort by relevance first, then rating, then date
+							const aRelevance = a.relevanceScore || 0
+							const bRelevance = b.relevanceScore || 0
+							if (aRelevance !== bRelevance) {
+								return bRelevance - aRelevance
+							}
+							if (a.rating !== b.rating) {
+								return b.rating - a.rating
+							}
+							return new Date(b.date_added).getTime() - new Date(a.date_added).getTime()
+						})
 				} else {
 					// Sort by rating (highest first) and then by date added (newest first)
 					filteredReleases.sort((a, b) => {
@@ -1027,7 +1041,7 @@ If the problem persists, please check that your Discogs account is accessible.`,
 					if (moodGenres.length > 0) text += `• Mood-based genres: ${moodGenres.slice(0, 5).join(', ')}\n`
 					text += `\n`
 				}
-				
+
 				if (moodInfo) {
 					text += moodInfo
 				}
@@ -1049,7 +1063,8 @@ If the problem persists, please check that your Discogs account is accessible.`,
 						const genres = info.genres?.join(', ') || 'Unknown'
 						const year = info.year || 'Unknown'
 						const rating = release.rating > 0 ? ` ⭐${release.rating}` : ''
-						const relevance = query && 'relevanceScore' in release ? ` (${Math.round((release as ReleaseWithRelevance).relevanceScore! * 100)}% match)` : ''
+						const relevance =
+							query && 'relevanceScore' in release ? ` (${Math.round((release as ReleaseWithRelevance).relevanceScore! * 100)}% match)` : ''
 
 						text += `${index + 1}. **${artists} - ${info.title}** (${year})${rating}${relevance}\n`
 						text += `   Format: ${formats} | Genres: ${genres}\n`
@@ -1145,14 +1160,14 @@ export async function handleMethod(request: JSONRPCRequest, httpRequest?: Reques
 	// In stateless HTTP mode, we don't enforce initialization state
 	// The mcp-remote client handles the proper initialization flow
 
-			// Some methods don't require authentication
-		switch (method) {
-			case 'resources/list': {
-				const resourcesResult = handleResourcesList()
-				return hasId(request) ? createResponse(id!, resourcesResult) : null
-			}
+	// Some methods don't require authentication
+	switch (method) {
+		case 'resources/list': {
+			const resourcesResult = handleResourcesList()
+			return hasId(request) ? createResponse(id!, resourcesResult) : null
+		}
 
-			case 'tools/list': {
+		case 'tools/list': {
 			// Return all available Discogs tools
 			const tools = [
 				{
@@ -1196,7 +1211,8 @@ export async function handleMethod(request: JSONRPCRequest, httpRequest?: Reques
 						properties: {
 							query: {
 								type: 'string',
-								description: 'Search query - supports artist/album names, genres, and mood descriptors like "mellow", "energetic", "Sunday evening", "melancholy"',
+								description:
+									'Search query - supports artist/album names, genres, and mood descriptors like "mellow", "energetic", "Sunday evening", "melancholy"',
 							},
 							per_page: {
 								type: 'number',
@@ -1234,7 +1250,7 @@ export async function handleMethod(request: JSONRPCRequest, httpRequest?: Reques
 				},
 				{
 					name: 'get_recommendations',
-					description: "Get context-aware music recommendations with mood and emotional understanding",
+					description: 'Get context-aware music recommendations with mood and emotional understanding',
 					inputSchema: {
 						type: 'object',
 						properties: {
@@ -1247,7 +1263,8 @@ export async function handleMethod(request: JSONRPCRequest, httpRequest?: Reques
 							},
 							genre: {
 								type: 'string',
-								description: 'Filter by genre or mood - supports both concrete genres ("Jazz", "Rock") and mood descriptors ("mellow", "energetic", "melancholy")',
+								description:
+									'Filter by genre or mood - supports both concrete genres ("Jazz", "Rock") and mood descriptors ("mellow", "energetic", "melancholy")',
 							},
 							decade: {
 								type: 'string',
@@ -1259,7 +1276,8 @@ export async function handleMethod(request: JSONRPCRequest, httpRequest?: Reques
 							},
 							query: {
 								type: 'string',
-								description: 'Contextual query with mood support - try "Sunday evening vibes", "energetic workout music", "mellow jazz for studying"',
+								description:
+									'Contextual query with mood support - try "Sunday evening vibes", "energetic workout music", "mellow jazz for studying"',
 							},
 							format: {
 								type: 'string',
@@ -1321,7 +1339,11 @@ export async function handleMethod(request: JSONRPCRequest, httpRequest?: Reques
 
 					if (!session) {
 						return hasId(request)
-							? createError(id!, MCPErrorCode.Unauthorized, 'Authentication required. Please use the "auth_status" tool for detailed authentication instructions, or visit https://discogs-mcp-prod.rian-db8.workers.dev/login to authenticate with Discogs.')
+							? createError(
+									id!,
+									MCPErrorCode.Unauthorized,
+									'Authentication required. Please use the "auth_status" tool for detailed authentication instructions, or visit https://discogs-mcp-prod.rian-db8.workers.dev/login to authenticate with Discogs.',
+								)
 							: null
 					}
 
@@ -1369,7 +1391,7 @@ export async function handleMethod(request: JSONRPCRequest, httpRequest?: Reques
 	}
 
 	let session = await verifyAuthentication(httpRequest, jwtSecret)
-	
+
 	// If no session from request, try to get the latest session from KV storage
 	if (!session && env?.MCP_SESSIONS) {
 		try {
@@ -1391,10 +1413,14 @@ export async function handleMethod(request: JSONRPCRequest, httpRequest?: Reques
 			console.error('Error retrieving stored session:', error)
 		}
 	}
-	
+
 	if (!session) {
 		if (hasId(request)) {
-			return createError(id!, MCPErrorCode.Unauthorized, 'Authentication required. Please use the "auth_status" tool for detailed authentication instructions, or visit https://discogs-mcp-prod.rian-db8.workers.dev/login to authenticate with Discogs.')
+			return createError(
+				id!,
+				MCPErrorCode.Unauthorized,
+				'Authentication required. Please use the "auth_status" tool for detailed authentication instructions, or visit https://discogs-mcp-prod.rian-db8.workers.dev/login to authenticate with Discogs.',
+			)
 		}
 		return null
 	}

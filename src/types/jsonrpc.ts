@@ -94,10 +94,10 @@ export function mapErrorToJSONRPC(error: unknown): { code: number; message: stri
 			return {
 				code: MCPErrorCode.DiscogsRateLimited,
 				message: 'Discogs API rate limit exceeded',
-				data: { 
+				data: {
 					originalMessage: message,
 					retryAfter: 60, // Default to 60 seconds
-					suggestion: 'The Discogs API has rate limits. Please wait a moment before trying again.'
+					suggestion: 'The Discogs API has rate limits. Please wait a moment before trying again.',
 				},
 			}
 		}

@@ -52,19 +52,19 @@ export class DiscogsAuth {
 	private accessTokenUrl = 'https://api.discogs.com/oauth/access_token'
 	private authorizeUrl = 'https://discogs.com/oauth/authorize'
 	private lastRequestTime = 0
-	
+
 	// Discogs-specific retry configuration for auth requests (more aggressive than default)
 	private readonly discogsRetryOptions: RetryOptions = {
-		maxRetries: 3,           // Balanced for both production and testing
-		initialDelayMs: 1500,    // Moderately increased from default 1000ms
-		maxDelayMs: 20000,       // Reasonable max delay (20s)
+		maxRetries: 3, // Balanced for both production and testing
+		initialDelayMs: 1500, // Moderately increased from default 1000ms
+		maxDelayMs: 20000, // Reasonable max delay (20s)
 		backoffMultiplier: 2,
 		jitterFactor: 0.1,
 	}
-	
+
 	// Minimum delay between auth requests (proactive rate limiting)
 	private readonly REQUEST_DELAY_MS = 200 // 200ms for auth requests (slightly more conservative)
-	
+
 	/**
 	 * Add a small delay between requests to proactively avoid rate limits
 	 */
@@ -72,7 +72,7 @@ export class DiscogsAuth {
 		const timeSinceLastRequest = Date.now() - this.lastRequestTime
 		if (timeSinceLastRequest < this.REQUEST_DELAY_MS) {
 			const delayNeeded = this.REQUEST_DELAY_MS - timeSinceLastRequest
-			await new Promise(resolve => setTimeout(resolve, delayNeeded))
+			await new Promise((resolve) => setTimeout(resolve, delayNeeded))
 		}
 		this.lastRequestTime = Date.now()
 	}
@@ -176,13 +176,17 @@ export class DiscogsAuth {
 
 		try {
 			await this.throttleRequest()
-			const response = await fetchWithRetry(this.requestTokenUrl, {
-				method: 'GET',
-				headers: {
-					Authorization: authHeader,
-					'User-Agent': 'discogs-mcp/1.0.0',
+			const response = await fetchWithRetry(
+				this.requestTokenUrl,
+				{
+					method: 'GET',
+					headers: {
+						Authorization: authHeader,
+						'User-Agent': 'discogs-mcp/1.0.0',
+					},
 				},
-			}, this.discogsRetryOptions)
+				this.discogsRetryOptions,
+			)
 
 			const text = await response.text()
 			console.log('Discogs response:', text)
@@ -237,15 +241,19 @@ export class DiscogsAuth {
 
 		try {
 			await this.throttleRequest()
-			const response = await fetchWithRetry(this.accessTokenUrl, {
-				method: 'POST',
-				headers: {
-					Authorization: authHeader,
-					'Content-Type': 'application/x-www-form-urlencoded',
-					'User-Agent': 'discogs-mcp/1.0.0',
+			const response = await fetchWithRetry(
+				this.accessTokenUrl,
+				{
+					method: 'POST',
+					headers: {
+						Authorization: authHeader,
+						'Content-Type': 'application/x-www-form-urlencoded',
+						'User-Agent': 'discogs-mcp/1.0.0',
+					},
+					body: `oauth_verifier=${encodeURIComponent(oauthVerifier)}`,
 				},
-				body: `oauth_verifier=${encodeURIComponent(oauthVerifier)}`,
-			}, this.discogsRetryOptions)
+				this.discogsRetryOptions,
+			)
 
 			const text = await response.text()
 			const params = new URLSearchParams(text)

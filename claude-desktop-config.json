@@ -2,10 +2,7 @@
 	"mcpServers": {
 		"discogs-local": {
 			"command": "npx",
-			"args": [
-				"mcp-remote",
-				"http://localhost:8787/sse"
-			]
+			"args": ["mcp-remote", "http://localhost:8787/sse"]
 		}
 	}
 }

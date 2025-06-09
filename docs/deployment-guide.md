@@ -23,6 +23,7 @@ CLOUDFLARE_ACCOUNT_ID=your_cloudflare_account_id_here
 ### Getting Cloudflare Credentials
 
 1. **API Token**: Go to [Cloudflare Dashboard → My Profile → API Tokens](https://dash.cloudflare.com/profile/api-tokens)
+
    - Click "Create Token"
    - Use "Custom token" template
    - Permissions: `Zone:Zone:Read`, `Zone:Zone Settings:Edit`, `Account:Cloudflare Workers:Edit`
@@ -40,6 +41,7 @@ npm run setup:prod
 ```
 
 This script will:
+
 1. Create production KV namespaces for logs, rate limiting, and sessions
 2. Prompt you to set the required secrets:
    - `DISCOGS_CONSUMER_KEY` - Your Discogs app consumer key
@@ -85,6 +87,7 @@ git push origin main
 ```
 
 The GitHub Actions workflow will automatically:
+
 1. Run tests and linting
 2. Deploy to production if all checks pass
 3. Comment on the associated PR with deployment status
@@ -106,8 +109,9 @@ curl https://your-worker-domain.workers.dev/health
 ```
 
 Expected response:
+
 ```json
-{"status": "ok", "timestamp": "2024-01-01T00:00:00.000Z"}
+{ "status": "ok", "timestamp": "2024-01-01T00:00:00.000Z" }
 ```
 
 ### 5.2 Test MCP Protocol
@@ -119,6 +123,7 @@ Use the provided test script:
 ```
 
 This script tests:
+
 - MCP initialization
 - Authentication flow
 - Tool functionality
@@ -141,15 +146,12 @@ Add the MCP server to your Claude Desktop configuration file:
 
 ```json
 {
-  "mcpServers": {
-    "discogs": {
-      "command": "npx",
-      "args": [
-        "mcp-remote",
-        "https://your-worker-domain.workers.dev/sse"
-      ]
-    }
-  }
+	"mcpServers": {
+		"discogs": {
+			"command": "npx",
+			"args": ["mcp-remote", "https://your-worker-domain.workers.dev/sse"]
+		}
+	}
 }
 ```
 
@@ -175,24 +177,28 @@ Find jazz albums from the 1960s in my collection
 Use this checklist to verify your production deployment:
 
 ### Infrastructure
+
 - [ ] Production KV namespaces created and configured
 - [ ] Secrets properly set in Cloudflare Workers
 - [ ] GitHub Actions deployment successful
 - [ ] Worker accessible via HTTPS
 
 ### Authentication
+
 - [ ] OAuth login flow works
 - [ ] Discogs callback URL configured correctly
 - [ ] JWT sessions created and validated
 - [ ] Rate limiting functional
 
 ### MCP Protocol
+
 - [ ] Initialize handshake successful
 - [ ] Tools list correctly
 - [ ] Resources list correctly
 - [ ] Prompts list correctly
 
 ### Functionality
+
 - [ ] Collection search works
 - [ ] Release details retrieval works
 - [ ] Collection statistics generation works
@@ -200,6 +206,7 @@ Use this checklist to verify your production deployment:
 - [ ] Error handling graceful
 
 ### Claude Desktop Integration
+
 - [ ] MCP server appears in Claude Desktop
 - [ ] Authentication flow completes in Claude
 - [ ] Collection queries work through Claude
@@ -210,19 +217,23 @@ Use this checklist to verify your production deployment:
 ### Common Issues
 
 **1. "Worker not found" error**
+
 - Verify the worker deployed successfully
 - Check the worker domain in Cloudflare Dashboard
 
 **2. "Authentication failed" error**
+
 - Verify Discogs consumer key/secret are correct
 - Check callback URL matches exactly
 - Ensure JWT secret is set
 
 **3. "KV namespace not found" error**
+
 - Verify KV namespace IDs in wrangler.toml
 - Ensure namespaces were created in correct account
 
 **4. Claude Desktop doesn't see the server**
+
 - Verify claude_desktop_config.json syntax
 - Restart Claude Desktop after configuration changes
 - Verify the SSE endpoint URL is correct
@@ -258,12 +269,14 @@ wrangler secret list --env production
 ### Cloudflare Analytics
 
 Monitor your worker in the Cloudflare Dashboard:
+
 - Workers → your-worker → Analytics
 - Check request volume, error rates, and performance
 
 ### KV Storage Usage
 
 Monitor KV usage for:
+
 - Request logs (MCP_LOGS)
 - Rate limiting counters (MCP_RL)
 - User sessions (MCP_SESSIONS)
@@ -286,4 +299,4 @@ Monitor KV usage for:
 
 ---
 
-This guide ensures your Discogs MCP Server is properly deployed, configured, and working with Claude Desktop in production. 
+This guide ensures your Discogs MCP Server is properly deployed, configured, and working with Claude Desktop in production.

@@ -61,13 +61,13 @@ describe('Discogs MCP Server', () => {
 
 		expect(response.status).toBe(200)
 		expect(response.headers.get('content-type')).toBe('application/json')
-		
+
 		const result = await response.json()
 		expect(result).toMatchObject({
 			name: 'Discogs MCP Server',
 			version: '1.0.0',
 			description: 'Model Context Protocol server for Discogs collection access',
-			endpoints: expect.any(Object)
+			endpoints: expect.any(Object),
 		})
 	})
 
@@ -169,7 +169,7 @@ describe('Discogs MCP Server', () => {
 			// The response should be a valid JSON-RPC response (either success or error)
 			expect(result).toHaveProperty('jsonrpc', '2.0')
 			expect(result).toHaveProperty('id', 1)
-			
+
 			// If it's a success response, it should have the expected structure
 			if (result.result) {
 				expect(result.result).toMatchObject({

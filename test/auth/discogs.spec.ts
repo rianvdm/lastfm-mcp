@@ -58,7 +58,9 @@ describe('DiscogsAuth', () => {
 				text: () => Promise.resolve('Invalid consumer key'),
 			})
 
-			await expect(auth.getRequestToken('http://localhost:3000/callback')).rejects.toThrow('Failed to get request token: HTTP 401: Unauthorized')
+			await expect(auth.getRequestToken('http://localhost:3000/callback')).rejects.toThrow(
+				'Failed to get request token: HTTP 401: Unauthorized',
+			)
 		})
 
 		it('should handle malformed responses', async () => {
@@ -122,9 +124,9 @@ describe('DiscogsAuth', () => {
 				text: () => Promise.resolve('Invalid verifier'),
 			})
 
-					await expect(auth.getAccessToken('request-token', 'request-secret', 'invalid-verifier')).rejects.toThrow(
-			'Failed to get access token: HTTP 401: Unauthorized',
-		)
+			await expect(auth.getAccessToken('request-token', 'request-secret', 'invalid-verifier')).rejects.toThrow(
+				'Failed to get access token: HTTP 401: Unauthorized',
+			)
 		})
 
 		it('should handle malformed access token responses', async () => {

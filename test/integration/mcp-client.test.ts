@@ -383,7 +383,8 @@ describe('MCP Client Integration Tests', () => {
 				id: 2,
 				error: {
 					code: -32001, // Unauthorized
-					message: 'Authentication required. Please use the "auth_status" tool for detailed authentication instructions, or visit https://discogs-mcp-prod.rian-db8.workers.dev/login to authenticate with Discogs.',
+					message:
+						'Authentication required. Please use the "auth_status" tool for detailed authentication instructions, or visit https://discogs-mcp-prod.rian-db8.workers.dev/login to authenticate with Discogs.',
 				},
 			})
 		})

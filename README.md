@@ -15,12 +15,12 @@ This server processes plain-text queries and returns rich, markdown-formatted re
 
 ```json
 {
-  "mcpServers": {
-    "discogs": {
-      "command": "npx",
-      "args": ["mcp-remote", "https://discogs-mcp-prod.rian-db8.workers.dev/sse"]
-    }
-  }
+	"mcpServers": {
+		"discogs": {
+			"command": "npx",
+			"args": ["mcp-remote", "https://discogs-mcp-prod.rian-db8.workers.dev/sse"]
+		}
+	}
 }
 ```
 
@@ -32,6 +32,7 @@ This server processes plain-text queries and returns rich, markdown-formatted re
 ### Adding to Other MCP Clients
 
 For other MCP-compatible clients, use the server endpoint:
+
 ```
 https://discogs-mcp-prod.rian-db8.workers.dev/sse
 ```
@@ -91,26 +92,28 @@ npm run dev
 ### Claude Desktop Configuration
 
 For local development:
+
 ```json
 {
-  "mcpServers": {
-    "discogs-local": {
-      "command": "npx",
-      "args": ["mcp-remote", "http://localhost:8787/sse"]
-    }
-  }
+	"mcpServers": {
+		"discogs-local": {
+			"command": "npx",
+			"args": ["mcp-remote", "http://localhost:8787/sse"]
+		}
+	}
 }
 ```
 
 For production:
+
 ```json
 {
-  "mcpServers": {
-    "discogs": {
-      "command": "npx",
-      "args": ["mcp-remote", "https://your-worker-domain.workers.dev/sse"]
-    }
-  }
+	"mcpServers": {
+		"discogs": {
+			"command": "npx",
+			"args": ["mcp-remote", "https://your-worker-domain.workers.dev/sse"]
+		}
+	}
 }
 ```
 
@@ -134,6 +137,7 @@ npm run deploy  # Deploy to development environment
 ### Production Deployment
 
 1. **First-time setup**: Create production KV namespaces and set secrets:
+
    ```bash
    npm run setup:prod
    ```
@@ -155,11 +159,13 @@ The project includes GitHub Actions for automated deployment:
 For production deployment, set these secrets in your Cloudflare account and GitHub repository:
 
 **Cloudflare Secrets** (set via `wrangler secret put`):
+
 - `DISCOGS_CONSUMER_KEY` - Your Discogs app consumer key
-- `DISCOGS_CONSUMER_SECRET` - Your Discogs app consumer secret  
+- `DISCOGS_CONSUMER_SECRET` - Your Discogs app consumer secret
 - `JWT_SECRET` - Strong random string for JWT signing
 
 **GitHub Secrets** (for automated deployment):
+
 - `CLOUDFLARE_API_TOKEN` - Cloudflare API token with Workers:Edit permissions
 - `CLOUDFLARE_ACCOUNT_ID` - Your Cloudflare account ID
 
@@ -175,6 +181,7 @@ Each environment has isolated KV storage for logs, rate limiting, and sessions.
 ## Example Queries
 
 ### Traditional Genre-Based Queries
+
 - "Give me some ideas for hard bop albums from the 60s that I own"
 - "What do I own that is similar to REM?"
 - "Show me my highest-rated Jazz albums from the 1970s"
@@ -182,6 +189,7 @@ Each environment has isolated KV storage for logs, rate limiting, and sessions.
 - "What are my best rock albums?"
 
 ### Mood-Based Queries (New!)
+
 - "I want to listen to something mellow on CD tonight"
 - "Find me energetic music for working out"
 - "What do I have that fits Sunday evening melancholy vibes?"
@@ -191,6 +199,7 @@ Each environment has isolated KV storage for logs, rate limiting, and sessions.
 - "What's good for a cozy winter evening?"
 
 ### Contextual Queries
+
 - "Suggest albums for a road trip"
 - "What's perfect for cooking dinner?"
 - "Find music for late night listening"

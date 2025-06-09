@@ -131,16 +131,16 @@ export class DiscogsClient {
 	private baseUrl = 'https://api.discogs.com'
 	private userAgent = 'discogs-mcp/1.0.0'
 	private lastRequestTime = 0
-	
+
 	// Discogs-specific retry configuration (more aggressive than default)
 	private readonly discogsRetryOptions: RetryOptions = {
-		maxRetries: 3,           // Balanced for both production and testing
-		initialDelayMs: 1500,    // Moderately increased from default 1000ms
-		maxDelayMs: 20000,       // Reasonable max delay (20s)
+		maxRetries: 3, // Balanced for both production and testing
+		initialDelayMs: 1500, // Moderately increased from default 1000ms
+		maxDelayMs: 20000, // Reasonable max delay (20s)
 		backoffMultiplier: 2,
 		jitterFactor: 0.1,
 	}
-	
+
 	// Minimum delay between Discogs API requests (proactive rate limiting)
 	private readonly REQUEST_DELAY_MS = 150 // 150ms between requests = ~400 requests/minute (well under Discogs limits)
 
@@ -151,7 +151,7 @@ export class DiscogsClient {
 		const timeSinceLastRequest = Date.now() - this.lastRequestTime
 		if (timeSinceLastRequest < this.REQUEST_DELAY_MS) {
 			const delayNeeded = this.REQUEST_DELAY_MS - timeSinceLastRequest
-			await new Promise(resolve => setTimeout(resolve, delayNeeded))
+			await new Promise((resolve) => setTimeout(resolve, delayNeeded))
 		}
 		this.lastRequestTime = Date.now()
 	}
@@ -204,9 +204,13 @@ export class DiscogsClient {
 
 		try {
 			await this.throttleRequest()
-			const response = await fetchWithRetry(url, {
-				headers,
-			}, this.discogsRetryOptions)
+			const response = await fetchWithRetry(
+				url,
+				{
+					headers,
+				},
+				this.discogsRetryOptions,
+			)
 
 			return response.json()
 		} catch (error) {
@@ -254,12 +258,16 @@ export class DiscogsClient {
 
 		try {
 			await this.throttleRequest()
-			const response = await fetchWithRetry(url, {
-				headers: {
-					Authorization: authHeader,
-					'User-Agent': this.userAgent,
+			const response = await fetchWithRetry(
+				url,
+				{
+					headers: {
+						Authorization: authHeader,
+						'User-Agent': this.userAgent,
+					},
 				},
-			}, this.discogsRetryOptions)
+				this.discogsRetryOptions,
+			)
 
 			return response.json()
 		} catch (error) {
@@ -308,12 +316,16 @@ export class DiscogsClient {
 
 			try {
 				await this.throttleRequest()
-				const response = await fetchWithRetry(url, {
-					headers: {
-						Authorization: authHeader,
-						'User-Agent': this.userAgent,
+				const response = await fetchWithRetry(
+					url,
+					{
+						headers: {
+							Authorization: authHeader,
+							'User-Agent': this.userAgent,
+						},
 					},
-				}, this.discogsRetryOptions)
+					this.discogsRetryOptions,
+				)
 
 				const data: DiscogsCollectionResponse = await response.json()
 				allReleases = allReleases.concat(data.releases)
@@ -355,31 +367,82 @@ export class DiscogsClient {
 				// Search in formats
 				const formatMatch = release.formats?.some((format) => format.name.toLowerCase().includes(query)) || false
 
-				// Search by year
-				const yearMatch = release.year && release.year.toString().includes(query)
+				// Search by year - enhanced to handle decade matching
+				let yearMatch = false
+				if (release.year) {
+					const yearStr = release.year.toString()
+					// Direct year match
+					if (yearStr.includes(query)) {
+						yearMatch = true
+					}
+					// Decade matching (e.g., "1960s" matches years 1960-1969)
+					const decadeMatch = query.match(/(\d{4})s$/)
+					if (decadeMatch) {
+						const startDecade = parseInt(decadeMatch[1])
+						if (release.year >= startDecade && release.year < startDecade + 10) {
+							yearMatch = true
+						}
+					}
+				}
 
 				return releaseIdMatch || artistMatch || titleMatch || genreMatch || styleMatch || labelMatch || formatMatch || yearMatch
 			}
 
-			// For multi-word queries, split into terms and require ALL terms to match
-			const queryTerms = query.split(/\s+/).filter(term => term.length > 2) // Split into words, ignore short words
-			
-			// Create searchable text from all release information
-			const searchableText = [
-				...release.artists?.map(artist => artist.name) || [],
+			// For multi-word queries, use smart matching logic
+			const queryTerms = query.split(/\s+/).filter((term) => term.length > 2) // Split into words, ignore short words
+
+			// Separate decade terms from other terms
+			const decadeTerms: string[] = []
+			const nonDecadeTerms: string[] = []
+
+			queryTerms.forEach((term) => {
+				const decadeMatch = term.match(/^(\d{4})s$/)
+				if (decadeMatch) {
+					decadeTerms.push(term)
+				} else {
+					nonDecadeTerms.push(term)
+				}
+			})
+
+			// Create searchable text from all release information (including decade)
+			const searchableFields = [
+				...(release.artists?.map((artist) => artist.name) || []),
 				release.title,
-				...release.genres || [],
-				...release.styles || [],
-				...release.labels?.map(label => label.name) || [],
-				...release.labels?.map(label => label.catno) || [],
-				...release.formats?.map(format => format.name) || [],
+				...(release.genres || []),
+				...(release.styles || []),
+				...(release.labels?.map((label) => label.name) || []),
+				...(release.labels?.map((label) => label.catno) || []),
+				...(release.formats?.map((format) => format.name) || []),
 				release.year?.toString() || '',
 				item.id.toString(),
-				release.id.toString()
-			].join(' ').toLowerCase()
-			
-			// Require ALL query terms to match the searchable text
-			return queryTerms.every(term => searchableText.includes(term))
+				release.id.toString(),
+			]
+
+			// Add decade representation if we have a year
+			if (release.year) {
+				const decade = `${Math.floor(release.year / 10) * 10}s`
+				searchableFields.push(decade)
+			}
+
+			const searchableText = searchableFields.join(' ').toLowerCase()
+
+			// Check non-decade terms (all must match)
+			const nonDecadeMatch = nonDecadeTerms.length === 0 || nonDecadeTerms.every((term) => searchableText.includes(term))
+
+			// Check decade terms (at least one must match - OR logic for conflicting decades)
+			const decadeMatch =
+				decadeTerms.length === 0 ||
+				decadeTerms.some((term) => {
+					// Direct decade string match (e.g., "1960s")
+					if (searchableText.includes(term)) {
+						return true
+					}
+					// Manual decade range check as fallback
+					const decadeYear = parseInt(term.replace('s', ''))
+					return release.year && release.year >= decadeYear && release.year < decadeYear + 10
+				})
+
+			return nonDecadeMatch && decadeMatch
 		})
 
 		// Implement pagination on filtered results
@@ -505,12 +568,16 @@ export class DiscogsClient {
 
 		try {
 			await this.throttleRequest()
-			const response = await fetchWithRetry(url, {
-				headers: {
-					Authorization: authHeader,
-					'User-Agent': this.userAgent,
+			const response = await fetchWithRetry(
+				url,
+				{
+					headers: {
+						Authorization: authHeader,
+						'User-Agent': this.userAgent,
+					},
 				},
-			}, this.discogsRetryOptions)
+				this.discogsRetryOptions,
+			)
 
 			return response.json()
 		} catch (error) {
@@ -559,9 +626,13 @@ export class DiscogsClient {
 
 		try {
 			await this.throttleRequest()
-			const response = await fetchWithRetry(url, {
-				headers,
-			}, this.discogsRetryOptions)
+			const response = await fetchWithRetry(
+				url,
+				{
+					headers,
+				},
+				this.discogsRetryOptions,
+			)
 
 			return response.json()
 		} catch (error) {
