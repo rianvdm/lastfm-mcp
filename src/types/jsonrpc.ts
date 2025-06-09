@@ -50,6 +50,7 @@ export enum MCPErrorCode {
 	DiscogsAPIError = -32008,
 	AuthenticationFailed = -32009,
 	ServerNotInitialized = -32010,
+	DiscogsRateLimited = -32011,
 }
 
 // Type guards
@@ -88,7 +89,20 @@ export function mapErrorToJSONRPC(error: unknown): { code: number; message: stri
 			}
 		}
 
-		// Rate limiting errors
+		// Discogs API rate limiting (check before generic rate limiting)
+		if (message.includes('Discogs API rate limit exceeded')) {
+			return {
+				code: MCPErrorCode.DiscogsRateLimited,
+				message: 'Discogs API rate limit exceeded',
+				data: { 
+					originalMessage: message,
+					retryAfter: 60, // Default to 60 seconds
+					suggestion: 'The Discogs API has rate limits. Please wait a moment before trying again.'
+				},
+			}
+		}
+
+		// MCP server rate limiting
 		if (message.includes('Rate limit') || message.includes('Too many requests')) {
 			return {
 				code: MCPErrorCode.RateLimited,
@@ -97,8 +111,8 @@ export function mapErrorToJSONRPC(error: unknown): { code: number; message: stri
 			}
 		}
 
-		// Discogs API errors
-		if (message.includes('Failed to fetch') || message.includes('Discogs')) {
+		// Discogs API errors (check after rate limiting)
+		if (message.includes('Failed to fetch') || message.includes('Discogs') || message.includes('Failed to search')) {
 			return {
 				code: MCPErrorCode.DiscogsAPIError,
 				message: 'Discogs API error',

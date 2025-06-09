@@ -574,11 +574,11 @@ describe('MCP Client Integration Tests', () => {
 				jsonrpc: '2.0',
 				id: 2,
 				error: {
-					code: -32603, // Internal error (since we're mocking network failure)
-					message: 'Internal error',
+					code: -32008, // Discogs API error
+					message: 'Discogs API error',
 				},
 			})
-		})
+		}, 10000) // Increase timeout to 10 seconds to account for retry delays
 
 		it('should handle rate limiting correctly', async () => {
 			// Mock rate limit exceeded

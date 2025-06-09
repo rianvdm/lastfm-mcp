@@ -1,6 +1,7 @@
 // Discogs API client for interacting with user collections and releases
 
 import { DiscogsAuth } from '../auth/discogs'
+import { fetchWithRetry } from '../utils/retry'
 
 export interface DiscogsRelease {
 	id: number
@@ -176,15 +177,18 @@ export class DiscogsClient {
 			headers['Authorization'] = `Discogs token=${accessToken}`
 		}
 
-		const response = await fetch(url, {
-			headers,
-		})
+		try {
+			const response = await fetchWithRetry(url, {
+				headers,
+			})
 
-		if (!response.ok) {
-			throw new Error(`Failed to fetch release ${releaseId}: ${response.status} ${response.statusText}`)
+			return response.json()
+		} catch (error) {
+			if (error instanceof Error && error.message.includes('429')) {
+				throw new Error(`Discogs API rate limit exceeded for release ${releaseId}. Please try again later.`)
+			}
+			throw new Error(`Failed to fetch release ${releaseId}: ${error instanceof Error ? error.message : 'Unknown error'}`)
 		}
-
-		return response.json()
 	}
 
 	/**
@@ -222,18 +226,21 @@ export class DiscogsClient {
 
 		const authHeader = await this.createOAuthHeader(url, 'GET', accessToken, accessTokenSecret, consumerKey, consumerSecret)
 
-		const response = await fetch(url, {
-			headers: {
-				Authorization: authHeader,
-				'User-Agent': this.userAgent,
-			},
-		})
+		try {
+			const response = await fetchWithRetry(url, {
+				headers: {
+					Authorization: authHeader,
+					'User-Agent': this.userAgent,
+				},
+			})
 
-		if (!response.ok) {
-			throw new Error(`Failed to search collection: ${response.status} ${response.statusText}`)
+			return response.json()
+		} catch (error) {
+			if (error instanceof Error && error.message.includes('429')) {
+				throw new Error('Discogs API rate limit exceeded for collection search. Please try again later.')
+			}
+			throw new Error(`Failed to search collection: ${error instanceof Error ? error.message : 'Unknown error'}`)
 		}
-
-		return response.json()
 	}
 
 	/**
@@ -272,21 +279,24 @@ export class DiscogsClient {
 			const url = `${this.baseUrl}/users/${username}/collection/folders/0/releases?${params.toString()}`
 			const authHeader = await this.createOAuthHeader(url, 'GET', accessToken, accessTokenSecret, consumerKey, consumerSecret)
 
-			const response = await fetch(url, {
-				headers: {
-					Authorization: authHeader,
-					'User-Agent': this.userAgent,
-				},
-			})
+			try {
+				const response = await fetchWithRetry(url, {
+					headers: {
+						Authorization: authHeader,
+						'User-Agent': this.userAgent,
+					},
+				})
 
-			if (!response.ok) {
-				throw new Error(`Failed to fetch collection: ${response.status} ${response.statusText}`)
+				const data: DiscogsCollectionResponse = await response.json()
+				allReleases = allReleases.concat(data.releases)
+				totalPages = data.pagination.pages
+				page++
+			} catch (error) {
+				if (error instanceof Error && error.message.includes('429')) {
+					throw new Error(`Discogs API rate limit exceeded while fetching collection page ${page}. Please try again later.`)
+				}
+				throw new Error(`Failed to fetch collection page ${page}: ${error instanceof Error ? error.message : 'Unknown error'}`)
 			}
-
-			const data: DiscogsCollectionResponse = await response.json()
-			allReleases = allReleases.concat(data.releases)
-			totalPages = data.pagination.pages
-			page++
 		} while (page <= totalPages)
 
 		// Filter releases based on query
@@ -465,22 +475,23 @@ export class DiscogsClient {
 		const url = `${this.baseUrl}/oauth/identity`
 		const authHeader = await this.createOAuthHeader(url, 'GET', accessToken, accessTokenSecret, consumerKey, consumerSecret)
 
-		const response = await fetch(url, {
-			headers: {
-				Authorization: authHeader,
-				'User-Agent': this.userAgent,
-			},
-		})
+		try {
+			const response = await fetchWithRetry(url, {
+				headers: {
+					Authorization: authHeader,
+					'User-Agent': this.userAgent,
+				},
+			})
 
-		console.log('Response status:', response.status, response.statusText)
-
-		if (!response.ok) {
-			const errorText = await response.text()
-			console.log('Error response body:', errorText)
-			throw new Error(`Failed to get user profile: ${response.status} ${response.statusText}`)
+			return response.json()
+		} catch (error) {
+			if (error instanceof Error && error.message.includes('429')) {
+				throw new Error('Discogs API rate limit exceeded for user profile. Please try again later.')
+			}
+			const errorText = error instanceof Error ? error.message : 'Unknown error'
+			console.log('Error response:', errorText)
+			throw new Error(`Failed to get user profile: ${errorText}`)
 		}
-
-		return response.json()
 	}
 
 	/**
@@ -517,15 +528,18 @@ export class DiscogsClient {
 			headers['Authorization'] = `Discogs token=${accessToken}`
 		}
 
-		const response = await fetch(url, {
-			headers,
-		})
+		try {
+			const response = await fetchWithRetry(url, {
+				headers,
+			})
 
-		if (!response.ok) {
-			throw new Error(`Failed to search database: ${response.status} ${response.statusText}`)
+			return response.json()
+		} catch (error) {
+			if (error instanceof Error && error.message.includes('429')) {
+				throw new Error('Discogs API rate limit exceeded for database search. Please try again later.')
+			}
+			throw new Error(`Failed to search database: ${error instanceof Error ? error.message : 'Unknown error'}`)
 		}
-
-		return response.json()
 	}
 }
 

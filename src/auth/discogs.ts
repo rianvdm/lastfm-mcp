@@ -2,6 +2,8 @@
 /// <reference lib="dom.iterable" />
 /// <reference lib="webworker" />
 
+import { fetchWithRetry } from '../utils/retry'
+
 interface DiscogsTokenResponse {
 	oauth_token: string
 	oauth_token_secret: string
@@ -147,39 +149,39 @@ export class DiscogsAuth {
 		console.log('Authorization header:', authHeader)
 		console.log('Making request to:', this.requestTokenUrl)
 
-		const response = await fetch(this.requestTokenUrl, {
-			method: 'GET',
-			headers: {
-				Authorization: authHeader,
-				'User-Agent': 'discogs-mcp/1.0.0',
-			},
-		})
+		try {
+			const response = await fetchWithRetry(this.requestTokenUrl, {
+				method: 'GET',
+				headers: {
+					Authorization: authHeader,
+					'User-Agent': 'discogs-mcp/1.0.0',
+				},
+			})
 
-		console.log('Response status:', response.status, response.statusText)
+			const text = await response.text()
+			console.log('Discogs response:', text)
 
-		if (!response.ok) {
-			const errorText = await response.text()
-			console.error('Discogs API error response:', errorText)
-			throw new Error(`Failed to get request token: ${response.status} ${response.statusText}. Response: ${errorText}`)
-		}
+			const params = new URLSearchParams(text)
 
-		const text = await response.text()
-		console.log('Discogs response:', text)
+			const oauthToken = params.get('oauth_token')
+			const oauthTokenSecret = params.get('oauth_token_secret')
+			const oauthCallbackConfirmed = params.get('oauth_callback_confirmed')
 
-		const params = new URLSearchParams(text)
+			if (!oauthToken || !oauthTokenSecret) {
+				throw new Error('Invalid response from Discogs: missing oauth_token or oauth_token_secret')
+			}
 
-		const oauthToken = params.get('oauth_token')
-		const oauthTokenSecret = params.get('oauth_token_secret')
-		const oauthCallbackConfirmed = params.get('oauth_callback_confirmed')
-
-		if (!oauthToken || !oauthTokenSecret) {
-			throw new Error('Invalid response from Discogs: missing oauth_token or oauth_token_secret')
-		}
-
-		return {
-			oauth_token: oauthToken,
-			oauth_token_secret: oauthTokenSecret,
-			oauth_callback_confirmed: oauthCallbackConfirmed || undefined,
+			return {
+				oauth_token: oauthToken,
+				oauth_token_secret: oauthTokenSecret,
+				oauth_callback_confirmed: oauthCallbackConfirmed || undefined,
+			}
+		} catch (error) {
+			if (error instanceof Error && error.message.includes('429')) {
+				throw new Error('Discogs API rate limit exceeded during authentication. Please try again later.')
+			}
+			console.error('Discogs API error:', error)
+			throw new Error(`Failed to get request token: ${error instanceof Error ? error.message : 'Unknown error'}`)
 		}
 	}
 
@@ -207,35 +209,37 @@ export class DiscogsAuth {
 
 		const authHeader = await this.generateOAuthHeader('POST', this.accessTokenUrl, { oauth_verifier: oauthVerifier }, token)
 
-		const response = await fetch(this.accessTokenUrl, {
-			method: 'POST',
-			headers: {
-				Authorization: authHeader,
-				'Content-Type': 'application/x-www-form-urlencoded',
-				'User-Agent': 'discogs-mcp/1.0.0',
-			},
-			body: `oauth_verifier=${encodeURIComponent(oauthVerifier)}`,
-		})
+		try {
+			const response = await fetchWithRetry(this.accessTokenUrl, {
+				method: 'POST',
+				headers: {
+					Authorization: authHeader,
+					'Content-Type': 'application/x-www-form-urlencoded',
+					'User-Agent': 'discogs-mcp/1.0.0',
+				},
+				body: `oauth_verifier=${encodeURIComponent(oauthVerifier)}`,
+			})
 
-		if (!response.ok) {
-			const errorText = await response.text()
-			console.error('Discogs API error response:', errorText)
-			throw new Error(`Failed to get access token: ${response.status} ${response.statusText}. Response: ${errorText}`)
-		}
+			const text = await response.text()
+			const params = new URLSearchParams(text)
 
-		const text = await response.text()
-		const params = new URLSearchParams(text)
+			const accessToken = params.get('oauth_token')
+			const accessTokenSecret = params.get('oauth_token_secret')
 
-		const accessToken = params.get('oauth_token')
-		const accessTokenSecret = params.get('oauth_token_secret')
+			if (!accessToken || !accessTokenSecret) {
+				throw new Error('Invalid response from Discogs: missing oauth_token or oauth_token_secret')
+			}
 
-		if (!accessToken || !accessTokenSecret) {
-			throw new Error('Invalid response from Discogs: missing oauth_token or oauth_token_secret')
-		}
-
-		return {
-			oauth_token: accessToken,
-			oauth_token_secret: accessTokenSecret,
+			return {
+				oauth_token: accessToken,
+				oauth_token_secret: accessTokenSecret,
+			}
+		} catch (error) {
+			if (error instanceof Error && error.message.includes('429')) {
+				throw new Error('Discogs API rate limit exceeded during authentication. Please try again later.')
+			}
+			console.error('Discogs API error:', error)
+			throw new Error(`Failed to get access token: ${error instanceof Error ? error.message : 'Unknown error'}`)
 		}
 	}
 
