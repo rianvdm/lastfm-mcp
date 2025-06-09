@@ -134,9 +134,9 @@ export class DiscogsClient {
 	
 	// Discogs-specific retry configuration (more aggressive than default)
 	private readonly discogsRetryOptions: RetryOptions = {
-		maxRetries: 5,           // Increased from default 3
-		initialDelayMs: 2000,    // Increased from default 1000ms
-		maxDelayMs: 60000,       // Increased from default 30000ms
+		maxRetries: 3,           // Balanced for both production and testing
+		initialDelayMs: 1500,    // Moderately increased from default 1000ms
+		maxDelayMs: 20000,       // Reasonable max delay (20s)
 		backoffMultiplier: 2,
 		jitterFactor: 0.1,
 	}
