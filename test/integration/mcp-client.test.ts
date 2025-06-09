@@ -578,7 +578,7 @@ describe('MCP Client Integration Tests', () => {
 					message: 'Discogs API error',
 				},
 			})
-		}, 10000) // Increase timeout to 10 seconds to account for retry delays
+		}, 20000) // Increase timeout to 20 seconds to account for aggressive retry delays (5 retries with exponential backoff)
 
 		it('should handle rate limiting correctly', async () => {
 			// Mock rate limit exceeded

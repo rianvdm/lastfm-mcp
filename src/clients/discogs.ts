@@ -1,7 +1,7 @@
 // Discogs API client for interacting with user collections and releases
 
 import { DiscogsAuth } from '../auth/discogs'
-import { fetchWithRetry } from '../utils/retry'
+import { fetchWithRetry, RetryOptions } from '../utils/retry'
 
 export interface DiscogsRelease {
 	id: number
@@ -130,6 +130,31 @@ export interface DiscogsCollectionStats {
 export class DiscogsClient {
 	private baseUrl = 'https://api.discogs.com'
 	private userAgent = 'discogs-mcp/1.0.0'
+	private lastRequestTime = 0
+	
+	// Discogs-specific retry configuration (more aggressive than default)
+	private readonly discogsRetryOptions: RetryOptions = {
+		maxRetries: 5,           // Increased from default 3
+		initialDelayMs: 2000,    // Increased from default 1000ms
+		maxDelayMs: 60000,       // Increased from default 30000ms
+		backoffMultiplier: 2,
+		jitterFactor: 0.1,
+	}
+	
+	// Minimum delay between Discogs API requests (proactive rate limiting)
+	private readonly REQUEST_DELAY_MS = 150 // 150ms between requests = ~400 requests/minute (well under Discogs limits)
+
+	/**
+	 * Add a small delay between requests to proactively avoid rate limits
+	 */
+	private async throttleRequest(): Promise<void> {
+		const timeSinceLastRequest = Date.now() - this.lastRequestTime
+		if (timeSinceLastRequest < this.REQUEST_DELAY_MS) {
+			const delayNeeded = this.REQUEST_DELAY_MS - timeSinceLastRequest
+			await new Promise(resolve => setTimeout(resolve, delayNeeded))
+		}
+		this.lastRequestTime = Date.now()
+	}
 
 	/**
 	 * Create OAuth 1.0a authorization header using proper HMAC-SHA1 signature
@@ -178,9 +203,10 @@ export class DiscogsClient {
 		}
 
 		try {
+			await this.throttleRequest()
 			const response = await fetchWithRetry(url, {
 				headers,
-			})
+			}, this.discogsRetryOptions)
 
 			return response.json()
 		} catch (error) {
@@ -227,12 +253,13 @@ export class DiscogsClient {
 		const authHeader = await this.createOAuthHeader(url, 'GET', accessToken, accessTokenSecret, consumerKey, consumerSecret)
 
 		try {
+			await this.throttleRequest()
 			const response = await fetchWithRetry(url, {
 				headers: {
 					Authorization: authHeader,
 					'User-Agent': this.userAgent,
 				},
-			})
+			}, this.discogsRetryOptions)
 
 			return response.json()
 		} catch (error) {
@@ -280,12 +307,13 @@ export class DiscogsClient {
 			const authHeader = await this.createOAuthHeader(url, 'GET', accessToken, accessTokenSecret, consumerKey, consumerSecret)
 
 			try {
+				await this.throttleRequest()
 				const response = await fetchWithRetry(url, {
 					headers: {
 						Authorization: authHeader,
 						'User-Agent': this.userAgent,
 					},
-				})
+				}, this.discogsRetryOptions)
 
 				const data: DiscogsCollectionResponse = await response.json()
 				allReleases = allReleases.concat(data.releases)
@@ -476,12 +504,13 @@ export class DiscogsClient {
 		const authHeader = await this.createOAuthHeader(url, 'GET', accessToken, accessTokenSecret, consumerKey, consumerSecret)
 
 		try {
+			await this.throttleRequest()
 			const response = await fetchWithRetry(url, {
 				headers: {
 					Authorization: authHeader,
 					'User-Agent': this.userAgent,
 				},
-			})
+			}, this.discogsRetryOptions)
 
 			return response.json()
 		} catch (error) {
@@ -529,9 +558,10 @@ export class DiscogsClient {
 		}
 
 		try {
+			await this.throttleRequest()
 			const response = await fetchWithRetry(url, {
 				headers,
-			})
+			}, this.discogsRetryOptions)
 
 			return response.json()
 		} catch (error) {
