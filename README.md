@@ -40,33 +40,45 @@ https://discogs-mcp-prod.rian-db8.workers.dev/sse
 ## Key Features
 
 - **OAuth Authentication**: Secure login via Discogs OAuth
+- **Advanced Search Intelligence**: Enhanced search algorithms with multiple matching strategies:
+  - **OR Logic for Genre Searches**: Queries like "psychedelic rock prog rock space rock" find releases matching ANY of the terms, not requiring all terms to match
+  - **Relevance Scoring**: Multi-word searches prioritize results by number of matching terms - albums matching more terms rank higher
+  - **Smart Context Detection**: Automatically detects whether you're searching for specific albums vs. mood-based recommendations
 - **Intelligent Mood Mapping**: Translate emotional descriptors and contextual cues into music recommendations:
   - Mood descriptors: "mellow," "energetic," "melancholy," "romantic," "dark"
   - Contextual awareness: "Sunday evening," "studying," "workout," "rainy day"
   - Time and seasonal contexts: "morning," "midnight," "winter," "summer"
+  - **Enhanced Album Recognition**: Distinguishes between specific searches like "Dark Side of the Moon" vs. mood queries like "dark ambient music"
 - **Collection Search**: Search through your Discogs collection by artist, album, genre, year, or mood
 - **Release Details**: Get detailed information about specific releases including tracklists, formats, and metadata
 - **Collection Statistics**: Analyze your collection with breakdowns by genre, decade, format, and more
 - **Context-Aware Recommendations**: Get intelligent recommendations from your own collection based on:
-  - Genre preferences (e.g., "Jazz", "Rock", "Electronic")
+  - **Multi-Genre Support**: Combine multiple genres like "psychedelic rock prog rock space rock" using flexible separator detection
   - Mood and emotional context (e.g., "mellow Sunday evening vibes")
   - Time periods (e.g., "1960s", "1970s", "1980s")
   - Similar artists or albums (e.g., "similar to Miles Davis")
   - Natural language queries (e.g., "hard bop albums from the 60s that I own")
+- **Smart Caching**: Intelligent KV-based caching system for improved performance and rate limit optimization
 - **Natural Language Interface**: Process commands via MCP protocol
 - **Rich Responses**: Structured output optimized for AI assistants
 - **Rate Limiting**: Per-user request throttling via Workers KV
 
 ## Available Tools
 
-- **`search_collection`** - Search your collection with mood and contextual awareness
-  - Supports artist/album names, genres, and mood descriptors
-  - Examples: "mellow", "energetic", "Sunday evening", "melancholy"
+- **`search_collection`** - Enhanced search with intelligent matching and relevance scoring
+  - **Smart genre detection**: Use OR logic for genre searches like "psychedelic rock prog rock"
+  - **Relevance ranking**: Multi-word searches prioritize releases with more matching terms
+  - **Mood and contextual awareness**: Supports mood descriptors and contextual cues
+  - **Flexible input**: Accepts genres separated by spaces, commas, or other separators
+  - Examples: "mellow", "energetic", "Sunday evening", "ambient drone progressive"
 - **`get_release`** - Get detailed information about a specific release
 - **`get_collection_stats`** - View statistics about your collection
-- **`get_recommendations`** - Get context-aware listening recommendations with mood support
-  - Filter by genre, mood, decade, format, or similarity
-  - Examples: "mellow jazz for studying", "energetic workout music"
+- **`get_recommendations`** - Enhanced context-aware recommendations with multi-genre support
+  - **Multi-genre filtering**: Combine genres like "psychedelic rock prog rock space rock"
+  - **Similarity matching**: Find releases similar to specific artists/albums
+  - **Advanced scoring**: Combines genre matching, style matching, era matching, and personal ratings
+  - **Intelligent filtering**: OR logic for genre/mood queries, smart context detection
+  - Examples: "mellow jazz for studying", "energetic workout music", "psychedelic rock prog rock"
 
 ## Architecture
 
@@ -180,6 +192,14 @@ Each environment has isolated KV storage for logs, rate limiting, and sessions.
 
 ## Example Queries
 
+### Enhanced Multi-Genre Searches (New!)
+
+- "psychedelic rock prog rock space rock" - Finds releases matching ANY of these genre terms
+- "ambient drone progressive experimental" - Uses OR logic for broader, more relevant results  
+- "jazz fusion bebop hard bop" - Combines multiple jazz subgenres intelligently
+- "electronic techno house trance" - Searches across electronic music styles
+- "Show me releases similar to Pink Floyd Dark Side of the Moon" - Uses similarity matching with genre filtering
+
 ### Traditional Genre-Based Queries
 
 - "Give me some ideas for hard bop albums from the 60s that I own"
@@ -188,15 +208,16 @@ Each environment has isolated KV storage for logs, rate limiting, and sessions.
 - "Find electronic music in my collection from the 1980s"
 - "What are my best rock albums?"
 
-### Mood-Based Queries (New!)
+### Mood-Based Queries (Enhanced!)
 
 - "I want to listen to something mellow on CD tonight"
 - "Find me energetic music for working out"
 - "What do I have that fits Sunday evening melancholy vibes?"
 - "Show me romantic music for a dinner date"
-- "I need something dark and brooding for a rainy day"
+- "I need something dark and brooding for a rainy day" - (Note: "dark" mood vs "Dark Side of the Moon" album detection)
 - "Give me chill music for studying"
 - "What's good for a cozy winter evening?"
+- "moody melancholy introspective sad contemplative" - Multi-mood OR logic finds releases matching any mood term
 
 ### Contextual Queries
 
@@ -205,7 +226,17 @@ Each environment has isolated KV storage for logs, rate limiting, and sessions.
 - "Find music for late night listening"
 - "Show me something uplifting for Monday morning"
 
-The system intelligently maps emotional descriptors and contextual cues to relevant genres and styles in your collection, while still supporting all traditional concrete genre searches.
+### Search Intelligence Features
+
+The system now features **advanced search intelligence** that:
+
+- **Automatically detects search intent**: Distinguishes between specific album searches ("Dark Side of the Moon") vs. mood-based queries ("dark ambient music")
+- **Uses flexible matching logic**: OR logic for genre/mood searches provides broader results, while AND logic for specific searches maintains precision
+- **Prioritizes relevance**: Multi-word searches rank results by number of matching terms - releases matching more terms appear first
+- **Supports flexible input**: Accepts multiple genres separated by spaces, commas, semicolons, or other separators
+- **Handles complex queries**: Combines genre filtering, similarity matching, mood analysis, and relevance scoring intelligently
+
+Whether you're looking for specific albums, exploring genres, or discovering music based on mood and context, the system adapts its search strategy to provide the most relevant results from your collection.
 
 ## License
 
