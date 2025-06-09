@@ -407,7 +407,7 @@ describe('MCP Client Integration Tests', () => {
 
 			// Test tools
 			const toolsList = await client.listTools()
-			expect(toolsList.result.tools).toHaveLength(7) // ping, server_info, auth_status, search_collection, get_release, get_collection_stats, get_recommendations
+			expect(toolsList.result.tools).toHaveLength(8) // ping, server_info, auth_status, search_collection, get_release, get_collection_stats, get_recommendations, get_cache_stats
 
 			const searchResult = await client.callTool('search_collection', { query: 'Beatles' })
 			console.log('Search result:', JSON.stringify(searchResult, null, 2))

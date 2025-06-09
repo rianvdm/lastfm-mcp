@@ -3,7 +3,7 @@
  * Implements smart caching to reduce API calls and rate limiting issues
  */
 
-import { DiscogsClient, type DiscogsCollectionResponse, type DiscogsRelease, type DiscogsCollectionStats, type DiscogsSearchResponse } from './discogs'
+import { DiscogsClient, type DiscogsCollectionResponse, type DiscogsRelease, type DiscogsCollectionStats, type DiscogsSearchResponse, type DiscogsCollectionItem } from './discogs'
 import { SmartCache, CacheKeys, createDiscogsCache } from '../utils/cache'
 
 export class CachedDiscogsClient {
@@ -201,7 +201,7 @@ export class CachedDiscogsClient {
 				console.log(`Fetching complete collection for ${username} (max ${maxPages} pages)`)
 				
 				// Start with first page
-				let allReleases: any[] = []
+				let allReleases: DiscogsCollectionItem[] = []
 				let currentPage = 1
 				let totalPages = 1
 				

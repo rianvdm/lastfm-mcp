@@ -36,15 +36,15 @@ export interface CacheEntry<T> {
 	version: string // For cache versioning/invalidation
 }
 
-export interface PendingRequest<T> {
-	promise: Promise<T>
+export interface PendingRequest {
+	promise: Promise<unknown>
 	timestamp: number
 }
 
 export class SmartCache {
 	private kv: KVNamespace
 	private config: CacheConfig
-	private pendingRequests = new Map<string, PendingRequest<any>>()
+	private pendingRequests = new Map<string, PendingRequest>()
 	private readonly CACHE_VERSION = '1.0.0'
 
 	constructor(kv: KVNamespace, config: Partial<CacheConfig> = {}) {
@@ -144,7 +144,7 @@ export class SmartCache {
 		const pending = this.pendingRequests.get(dedupeKey)
 		if (pending) {
 			console.log(`Deduplicating request for ${type}:${identifier}`)
-			return pending.promise
+			return pending.promise as Promise<T>
 		}
 
 		// Check cache first (unless force refresh)
