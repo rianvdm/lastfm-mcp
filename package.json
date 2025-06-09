@@ -2,6 +2,7 @@
 	"name": "discogs-mcp",
 	"version": "0.0.0",
 	"private": true,
+	"license": "MIT",
 	"type": "module",
 	"scripts": {
 		"deploy": "wrangler deploy",
