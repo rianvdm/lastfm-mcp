@@ -1128,5 +1128,75 @@ describe('Discogs Client', () => {
 			
 			expect(result.pagination.items).toBe(3)
 		})
+
+		it('should not trigger mood detection for specific album searches like "Dark Side of the Moon"', async () => {
+			const mockResponse = {
+				pagination: { pages: 1, page: 1, per_page: 100, items: 2, urls: {} },
+				releases: [
+					{
+						id: 1,
+						instance_id: 1,
+						date_added: '2023-01-01T00:00:00-08:00',
+						rating: 5,
+						basic_information: {
+							id: 1,
+							title: 'The Dark Side Of The Moon',
+							year: 1973,
+							artists: [{ name: 'Pink Floyd', id: 1 }],
+							genres: ['Rock'],
+							styles: ['Psychedelic Rock', 'Prog Rock'],
+							formats: [{ name: 'Vinyl', qty: '1' }],
+							labels: [{ name: 'Harvest', catno: 'SHVL 804' }],
+							resource_url: 'https://api.discogs.com/releases/1',
+							thumb: '',
+							cover_image: '',
+						},
+					},
+					{
+						id: 2,
+						instance_id: 2,
+						date_added: '2023-01-02T00:00:00-08:00',
+						rating: 4,
+						basic_information: {
+							id: 2,
+							title: 'Dark Side Rising',
+							year: 2020,
+							artists: [{ name: 'Metal Band', id: 2 }],
+							genres: ['Rock'],
+							styles: ['Heavy Metal', 'Dark Metal'], // Has "dark" in style but shouldn't be prioritized by mood
+							formats: [{ name: 'CD', qty: '1' }],
+							labels: [{ name: 'Metal Records', catno: 'MR001' }],
+							resource_url: 'https://api.discogs.com/releases/2',
+							thumb: '',
+							cover_image: '',
+						},
+					},
+				],
+			}
+
+			mockFetch.mockResolvedValueOnce({
+				ok: true,
+				json: () => Promise.resolve(mockResponse),
+			})
+
+			// Search for "Dark Side of the Moon" - should find the Pink Floyd album specifically, not trigger mood detection
+			const result = await discogsClient.searchCollection(
+				mockAuth.username,
+				mockAuth.accessToken,
+				mockAuth.accessTokenSecret,
+				{ query: 'Dark Side of the Moon', per_page: 50 },
+				mockAuth.consumerKey,
+				mockAuth.consumerSecret,
+			)
+
+			expect(result.releases).toHaveLength(2)
+			
+			// Should prioritize exact title match over partial style matches
+			// Pink Floyd's "The Dark Side Of The Moon" should come first due to better title matching
+			expect(result.releases.some(r => r.basic_information.title === 'The Dark Side Of The Moon')).toBe(true)
+			expect(result.releases.some(r => r.basic_information.artists[0].name === 'Pink Floyd')).toBe(true)
+			
+			expect(result.pagination.items).toBe(2)
+		})
 	})
 })

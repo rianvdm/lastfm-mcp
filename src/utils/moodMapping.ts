@@ -357,7 +357,7 @@ const CONCRETE_GENRES = new Set([
 ])
 
 /**
- * Check if a query contains mood or contextual language (avoiding concrete genres)
+ * Check if a query contains mood or contextual language (avoiding concrete genres and specific searches)
  */
 export function hasMoodContent(query: string): boolean {
 	const lowerQuery = query.toLowerCase().trim()
@@ -370,6 +370,49 @@ export function hasMoodContent(query: string): boolean {
 	// Don't trigger for simple single word concrete genre queries
 	const words = lowerQuery.split(/\s+/)
 	if (words.length === 1 && CONCRETE_GENRES.has(words[0])) {
+		return false
+	}
+
+	// Don't trigger for specific album/artist searches - these patterns suggest intentional searches
+	const specificSearchPatterns = [
+		// Artist + Album patterns
+		/\b\w+\s+(by|from|of)\s+\w+\b/i, // "album by artist", "song from artist"
+		/\b\w+\s*-\s*\w+/i, // "Artist - Album" format
+		
+		// Common album title patterns that might contain mood words
+		/\b(side|dark side|bright side|other side)\s+of\s+(the\s+)?\w+/i, // "Side of the Moon", etc.
+		/\b(dark|black|white|red|blue|green)\s+(side|moon|star|sun|night|day|light)\b/i, // Color + celestial/time
+		/\b(the\s+)?(dark|black|white)\s+(side|album|record|ep)\b/i, // "The Dark Album", etc.
+		
+		// Album-specific patterns with quoted content
+		/^["'`].+["'`]$/i, // Fully quoted strings are likely specific searches
+		
+		// Multi-word titles that contain mood words but are likely album/song titles
+		/\b(dark|black)\s+(side|star|moon|night|matter|energy|forest|water)\b/i,
+		/\b(bright|white|light)\s+(side|star|moon|day|matter|energy)\b/i,
+		/\b(sad|happy|blue|red)\s+(song|songs|ballad|blues|note|notes)\b/i,
+		
+		// Pattern for specific album titles that might accidentally trigger mood detection
+		/\b\w+\s+(side|part|volume|vol\.?\s*\d+)\b/i, // "Something Side", "Part 1", etc.
+	]
+	
+	// Check if query matches specific search patterns
+	if (specificSearchPatterns.some(pattern => pattern.test(lowerQuery))) {
+		return false
+	}
+
+	// Additional check: if the query contains very specific music terms, it's probably not a mood search
+	const specificMusicTerms = [
+		'album', 'albums', 'song', 'songs', 'track', 'tracks', 'ep', 'lp', 'single',
+		'vinyl', 'cd', 'cassette', 'digital', 'remaster', 'remastered', 'deluxe',
+		'live', 'concert', 'tour', 'acoustic', 'instrumental', 'remix', 'version'
+	]
+	
+	const hasSpecificMusicTerms = specificMusicTerms.some(term => 
+		lowerQuery.includes(term) && words.length <= 5 // Only for shorter queries
+	)
+	
+	if (hasSpecificMusicTerms) {
 		return false
 	}
 
