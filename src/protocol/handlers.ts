@@ -1120,6 +1120,22 @@ If the problem persists, please check that your Discogs account is accessible.`,
 						.toLowerCase()
 						.split(/\s+/)
 						.filter((term) => term.length > 2) // Split into words, ignore short words
+					
+					// Check if this looks like a genre/style/mood query
+					const genreStyleTerms = [
+						'ambient', 'drone', 'progressive', 'rock', 'jazz', 'blues', 'electronic', 'techno', 'house',
+						'metal', 'punk', 'folk', 'country', 'classical', 'hip', 'hop', 'rap', 'soul', 'funk', 'disco',
+						'reggae', 'ska', 'indie', 'alternative', 'psychedelic', 'experimental', 'avant-garde',
+						'minimal', 'downtempo', 'chillout', 'trance', 'dubstep', 'garage', 'post-rock', 'post-punk',
+						'new wave', 'synthpop', 'industrial', 'gothic', 'darkwave', 'shoegaze', 'grunge', 'hardcore',
+						// Add mood terms as well
+						'moody', 'melancholy', 'melancholic', 'introspective', 'sad', 'contemplative', 'somber', 'nostalgic',
+						'energetic', 'upbeat', 'happy', 'cheerful', 'vibrant', 'mellow', 'chill', 'relaxing', 'peaceful',
+						'dark', 'brooding', 'intense', 'romantic', 'intimate', 'sensual'
+					]
+					
+					const isGenreStyleMoodQuery = queryTerms.some(term => genreStyleTerms.includes(term.toLowerCase()))
+					
 					filteredReleases = filteredReleases.filter((release) => {
 						const info = release.basic_information
 
@@ -1134,9 +1150,15 @@ If the problem persists, please check that your Discogs account is accessible.`,
 							.join(' ')
 							.toLowerCase()
 
-						// For recommendations, require at least 50% of terms to match for relevance
-						const matchingTerms = queryTerms.filter((term) => searchableText.includes(term)).length
-						return matchingTerms >= Math.ceil(queryTerms.length * 0.5)
+						if (isGenreStyleMoodQuery) {
+							// For genre/style/mood queries, use OR logic - at least one term must match
+							const matchingTerms = queryTerms.filter((term) => searchableText.includes(term)).length
+							return matchingTerms >= 1
+						} else {
+							// For other queries, require at least 50% of terms to match for relevance
+							const matchingTerms = queryTerms.filter((term) => searchableText.includes(term)).length
+							return matchingTerms >= Math.ceil(queryTerms.length * 0.5)
+						}
 					})
 				}
 
