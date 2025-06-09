@@ -32,8 +32,20 @@ import {
 } from './validation'
 import { verifySessionToken, SessionPayload } from '../auth/jwt'
 import { discogsClient, type DiscogsCollectionItem } from '../clients/discogs'
+import { getCachedDiscogsClient, type CachedDiscogsClient } from '../clients/cachedDiscogs'
 import { analyzeMoodQuery, hasMoodContent, generateMoodSearchTerms } from '../utils/moodMapping'
 import { isConnectionAuthenticated } from '../transport/sse'
+
+/**
+ * Get cached Discogs client instance
+ */
+function getCachedClient(env?: Env): CachedDiscogsClient | null {
+	if (!env?.MCP_SESSIONS) {
+		console.warn('No KV storage available, falling back to direct client')
+		return null
+	}
+	return getCachedDiscogsClient(env.MCP_SESSIONS)
+}
 
 /**
  * Extract and verify session token from request
@@ -225,14 +237,18 @@ export async function handleResourcesRead(params: unknown, session: SessionPaylo
 	const { uri } = params
 
 	try {
+		// Get cached client instance or fall back to direct client
+		const cachedClient = getCachedClient(env)
+		const client = cachedClient || discogsClient
+
 		// Parse the URI to determine what resource is being requested
 		if (uri === 'discogs://collection') {
 			// Get user's complete collection
 			const consumerKey = env?.DISCOGS_CONSUMER_KEY || ''
 			const consumerSecret = env?.DISCOGS_CONSUMER_SECRET || ''
 
-			const userProfile = await discogsClient.getUserProfile(session.accessToken, session.accessTokenSecret, consumerKey, consumerSecret)
-			const collection = await discogsClient.searchCollection(
+			const userProfile = await client.getUserProfile(session.accessToken, session.accessTokenSecret, consumerKey, consumerSecret)
+			const collection = await client.searchCollection(
 				userProfile.username,
 				session.accessToken,
 				session.accessTokenSecret,
@@ -259,7 +275,7 @@ export async function handleResourcesRead(params: unknown, session: SessionPaylo
 				throw new Error('Invalid release URI - must specify a release ID')
 			}
 
-			const release = await discogsClient.getRelease(releaseId, session.accessToken, session.accessTokenSecret)
+			const release = await client.getRelease(releaseId, session.accessToken, session.accessTokenSecret)
 
 			return {
 				contents: [
@@ -282,8 +298,8 @@ export async function handleResourcesRead(params: unknown, session: SessionPaylo
 			const consumerKey = env?.DISCOGS_CONSUMER_KEY || ''
 			const consumerSecret = env?.DISCOGS_CONSUMER_SECRET || ''
 
-			const userProfile = await discogsClient.getUserProfile(session.accessToken, session.accessTokenSecret, consumerKey, consumerSecret)
-			const searchResults = await discogsClient.searchCollection(
+			const userProfile = await client.getUserProfile(session.accessToken, session.accessTokenSecret, consumerKey, consumerSecret)
+			const searchResults = await client.searchCollection(
 				userProfile.username,
 				session.accessToken,
 				session.accessTokenSecret,
@@ -552,6 +568,10 @@ async function handleAuthenticatedToolsCall(params: unknown, session: SessionPay
 
 	const { name, arguments: args } = params
 
+	// Get cached client instance or fall back to direct client
+	const cachedClient = getCachedClient(env)
+	const client = cachedClient || discogsClient
+
 	// Get tool schema for validation
 	const toolSchemas: Record<string, unknown> = {
 		search_collection: {
@@ -586,6 +606,11 @@ async function handleAuthenticatedToolsCall(params: unknown, session: SessionPay
 			},
 			required: [],
 		},
+		get_cache_stats: {
+			type: 'object',
+			properties: {},
+			required: [],
+		},
 	}
 
 	// Validate tool arguments against schema
@@ -608,7 +633,7 @@ async function handleAuthenticatedToolsCall(params: unknown, session: SessionPay
 				const consumerSecret = env?.DISCOGS_CONSUMER_SECRET || ''
 
 				// Try to get user profile to verify authentication
-				const userProfile = await discogsClient.getUserProfile(session.accessToken, session.accessTokenSecret, consumerKey, consumerSecret)
+				const userProfile = await client.getUserProfile(session.accessToken, session.accessTokenSecret, consumerKey, consumerSecret)
 
 				return {
 					content: [
@@ -679,7 +704,7 @@ If the problem persists, please check that your Discogs account is accessible.`,
 				const consumerKey = env?.DISCOGS_CONSUMER_KEY || ''
 				const consumerSecret = env?.DISCOGS_CONSUMER_SECRET || ''
 
-				const userProfile = await discogsClient.getUserProfile(session.accessToken, session.accessTokenSecret, consumerKey, consumerSecret)
+				const userProfile = await client.getUserProfile(session.accessToken, session.accessTokenSecret, consumerKey, consumerSecret)
 
 				// Check for temporal terms to provide better user feedback
 				const queryWords = query.toLowerCase().split(/\s+/)
@@ -714,7 +739,7 @@ If the problem persists, please check that your Discogs account is accessible.`,
 				const seenReleaseIds = new Set<string>()
 
 				for (const searchQuery of searchQueries) {
-					const searchResults = await discogsClient.searchCollection(
+					const searchResults = await client.searchCollection(
 						userProfile.username,
 						session.accessToken,
 						session.accessTokenSecret,
@@ -785,7 +810,7 @@ If the problem persists, please check that your Discogs account is accessible.`,
 			}
 
 			try {
-				const release = await discogsClient.getRelease(releaseId, session.accessToken, session.accessTokenSecret)
+				const release = await client.getRelease(releaseId, session.accessToken, session.accessTokenSecret)
 
 				const artists = (release.artists || []).map((a) => a.name).join(', ')
 				const formats = (release.formats || []).map((f) => `${f.name} (${f.qty})`).join(', ')
@@ -828,8 +853,8 @@ If the problem persists, please check that your Discogs account is accessible.`,
 				const consumerKey = env?.DISCOGS_CONSUMER_KEY || ''
 				const consumerSecret = env?.DISCOGS_CONSUMER_SECRET || ''
 
-				const userProfile = await discogsClient.getUserProfile(session.accessToken, session.accessTokenSecret, consumerKey, consumerSecret)
-				const stats = await discogsClient.getCollectionStats(
+				const userProfile = await client.getUserProfile(session.accessToken, session.accessTokenSecret, consumerKey, consumerSecret)
+				const stats = await client.getCollectionStats(
 					userProfile.username,
 					session.accessToken,
 					session.accessTokenSecret,
@@ -924,10 +949,10 @@ If the problem persists, please check that your Discogs account is accessible.`,
 				const consumerKey = env?.DISCOGS_CONSUMER_KEY || ''
 				const consumerSecret = env?.DISCOGS_CONSUMER_SECRET || ''
 
-				const userProfile = await discogsClient.getUserProfile(session.accessToken, session.accessTokenSecret, consumerKey, consumerSecret)
+				const userProfile = await client.getUserProfile(session.accessToken, session.accessTokenSecret, consumerKey, consumerSecret)
 
 				// Get full collection for context-aware recommendations
-				const fullCollection = await discogsClient.searchCollection(
+				const fullCollection = await client.searchCollection(
 					userProfile.username,
 					session.accessToken,
 					session.accessTokenSecret,
@@ -939,7 +964,7 @@ If the problem persists, please check that your Discogs account is accessible.`,
 				// Get all collection items by paginating through all pages
 				let allReleases = fullCollection.releases
 				for (let page = 2; page <= fullCollection.pagination.pages; page++) {
-					const pageResults = await discogsClient.searchCollection(
+					const pageResults = await client.searchCollection(
 						userProfile.username,
 						session.accessToken,
 						session.accessTokenSecret,
@@ -1228,6 +1253,53 @@ If the problem persists, please check that your Discogs account is accessible.`,
 			}
 		}
 
+		case 'get_cache_stats': {
+			try {
+				if (!cachedClient) {
+					return {
+						content: [
+							{
+								type: 'text',
+								text: '**Cache Statistics**\n\nCaching is not available - no KV storage configured. All requests go directly to the Discogs API.',
+							},
+						],
+					}
+				}
+
+				const stats = await cachedClient.getCacheStats()
+				
+				let text = '**Cache Performance Statistics**\n\n'
+				text += `📊 **Total Cache Entries:** ${stats.totalEntries}\n`
+				text += `⏳ **Pending Requests:** ${stats.pendingRequests}\n\n`
+				
+				if (Object.keys(stats.entriesByType).length > 0) {
+					text += '**Cached Data Types:**\n'
+					for (const [type, count] of Object.entries(stats.entriesByType)) {
+						text += `• ${type}: ${count} entries\n`
+					}
+				} else {
+					text += '**No cached data** - Cache is empty or recently cleared\n'
+				}
+				
+				text += '\n**Cache Benefits:**\n'
+				text += '• Reduced API calls to Discogs\n'
+				text += '• Faster response times\n'
+				text += '• Better rate limit compliance\n'
+				text += '• Request deduplication for concurrent users\n'
+
+				return {
+					content: [
+						{
+							type: 'text',
+							text,
+						},
+					],
+				}
+			} catch (error) {
+				throw new Error(`Failed to get cache stats: ${error instanceof Error ? error.message : 'Unknown error'}`)
+			}
+		}
+
 		default:
 			throw new Error(`Unknown authenticated tool: ${name}`)
 	}
@@ -1422,6 +1494,15 @@ export async function handleMethod(request: JSONRPCRequest, httpRequest?: Reques
 								description: 'Filter recommendations by format (e.g., "Vinyl", "CD", "Cassette", "Digital")',
 							},
 						},
+						required: [],
+					},
+				},
+				{
+					name: 'get_cache_stats',
+					description: 'Get cache performance statistics to monitor API optimization',
+					inputSchema: {
+						type: 'object',
+						properties: {},
 						required: [],
 					},
 				},
