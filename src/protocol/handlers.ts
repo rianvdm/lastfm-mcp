@@ -987,8 +987,12 @@ If the problem persists, please check that your Discogs account is accessible.`,
 						// Original genre matching (if genre parameter provided)
 						let genreMatch = false
 						if (genre) {
-							genreMatch =
-								releaseGenres.some((g) => g.includes(genre.toLowerCase())) || releaseStyles.some((s) => s.includes(genre.toLowerCase()))
+							// Split genre parameter by common separators and check each one
+							const genreTerms = genre.toLowerCase().split(/[\s,;|&]+/).filter(term => term.length > 0)
+							genreMatch = genreTerms.some(term => 
+								releaseGenres.some((g) => g.includes(term)) || 
+								releaseStyles.some((s) => s.includes(term))
+							)
 						}
 
 						// Mood-based genre matching

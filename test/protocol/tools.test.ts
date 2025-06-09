@@ -615,6 +615,135 @@ describe('MCP Tools', () => {
 			expect(mockDiscogsClient.searchCollection).toHaveBeenCalledWith('testuser', 'test-token', 'test-secret', { per_page: 100 }, '', '')
 		})
 
+		it('should handle multiple genres in get_recommendations tool', async () => {
+			const mockUserProfile = { username: 'testuser', id: 123 }
+			const mockSearchResults = {
+				pagination: { pages: 1, page: 1, per_page: 100, items: 3, urls: {} },
+				releases: [
+					{
+						id: 1,
+						instance_id: 1,
+						date_added: '2023-01-01T00:00:00-08:00',
+						rating: 5,
+						basic_information: {
+							id: 1,
+							title: 'The Dark Side Of The Moon',
+							year: 1973,
+							artists: [{ name: 'Pink Floyd', id: 1 }],
+							genres: ['Rock'],
+							styles: ['Psychedelic Rock', 'Prog Rock'], // Matches "psychedelic" and "prog"
+							formats: [{ name: 'Vinyl', qty: '1' }],
+							labels: [{ name: 'Harvest', catno: 'SHVL 804' }],
+							resource_url: 'https://api.discogs.com/releases/1',
+							thumb: '',
+							cover_image: '',
+						},
+					},
+					{
+						id: 2,
+						instance_id: 2,
+						date_added: '2023-01-02T00:00:00-08:00',
+						rating: 4,
+						basic_information: {
+							id: 2,
+							title: 'Space Oddity',
+							year: 1969,
+							artists: [{ name: 'David Bowie', id: 2 }],
+							genres: ['Rock'],
+							styles: ['Space Rock'], // Matches "space"
+							formats: [{ name: 'CD', qty: '1' }],
+							labels: [{ name: 'RCA', catno: 'LSP-4813' }],
+							resource_url: 'https://api.discogs.com/releases/2',
+							thumb: '',
+							cover_image: '',
+						},
+					},
+					{
+						id: 3,
+						instance_id: 3,
+						date_added: '2023-01-03T00:00:00-08:00',
+						rating: 3,
+						basic_information: {
+							id: 3,
+							title: 'Jazz Album',
+							year: 1965,
+							artists: [{ name: 'Jazz Artist', id: 3 }],
+							genres: ['Jazz'],
+							styles: ['Hard Bop'], // Doesn't match any genre terms
+							formats: [{ name: 'Vinyl', qty: '1' }],
+							labels: [{ name: 'Blue Note', catno: 'BLP 4321' }],
+							resource_url: 'https://api.discogs.com/releases/3',
+							thumb: '',
+							cover_image: '',
+						},
+					},
+				],
+			}
+
+			mockDiscogsClient.getUserProfile.mockResolvedValue(mockUserProfile)
+			mockDiscogsClient.searchCollection.mockResolvedValue(mockSearchResults)
+
+			// Initialize first
+			await handleMethod({
+				jsonrpc: '2.0',
+				method: 'initialize',
+				params: {
+					protocolVersion: '2024-11-05',
+					capabilities: {},
+					clientInfo: { name: 'Test', version: '1.0' },
+				},
+				id: 1,
+			})
+
+			// Send initialized notification
+			await handleMethod({
+				jsonrpc: '2.0',
+				method: 'initialized',
+			})
+
+			const response = await handleMethod(
+				{
+					jsonrpc: '2.0',
+					method: 'tools/call',
+					params: {
+						name: 'get_recommendations',
+						arguments: {
+							genre: 'psychedelic rock prog rock space rock', // Multiple genres
+							limit: 3,
+						},
+					},
+					id: 2,
+				},
+				await createMockAuthenticatedRequest(),
+				mockJwtSecret,
+			)
+
+			expect(response).toMatchObject({
+				jsonrpc: '2.0',
+				id: 2,
+				result: {
+					content: [
+						{
+							type: 'text',
+							text: expect.stringContaining('Context-Aware Music Recommendations'),
+						},
+					],
+				},
+			})
+
+			// Check that the response includes both Pink Floyd and Bowie albums (matching different genre terms)
+			const result = response?.result as { content: Array<{ type: string; text: string }> }
+			const responseText = result.content[0].text
+			expect(responseText).toContain('Genre: psychedelic rock prog rock space rock')
+			expect(responseText).toContain('The Dark Side Of The Moon') // Matches "psychedelic" and "prog"
+			expect(responseText).toContain('Space Oddity') // Matches "space"
+			expect(responseText).not.toContain('Jazz Album') // Doesn't match any genre terms
+			expect(responseText).toContain('Found 2 matching releases') // Should find 2 matches, not 0
+
+			expect(mockDiscogsClient.getUserProfile).toHaveBeenCalledWith('test-token', 'test-secret', '', '')
+			expect(mockDiscogsClient.searchCollection).toHaveBeenCalledWith('testuser', 'test-token', 'test-secret', { per_page: 100 }, '', '')
+		})
+
 		it('should handle get_recommendations tool with format filter', async () => {
 			const mockUserProfile = { username: 'testuser', id: 123 }
 			const mockSearchResults = {
