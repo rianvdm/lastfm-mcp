@@ -181,7 +181,7 @@ describe('MCP Tools', () => {
 			const result = response?.result as { content: Array<{ type: string; text: string }> }
 			const responseText = result.content[0].text
 			expect(responseText).toContain('How to authenticate:')
-			expect(responseText).toContain('Visit: /login')
+			expect(responseText).toContain('Visit: https://discogs-mcp-prod.rian-db8.workers.dev/login')
 			expect(responseText).toContain('What you\'ll be able to do after authentication:')
 		})
 	})

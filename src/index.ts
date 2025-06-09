@@ -505,10 +505,12 @@ async function handleMCPAuth(request: Request, env: Env): Promise<Response> {
 			}
 		}
 
+		const baseUrl = 'https://discogs-mcp-prod.rian-db8.workers.dev'
+		
 		return new Response(
 			JSON.stringify({
 				error: 'Not authenticated',
-				message: 'Please visit /login to authenticate with Discogs first',
+				message: `Please visit ${baseUrl}/login to authenticate with Discogs first`,
 			}),
 			{
 				status: 401,

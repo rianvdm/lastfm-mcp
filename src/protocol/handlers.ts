@@ -127,13 +127,14 @@ async function getConnectionSession(request: Request, jwtSecret: string, env?: E
  */
 function generateAuthInstructions(request: Request): string {
 	const connectionId = request.headers.get('X-Connection-ID')
+	const baseUrl = 'https://discogs-mcp-prod.rian-db8.workers.dev'
 	
 	if (connectionId) {
 		// Connection-specific auth instructions
-		return `visit /login?connection_id=${connectionId} to authenticate with your Discogs account`
+		return `visit ${baseUrl}/login?connection_id=${connectionId} to authenticate with your Discogs account`
 	} else {
 		// Generic auth instructions
-		return 'visit /login to authenticate with Discogs'
+		return `visit ${baseUrl}/login to authenticate with Discogs`
 	}
 }
 
@@ -491,7 +492,8 @@ async function handleToolsCall(params: unknown, httpRequest?: Request): Promise<
 			// Provide unauthenticated status with connection-specific instructions
 			const connectionId = httpRequest?.headers.get('X-Connection-ID')
 			const connectionInfo = connectionId ? `\n🔗 **Connection ID:** ${connectionId}` : ''
-			const loginUrl = connectionId ? `/login?connection_id=${connectionId}` : '/login'
+			const baseUrl = 'https://discogs-mcp-prod.rian-db8.workers.dev'
+			const loginUrl = connectionId ? `${baseUrl}/login?connection_id=${connectionId}` : `${baseUrl}/login`
 			
 			return {
 				content: [
@@ -630,9 +632,10 @@ Your authentication is secure and tied to your specific session.`,
 					],
 				}
 			} catch (error) {
+				const baseUrl = 'https://discogs-mcp-prod.rian-db8.workers.dev'
 				const loginUrl = connectionId 
-					? `/login?connection_id=${connectionId}` 
-					: '/login'
+					? `${baseUrl}/login?connection_id=${connectionId}` 
+					: `${baseUrl}/login`
 				
 				return {
 					content: [
