@@ -19,9 +19,33 @@ import type { ExecutionContext } from '@cloudflare/workers-types'
 /// <reference lib="dom.iterable" />
 /// <reference lib="webworker" />
 
+/**
+ * Helper function to add CORS headers to responses
+ */
+function addCorsHeaders(headers: HeadersInit = {}): Headers {
+	const corsHeaders = new Headers(headers)
+	corsHeaders.set('Access-Control-Allow-Origin', '*')
+	corsHeaders.set('Access-Control-Allow-Methods', 'GET, POST, OPTIONS')
+	corsHeaders.set('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Connection-ID, Cookie')
+	return corsHeaders
+}
+
 export default {
 	async fetch(request: Request, env: Env, _ctx: ExecutionContext): Promise<Response> {
 		const url = new URL(request.url)
+
+		// Handle CORS preflight requests
+		if (request.method === 'OPTIONS') {
+			return new Response(null, {
+				status: 200,
+				headers: {
+					'Access-Control-Allow-Origin': '*',
+					'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+					'Access-Control-Allow-Headers': 'Content-Type, Authorization, X-Connection-ID, Cookie',
+					'Access-Control-Max-Age': '86400',
+				},
+			})
+		}
 
 		// Handle different endpoints
 		switch (url.pathname) {
@@ -380,7 +404,7 @@ async function handleMCPRequest(request: Request, env?: Env): Promise<Response> 
 			}
 
 			return new Response(serializeResponse(errorResponse), {
-				headers: { 'Content-Type': 'application/json' },
+				headers: addCorsHeaders({ 'Content-Type': 'application/json' }),
 			})
 		}
 
@@ -407,7 +431,7 @@ async function handleMCPRequest(request: Request, env?: Env): Promise<Response> 
 			}
 
 			return new Response(serializeResponse(errorResponse), {
-				headers: { 'Content-Type': 'application/json' },
+				headers: addCorsHeaders({ 'Content-Type': 'application/json' }),
 			})
 		}
 
@@ -443,10 +467,10 @@ async function handleMCPRequest(request: Request, env?: Env): Promise<Response> 
 
 				return new Response(serializeResponse(errorResponse), {
 					status: 429,
-					headers: {
+					headers: addCorsHeaders({
 						'Content-Type': 'application/json',
 						'Retry-After': rateLimitResult.resetTime ? Math.ceil((rateLimitResult.resetTime - Date.now()) / 1000).toString() : '60',
-					},
+					}),
 				})
 			}
 		}
@@ -467,12 +491,15 @@ async function handleMCPRequest(request: Request, env?: Env): Promise<Response> 
 
 		// If no response (notification), return 204 No Content
 		if (!response) {
-			return new Response(null, { status: 204 })
+			return new Response(null, { 
+				status: 204,
+				headers: addCorsHeaders()
+			})
 		}
 
 		// Return JSON-RPC response
 		return new Response(serializeResponse(response), {
-			headers: { 'Content-Type': 'application/json' },
+			headers: addCorsHeaders({ 'Content-Type': 'application/json' }),
 		})
 	} catch (error) {
 		// Internal server error
@@ -492,7 +519,7 @@ async function handleMCPRequest(request: Request, env?: Env): Promise<Response> 
 
 		return new Response(serializeResponse(errorResponse), {
 			status: 500,
-			headers: { 'Content-Type': 'application/json' },
+			headers: addCorsHeaders({ 'Content-Type': 'application/json' }),
 		})
 	}
 }
@@ -517,7 +544,7 @@ async function handleMCPAuth(request: Request, env: Env): Promise<Response> {
 						expires_at: new Date(sessionData.expiresAt).toISOString(),
 					}),
 					{
-						headers: { 'Content-Type': 'application/json' },
+						headers: addCorsHeaders({ 'Content-Type': 'application/json' }),
 					},
 				)
 			}
@@ -549,7 +576,7 @@ async function handleMCPAuth(request: Request, env: Env): Promise<Response> {
 							message: 'Use this token in the Cookie header as: session=' + sessionToken,
 						}),
 						{
-							headers: { 'Content-Type': 'application/json' },
+							headers: addCorsHeaders({ 'Content-Type': 'application/json' }),
 						},
 					)
 				}
@@ -580,7 +607,7 @@ async function handleMCPAuth(request: Request, env: Env): Promise<Response> {
 			}),
 			{
 				status: 500,
-				headers: { 'Content-Type': 'application/json' },
+				headers: addCorsHeaders({ 'Content-Type': 'application/json' }),
 			},
 		)
 	}
