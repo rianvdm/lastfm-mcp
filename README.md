@@ -31,7 +31,7 @@ This server processes plain-text queries and returns rich, markdown-formatted re
 
 ### Adding to Other MCP Clients
 
-For other MCP-compatible clients, use the server endpoint:
+For other MCP-compatible clients, like the [Cloudflare Workers LLM Playground](https://playground.ai.cloudflare.com/), use the server endpoint:
 
 ```
 https://discogs-mcp-prod.rian-db8.workers.dev/sse
