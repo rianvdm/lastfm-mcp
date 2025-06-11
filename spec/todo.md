@@ -1,80 +1,195 @@
-# Discogs MCP Server – Development Checklist
+# Last.fm MCP Server – Development Checklist
 
 > Use this file as a living checklist. Mark each `[ ]` entry as `[x]` when complete.
 
 ---
 
-## Chunk A – Project Skeleton
+## Phase 1 – Project Conversion Setup
 
-- [x] **A1** Initialize Git repo & add root `README.md`
-- [x] **A2** Run `wrangler init discogs-mcp --ts` and commit scaffold
-- [x] **A3** Add ESLint & Prettier configs and npm scripts (`lint`, `format`)
-- [x] **A4** Create GitHub Actions workflow for `lint`, `test`, and `build`
+- [ ] **A1** Update package.json name, description, and keywords for Last.fm
+- [ ] **A2** Update README.md with Last.fm-specific information
+- [ ] **A3** Update all configuration files and examples for Last.fm
+- [ ] **A4** Remove or update Discogs-specific documentation
 
-## Chunk B – MCP Protocol Foundation
+## Phase 2 – Authentication System Overhaul
 
-- [x] **B1** Create JSON-RPC message parser and types
-- [x] **B2** Implement MCP initialize/initialized flow
-- [x] **B3** Add SSE transport endpoints
-- [x] **B4** Write tests for protocol handling
+- [ ] **B1** Create new `src/auth/lastfm.ts` web authentication flow
+- [ ] **B2** Remove Discogs OAuth system (`src/auth/discogs.ts`)
+- [ ] **B3** Update authentication middleware for session key validation
+- [ ] **B4** Update environment variables and Wrangler secrets
+- [ ] **B5** Update authentication tests for Last.fm web auth flow
+- [ ] **B6** Implement MD5 method signature generation
+- [ ] **B7** Add /login and /callback routes for Last.fm auth
 
-## Chunk C – Authentication Layer
+## Phase 3 – API Client Replacement
 
-- [x] **C1** Implement Discogs OAuth utility (`src/auth/discogs.ts`)
-- [x] **C2** Add `/login` + `/callback` routes for OAuth handshake
-- [x] **C3** Persist user session via signed JWT cookie
-- [x] **C4** Add auth check to MCP handlers (except initialize)
-- [x] **C5** Write tests mocking Discogs endpoints
+- [ ] **C1** Create new `src/clients/lastfm.ts` API client
+- [ ] **C2** Implement Last.fm API methods (recent tracks, top artists, top albums, etc.)
+- [ ] **C3** Add similar artists and similar tracks endpoints
+- [ ] **C4** Implement retry logic and rate limiting
+- [ ] **C5** Remove Discogs client (`src/clients/discogs.ts`)
+- [ ] **C6** Update all imports throughout codebase
+- [ ] **C7** Add comprehensive error handling for Last.fm API
 
-## Chunk D – Infrastructure Utilities
+## Phase 4 – Data Type Updates
 
-- [x] **D1** Create `kvLogger` module (Workers KV request logging)
-- [x] **D2** Implement `rateLimit` middleware (per-user sliding window)
-- [x] **D3** Wire logger & limiter into main handler
-- [x] **D4** Add unit tests for logging and rate limiting
+- [ ] **D1** Update `src/types/` with Last.fm data structures
+- [ ] **D2** Replace Discogs types with Last.fm equivalents
+- [ ] **D3** Update MCP resource and tool schemas
+- [ ] **D4** Update validation schemas for Last.fm data
+- [ ] **D5** Test type compatibility across the system
 
-## Chunk E – MCP Resources
+## Phase 5 – MCP Resources Conversion
 
-- [x] **E1** Build Discogs REST client (`src/clients/discogs.ts`)
-- [x] **E2** Add resources/list handler
-- [x] **E3** Add resources/read handler for releases and collection
-- [x] **E4** Test resource responses
+- [ ] **E1** Update resource URIs for Last.fm (lastfm://track/{artist}/{track}, etc.)
+- [ ] **E2** Implement track resource handler
+- [ ] **E3** Implement artist resource handler
+- [ ] **E4** Implement album resource handler
+- [ ] **E5** Implement user listening history resources (recent, top artists, top albums)
+- [ ] **E6** Implement user profile resource
+- [ ] **E7** Implement similar artists and similar tracks resources
+- [ ] **E8** Add pagination support for large datasets
+- [ ] **E9** Test all new resource implementations
 
-## Chunk F – MCP Tools
+## Phase 6 – MCP Tools Conversion
 
-- [x] **F1** Add tools/list handler
-- [x] **F2** Implement search_collection tool (✅ Fixed: Now properly filters collection with client-side search)
-- [x] **F3** Implement get_release and get_collection_stats tools
-- [x] **F4** Implement get_recommendations tool
+- [ ] **F1** Replace collection tools with Last.fm listening data tools
+- [ ] **F2** Implement get_recent_tracks tool
+- [ ] **F3** Implement get_top_artists and get_top_albums tools
+- [ ] **F4** Implement get_loved_tracks tool
+- [ ] **F5** Implement get_track_info and get_artist_info tools
+- [ ] **F6** Implement get_album_info tool
+- [ ] **F7** Implement get_user_info tool
+- [ ] **F8** Implement get_similar_artists and get_similar_tracks tools
+- [ ] **F9** Implement get_listening_stats tool
+- [ ] **F10** Implement get_music_recommendations tool
+- [ ] **F11** Add comprehensive parameter validation
+- [ ] **F12** Update all tool schemas and validation
 
-## Chunk G – MCP Prompts
+## Phase 7 – MCP Prompts Adaptation
 
-- [x] **G1** Add prompts/list handler
-- [x] **G2** Implement browse_collection prompt
-- [x] **G3** Implement find_music and collection_insights prompts
-- [x] **G4** Test prompt responses
+- [ ] **G1** Update prompt definitions for Last.fm use cases
+- [ ] **G2** Implement listening_insights prompt
+- [ ] **G3** Implement music_discovery prompt
+- [ ] **G4** Implement track_analysis prompt
+- [ ] **G5** Implement album_analysis prompt
+- [ ] **G6** Implement artist_analysis prompt
+- [ ] **G7** Implement listening_habits prompt
+- [ ] **G8** Test all prompt responses and formatting
 
-## Chunk H – Polish & Test Coverage
+## Phase 8 – Protocol Handler Updates
 
-- [x] **H1** Proper JSON-RPC error responses
-- [x] **H2** MCP protocol compliance validation
-- [x] **H3** Integration tests with mock MCP client
-- [x] **H4** End-to-end test: initialize → auth → use tools
+- [ ] **H1** Update `src/protocol/handlers.ts` for Last.fm resources
+- [ ] **H2** Update tool call handlers for Last.fm tools
+- [ ] **H3** Update prompt handlers for Last.fm prompts
+- [ ] **H4** Update error handling for Last.fm API errors
+- [ ] **H5** Validate MCP protocol compliance
 
-## Chunk I – Deployment
+## Phase 9 – Infrastructure & Configuration
 
-- [x] **I1** Configure Wrangler environments & secrets (`wrangler.toml`)
-- [x] **I2** Extend CI workflow to publish to production on `main`
-- [x] **I3** Verify production deploy & test with Claude Desktop
+- [ ] **I1** Update `wrangler.toml` for Last.fm environment
+- [ ] **I2** Update environment variable names and secrets
+- [ ] **I3** Update KV namespace names and configuration
+- [ ] **I4** Update rate limiting for Last.fm API limits (~5 req/sec)
+- [ ] **I5** Implement caching strategy for performance
+- [ ] **I6** Add monitoring and metrics collection
+- [ ] **I7** Update logging for Last.fm-specific events
+- [ ] **I8** Configure CORS for web clients
+- [ ] **I9** Set up health check endpoints
+
+## Phase 10 – Testing Overhaul
+
+- [ ] **J1** Update unit tests for Last.fm API client
+- [ ] **J2** Update integration tests with Last.fm API mocking
+- [ ] **J3** Update MCP protocol tests for Last.fm resources/tools
+- [ ] **J4** Add end-to-end tests for Last.fm scenarios
+- [ ] **J5** Test rate limiting and backoff behavior
+- [ ] **J6** Test authentication edge cases
+- [ ] **J7** Update test data and fixtures for Last.fm
+- [ ] **J8** Add performance and load testing
+- [ ] **J9** Validate test coverage ≥ 80%
+
+## Phase 11 – Documentation & Examples
+
+- [ ] **K1** Update README with Last.fm setup instructions
+- [ ] **K2** Create Last.fm API key setup guide
+- [ ] **K3** Update Claude Desktop configuration examples
+- [ ] **K4** Create Last.fm-specific usage examples
+- [ ] **K5** Add setup guide for Last.fm API credentials
+- [ ] **K6** Document rate limiting and caching behavior
+- [ ] **K7** Update troubleshooting guide for Last.fm issues
+- [ ] **K8** Update deployment documentation
+- [ ] **K9** Create monitoring and alerting documentation
+
+## Phase 12 – Deployment & Validation
+
+- [ ] **L1** Test deployment to Cloudflare Workers
+- [ ] **L2** Validate Last.fm API integration in production
+- [ ] **L3** Test with Claude Desktop client
+- [ ] **L4** Verify all MCP protocol compliance
+- [ ] **L5** Performance testing and optimization
+- [ ] **L6** Test with multiple concurrent users
+- [ ] **L7** Validate caching effectiveness
+- [ ] **L8** Monitor logs and error rates
+- [ ] **L9** Set up production alerting
+- [ ] **L10** Conduct security review
+
+---
+
+## Key Last.fm Integration Points
+
+### API Endpoints to Implement
+- `user.getRecentTracks` - Recent listening history (with pagination)
+- `user.getTopArtists` - Top artists by time period
+- `user.getTopAlbums` - Top albums by time period
+- `user.getLovedTracks` - User's loved tracks
+- `track.getInfo` - Track metadata and statistics
+- `artist.getInfo` - Artist information and bio
+- `album.getInfo` - Album information and track listing
+- `user.getInfo` - User profile information
+- `artist.getSimilar` - Similar artists with scores
+- `track.getSimilar` - Similar tracks with scores
+- `auth.getSession` - Convert auth token to session key
+
+### Authentication Requirements
+- Last.fm API key (public identifier)
+- Last.fm shared secret (for signing requests)
+- Session key (obtained after user authorization, permanent by default)
+- Method signatures (MD5 hash of parameters + shared secret)
+- Web authentication flow similar to OAuth but with custom signing
+
+### Rate Limiting Considerations
+- Last.fm API: ~5 requests per second per API key
+- Implement exponential backoff and retry logic
+- Cache frequently accessed data (24h for static, 5min for user data)
+- Monitor quota usage and implement graceful degradation
+- Queue requests during high traffic periods
+
+### Data Mapping Challenges
+- Map Last.fm track/artist/album data to MCP resource format
+- Handle missing metadata gracefully with defaults
+- Convert Unix timestamps to ISO 8601 format
+- Map Last.fm tags to genres/categories with confidence scores
+- Normalize artist and track names for consistency
+- Handle special characters and Unicode in names
+- Deal with album disambiguation (multiple releases)
+- Process large datasets efficiently (streaming/pagination)
 
 ---
 
 ### Ongoing Quality Gates
 
-- [x] Lint passes (`npm run lint`)
-- [x] Unit tests pass (`npm test`) - 182 tests passing
-- [x] Build succeeds (`npm run build`)
+- [ ] Lint passes (`npm run lint`)
+- [ ] Unit tests pass (`npm test`)
+- [ ] Build succeeds (`npm run build`)
 - [ ] Code coverage ≥ 80 percent
-- [x] MCP protocol compliance validated
+- [ ] MCP protocol compliance validated
+- [ ] Last.fm API integration tested
+- [ ] Claude Desktop compatibility verified
+- [ ] Rate limiting properly implemented
+- [ ] Caching working effectively
+- [ ] Error handling comprehensive
+- [ ] Security measures in place
+- [ ] Performance benchmarks met
 
-> **Tip:** This checklist now reflects building a proper MCP server that will work with Claude Desktop and other MCP clients.
+> **Tip:** This conversion maintains the MCP server architecture while adapting to Last.fm's API and data model. Focus on one phase at a time to ensure stability.

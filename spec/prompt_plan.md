@@ -1,125 +1,124 @@
-# Prompt Plan
+# Last.fm MCP Server - Conversion Plan
 
-Below is a complete roadmap that goes from "big picture" → "progressively smaller chunks" → "atomic, right-sized steps" → "ready-to-paste LLM prompts".  
-All prompts are wrapped in triple-back-tick blocks with the language tag `text`.
-
----
-
-## 1 – High-Level Blueprint
-
-1. Foundation & Tooling  
-   1.1 Repository, CI, linting/formatting  
-   1.2 Wrangler-based Cloudflare Workers scaffold (TypeScript)
-2. Core Runtime  
-   2.1 HTTP handler + MCP JSON-RPC envelope  
-   2.2 MCP protocol implementation (initialize, capabilities)
-3. Security & Observability  
-   3.1 Discogs OAuth flow  
-   3.2 Workers KV request logging  
-   3.3 Per-user rate limiting
-4. Core Features  
-   4.1 MCP Resources (release, collection, search)  
-   4.2 MCP Tools (search_collection, get_release, etc.)  
-   4.3 MCP Prompts (browse, find, insights)  
-   4.4 Collection stats tool  
-   4.5 Recommendations tool (w/ optional Last.fm)
-5. UX & Resilience  
-   5.1 Proper JSON-RPC error handling  
-   5.2 MCP-compliant error responses
-6. Quality Gates  
-   6.1 Unit tests, integration tests, MCP protocol tests  
-   6.2 CI workflow, preview deploys on push
-7. Launch & Beyond  
-   7.1 Production deploy  
-   7.2 Post-launch monitoring, future enhancements
+This document outlines the conversion of the Discogs MCP Server to a Last.fm MCP Server. The plan builds on the existing architecture while adapting to Last.fm's API and data structures.
 
 ---
 
-## 2 – First Pass: Iterative Chunks
+## 1 – Conversion Strategy
 
-Chunk A – Project Skeleton  
-• Create repo → Wrangler init → TypeScript, ESLint & Prettier → GitHub CI
-
-Chunk B – MCP Protocol Foundation  
-• HTTP SSE transport → JSON-RPC parser → MCP initialize handler
-
-Chunk C – Auth Layer  
-• Discogs OAuth endpoints → Session cookie/JWT → Guard MCP methods
-
-Chunk D – Infra Utilities  
-• KV logging module → Rate limiter middleware
-
-Chunk E – MCP Resources  
-• Implement resources/list → resources/read → Release & collection resources
-
-Chunk F – MCP Tools  
-• Implement tools/list → tools/call → Search, stats, recommendations
-
-Chunk G – MCP Prompts  
-• Implement prompts/list → prompts/get → Browse, find, insights prompts
-
-Chunk H – Polish & Tests  
-• Error handling → MCP compliance tests → Integration tests
-
-Chunk I – Deploy  
-• Prod Wrangler environment → Preview + prod GitHub actions
+1. **Foundation Updates**  
+   1.1 Update project metadata and documentation  
+   1.2 Modify API client from Discogs to Last.fm  
+2. **Authentication Changes**  
+   2.1 Replace Discogs OAuth with Last.fm API key authentication  
+   2.2 Update session management  
+3. **Data Model Updates**  
+   3.1 Replace Discogs data types with Last.fm equivalents  
+   3.2 Update resource and tool schemas  
+4. **Core Feature Adaptation**  
+   4.1 MCP Resources (tracks, albums, artists, user data)  
+   4.2 MCP Tools (recent tracks, top artists, loved tracks, etc.)  
+   4.3 MCP Prompts (listening history, music discovery, stats)  
+   4.4 Listening statistics and insights  
+   4.5 Music recommendations based on listening history
+5. **Configuration Updates**  
+   5.1 Update Cloudflare Workers configuration  
+   5.2 Environment variables and secrets  
+6. **Testing & Validation**  
+   6.1 Update tests for Last.fm API integration  
+   6.2 Validate MCP protocol compliance  
+7. **Documentation**  
+   7.1 Update README and usage instructions  
+   7.2 Create Last.fm-specific examples
 
 ---
 
-## 3 – Second Pass: Atomic Steps
+## 2 – Conversion Chunks
 
-Below, each chunk is split into 2-to-4 digestible steps that fit in a single PR/session.
+Chunk A – Project Metadata  
+• Update package.json, README, and project documentation for Last.fm
 
-Chunk A – Project Skeleton  
-A1 Initialize Git repo & README  
-A2 Run `wrangler init discogs-mcp --ts` & commit  
-A3 Add ESLint + Prettier configs & npm scripts  
-A4 Add GitHub Actions workflow (`test`, `lint`, `build`)
+Chunk B – API Client Replacement  
+• Replace Discogs client with Last.fm API client → Update data types
 
-Chunk B – MCP Protocol Foundation  
-B1 Create JSON-RPC message parser and types  
-B2 Implement MCP initialize/initialized flow  
-B3 Add SSE transport endpoints  
-B4 Write tests for protocol handling
+Chunk C – Authentication Overhaul  
+• Replace OAuth with Last.fm API key → Update auth middleware
 
-Chunk C – Auth Layer  
-C1 Create `src/auth/discogs.ts` wrapper (request token, callback, access token)  
-C2 Add `/login` and `/callback` routes in Worker  
-C3 Persist user session in cookie (signed JWT)  
-C4 Middleware to reject unauthenticated MCP methods
+Chunk D – Resource Updates  
+• Update MCP resources for Last.fm data → Tracks, albums, artists, user profile
 
-Chunk D – Infra Utilities  
-D1 Write `kvLogger` (put entry + TTL)  
-D2 Create `rateLimit` middleware (KV counter + 429)  
-D3 Wire logger & limiter into main handler and extend tests
+Chunk E – Tool Conversion  
+• Convert tools to Last.fm equivalents → Recent tracks, top artists, loved tracks
 
-Chunk E – MCP Resources  
-E1 Implement Discogs REST client util  
-E2 Add resources/list handler  
-E3 Add resources/read handler for releases and collection  
-E4 Test resource responses
+Chunk F – Prompt Adaptation  
+• Update prompts for Last.fm use cases → Listening insights, music discovery
 
-Chunk F – MCP Tools  
-F1 Add tools/list handler  
-F2 Implement search_collection tool  
-F3 Implement get_release and get_collection_stats tools  
-F4 Implement get_recommendations tool
+Chunk G – Configuration Updates  
+• Update Wrangler config → Environment variables → Secrets management
 
-Chunk G – MCP Prompts  
-G1 Add prompts/list handler  
-G2 Implement browse_collection prompt  
-G3 Implement find_music and collection_insights prompts  
-G4 Test prompt responses
+Chunk H – Testing & Validation  
+• Update test suites → Validate Last.fm integration → MCP compliance
 
-Chunk H – Polish & Tests  
-H1 Proper JSON-RPC error responses  
-H2 MCP protocol compliance validation  
-H3 Integration tests with mock MCP client  
-H4 End-to-end test: initialize → auth → use tools
+Chunk I – Documentation  
+• Update README → Usage examples → API documentation
 
-Chunk I – Deploy  
-I1 Add `.dev.vars` & `wrangler.toml` prod vars (KV, secrets)  
-I2 GitHub Action: test → build → `wrangler publish` on `main`
+---
+
+## 3 – Detailed Conversion Steps
+
+Chunk A – Project Metadata  
+A1 Update package.json name, description, and keywords for Last.fm  
+A2 Update README.md with Last.fm-specific information  
+A3 Update spec files (spec.md, todo.md) for Last.fm requirements  
+A4 Update example configurations for Last.fm API
+
+Chunk B – API Client Replacement  
+B1 Create new `src/clients/lastfm.ts` API client  
+B2 Update data types in `src/types/` for Last.fm responses  
+B3 Remove Discogs-specific client and types  
+B4 Update imports throughout codebase
+
+Chunk C – Authentication Overhaul  
+C1 Replace OAuth with API key authentication in `src/auth/lastfm.ts`  
+C2 Update authentication middleware for API key validation  
+C3 Remove OAuth routes and update session management  
+C4 Update environment variables and secrets
+
+Chunk D – Resource Updates  
+D1 Update resource URIs for Last.fm (lastfm://track/{id}, etc.)  
+D2 Implement resource handlers for tracks, albums, artists  
+D3 Add user profile and listening history resources  
+D4 Test new resource implementations
+
+Chunk E – Tool Conversion  
+E1 Replace collection tools with Last.fm equivalents  
+E2 Implement get_recent_tracks, get_top_artists, get_loved_tracks  
+E3 Implement get_listening_stats and get_music_recommendations  
+E4 Update tool schemas and parameter validation
+
+Chunk F – Prompt Adaptation  
+F1 Update prompts for Last.fm use cases  
+F2 Create listening_insights, music_discovery prompts  
+F3 Update browse_music prompt for Last.fm data  
+F4 Test prompt generation and responses
+
+Chunk G – Configuration Updates  
+G1 Update wrangler.toml for Last.fm environment  
+G2 Update environment variable names and secrets  
+G3 Update Claude Desktop configuration examples  
+G4 Test deployment configuration
+
+Chunk H – Testing & Validation  
+H1 Update test suites for Last.fm API mocking  
+H2 Validate all MCP protocol compliance  
+H3 Add integration tests for Last.fm scenarios  
+H4 End-to-end testing with Claude Desktop
+
+Chunk I – Documentation  
+I1 Update README with Last.fm setup instructions  
+I2 Create Last.fm-specific usage examples  
+I3 Update API documentation and schemas  
+I4 Add troubleshooting guide for Last.fm issues
 
 ---
 
@@ -138,18 +137,18 @@ Result: steps are "small enough to be safe, big enough to advance".
 Copy-paste each prompt (in order) into your favorite code-gen LLM.  
 Every prompt assumes all previous code now exists.
 
-### Prompt 01 – Repo & Wrangler Init
+### Prompt 01 – Project Metadata Update
 
 ```text
-You are coding in an empty Git repo called "discogs-mcp".
+Update the cloned Last.fm MCP server project metadata.
 
 Task:
-1. Run `wrangler init discogs-mcp --ts`.
-2. Ensure `package.json` uses "type": "module" and Node ≥ 20.
-3. Add `.gitignore` for node_modules & Wrangler artifacts.
-4. Add a minimal `README.md` describing the project purpose.
+1. Update `package.json` name to "lastfm-mcp" and description to reference Last.fm.
+2. Update keywords to include "lastfm", "music", "scrobbling".
+3. Update the main README.md to describe Last.fm MCP server purpose.
+4. Update any Discogs references to Last.fm throughout the project.
 
-Return only the created/modified files with full contents.
+Return only the modified files with full contents.
 ```
 
 ### Prompt 02 – Lint & Format
@@ -230,32 +229,34 @@ Create src/transport/sse.ts:
 Test SSE message flow.
 ```
 
-### Prompt 07 – Discogs OAuth (Part 1)
+### Prompt 07 – Last.fm Web Authentication
 
 ```text
-Add Discogs OAuth utilities.
+Replace Discogs OAuth with Last.fm web authentication flow.
 
 Steps:
-1. Create src/auth/discogs.ts with functions:
-    - getRequestToken()
-    - getAccessToken(oauthToken, oauthVerifier)
-2. Use oauth-1.0a + crypto (HMAC-SHA1).
-3. Store consumer key/secret in Wrangler secrets.
+1. Create src/auth/lastfm.ts with functions:
+    - getAuthUrl(apiKey: string, callbackUrl: string)
+    - getSessionKey(token: string, apiKey: string, secret: string)
+    - generateMethodSignature(params: object, secret: string)
+2. Implement MD5 signing for authenticated requests.
+3. Store Last.fm API key and shared secret in Wrangler secrets.
+4. Add /login and /callback routes for authentication flow.
 
 Return full code and placeholder env names.
 ```
 
-### Prompt 08 – Discogs OAuth (Part 2)
+### Prompt 08 – Last.fm Authentication Routes
 
 ```text
-Wire OAuth routes.
+Wire Last.fm authentication routes.
 
 Modify src/index.ts:
-• GET /login → redirect user to Discogs authorize URL.
-• GET /callback → exchange tokens, set signed JWT cookie, return "Logged in!"
+• GET /login → redirect user to Last.fm authorize URL.
+• GET /callback → exchange token for session key, set signed JWT cookie, return "Logged in!"
 • Add auth check to MCP handlers (except initialize)
 
-Add Jest test mocking fetch to Discogs endpoints.
+Add tests mocking fetch to Last.fm endpoints.
 ```
 
 ### Prompt 09 – KV Logger
@@ -280,70 +281,98 @@ Implement per-user rate limiting.
 Add unit tests for limit reset & block.
 ```
 
-### Prompt 11 – Discogs Client
+### Prompt 11 – Last.fm Client
 
 ```text
-Add REST wrapper.
+Replace Discogs client with Last.fm API wrapper.
 
-File src/clients/discogs.ts:
-• getRelease(id, token)
-• searchCollection(query, token, opts)
-• getCollectionStats(token)
-Both include User-Agent header and user OAuth token.
+File src/clients/lastfm.ts:
+• getRecentTracks(username, apiKey, limit?, from?, to?)
+• getTopArtists(username, apiKey, period?, limit?)
+• getTopAlbums(username, apiKey, period?, limit?)
+• getLovedTracks(username, apiKey, limit?)
+• getTrackInfo(artist, track, apiKey, username?)
+• getArtistInfo(artist, apiKey, username?)
+• getAlbumInfo(artist, album, apiKey, username?)
+• getUserInfo(username, apiKey)
+• getSimilarArtists(artist, apiKey, limit?)
+• getSimilarTracks(artist, track, apiKey, limit?)
 
-Include type defs for Discogs API responses.
+Include User-Agent header, Last.fm API rate limiting, retry logic.
+Include comprehensive type definitions for Last.fm API responses.
+Add error handling for API failures and rate limits.
 ```
 
-### Prompt 12 – Resources Implementation
+### Prompt 12 – Last.fm Resources Implementation
 
 ```text
-Implement MCP resources.
+Implement MCP resources for Last.fm.
 
 Add to src/protocol/handlers.ts:
-• handleListResources(): return available resources
-• handleReadResource(uri): read specific resource
+• handleListResources(): return available Last.fm resources
+• handleReadResource(uri): read specific Last.fm resource
 
 Resources:
-• discogs://release/{id}
-• discogs://collection
-• discogs://search?q={query}
+• lastfm://track/{artist}/{track}
+• lastfm://artist/{artist}
+• lastfm://album/{artist}/{album}
+• lastfm://user/{username}/recent
+• lastfm://user/{username}/top-artists
+• lastfm://user/{username}/top-albums
+• lastfm://user/{username}/loved
+• lastfm://user/{username}/profile
+• lastfm://artist/{artist}/similar
+• lastfm://track/{artist}/{track}/similar
 
-Return proper MCP resource format with contents.
+Return proper MCP resource format with Last.fm data.
+Include pagination support and error handling.
 ```
 
-### Prompt 13 – Tools Implementation
+### Prompt 13 – Last.fm Tools Implementation
 
 ```text
-Implement MCP tools.
+Implement MCP tools for Last.fm.
 
 Add to src/protocol/handlers.ts:
-• handleListTools(): return tool definitions
-• handleCallTool(name, arguments): execute tool
+• handleListTools(): return Last.fm tool definitions
+• handleCallTool(name, arguments): execute Last.fm tool
 
 Tools:
-• search_collection(query, limit?)
-• get_release(release_id)
-• get_collection_stats()
-• get_recommendations(mood?, genre?, decade?)
+• get_recent_tracks(username, limit?, from?, to?)
+• get_top_artists(username, period?, limit?)
+• get_top_albums(username, period?, limit?)
+• get_loved_tracks(username, limit?)
+• get_track_info(artist, track, username?)
+• get_artist_info(artist, username?)
+• get_album_info(artist, album, username?)
+• get_user_info(username)
+• get_similar_artists(artist, limit?)
+• get_similar_tracks(artist, track, limit?)
+• get_listening_stats(username, period?)
+• get_music_recommendations(username, genre?, limit?)
 
-Include proper schemas and descriptions.
+Include proper schemas, validation, and descriptions for Last.fm data.
+Add comprehensive error handling and parameter validation.
 ```
 
-### Prompt 14 – Prompts Implementation
+### Prompt 14 – Last.fm Prompts Implementation
 
 ```text
-Implement MCP prompts.
+Implement MCP prompts for Last.fm.
 
 Add to src/protocol/handlers.ts:
-• handleListPrompts(): return prompt definitions
+• handleListPrompts(): return Last.fm prompt definitions
 • handleGetPrompt(name, arguments?): return prompt messages
 
 Prompts:
-• browse_collection
-• find_music(query)
-• collection_insights
+• listening_insights(username)
+• music_discovery(username, genre?)
+• track_analysis(artist, track)
+• album_analysis(artist, album)
+• artist_analysis(artist)
+• listening_habits(username)
 
-Return proper MCP prompt format.
+Return proper MCP prompt format for Last.fm use cases.
 ```
 
 ### Prompt 15 – Error Handling
@@ -352,9 +381,13 @@ Return proper MCP prompt format.
 Enhance error handling for MCP compliance.
 
 1. Wrap all handlers in try/catch → proper JSON-RPC errors
-2. Map Discogs API errors to MCP error codes
-3. Add request validation
-4. Test error scenarios
+2. Map Last.fm API errors to MCP error codes
+3. Add comprehensive request validation
+4. Handle rate limiting gracefully
+5. Implement retry logic with exponential backoff
+6. Add timeout handling
+7. Test all error scenarios
+8. Provide user-friendly error messages
 ```
 
 ### Prompt 16 – Integration Tests
@@ -363,11 +396,15 @@ Enhance error handling for MCP compliance.
 Add comprehensive MCP protocol tests.
 
 • Test full initialize flow
-• Test resources/list and resources/read
-• Test tools/list and tools/call
-• Test error handling
-• Mock Discogs API responses
+• Test authentication flow end-to-end
+• Test resources/list and resources/read for all resource types
+• Test tools/list and tools/call for all tools
+• Test prompts/list and prompts/get for all prompts
+• Test error handling and edge cases
+• Mock Last.fm API responses with realistic data
+• Test rate limiting behavior
 • Validate JSON-RPC compliance
+• Test with different user scenarios
 ```
 
 ### Prompt 17 – Deploy Workflow
@@ -376,7 +413,11 @@ Add comprehensive MCP protocol tests.
 Update `.github/workflows/ci.yml`:
 
 • On push to `main`, after tests build & publish with `wrangler publish --env production`.
-• Store secrets: CF_API_TOKEN, CF_ACCOUNT_ID, Discogs keys in repo settings.
+• Store secrets: CF_API_TOKEN, CF_ACCOUNT_ID, Last.fm API key and secret in repo settings.
+• Add environment-specific deployments (dev, staging, production).
+• Include health checks after deployment.
+• Add rollback capability on deployment failure.
+• Monitor deployment metrics and logs.
 
 Add a "Deploy succeeded" comment to PRs on success.
 ```
