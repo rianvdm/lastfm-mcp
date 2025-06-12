@@ -2,7 +2,7 @@
 	"mcpServers": {
 		"lastfm": {
 			"command": "npx",
-			"args": ["mcp-remote", "https://lastfm-mcp-prod.your-domain.workers.dev/sse"]
+			"args": ["mcp-remote", "https://lastfm-mcp-prod.rian-db8.workers.dev/sse"]
 		}
 	}
 }
