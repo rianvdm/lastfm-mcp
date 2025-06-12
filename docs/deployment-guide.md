@@ -1,13 +1,13 @@
 # Production Deployment & Verification Guide
 
-This guide walks you through deploying the Discogs MCP Server to production and verifying it works with Claude Desktop.
+This guide walks you through deploying the Last.fm MCP Server to production and verifying it works with Claude Desktop.
 
 ## Prerequisites
 
 Before deploying to production, ensure you have:
 
 1. **Cloudflare Account** with Workers enabled
-2. **Discogs Developer Account** with an app created
+2. **Last.fm Developer Account** with API credentials
 3. **GitHub Repository** with appropriate secrets configured
 4. **Claude Desktop** installed and configured
 
@@ -44,8 +44,8 @@ This script will:
 
 1. Create production KV namespaces for logs, rate limiting, and sessions
 2. Prompt you to set the required secrets:
-   - `DISCOGS_CONSUMER_KEY` - Your Discogs app consumer key
-   - `DISCOGS_CONSUMER_SECRET` - Your Discogs app consumer secret
+   - `LASTFM_API_KEY` - Your Last.fm API key
+   - `LASTFM_SHARED_SECRET` - Your Last.fm shared secret
    - `JWT_SECRET` - A strong random string for JWT signing
 
 ### Getting Discogs Credentials

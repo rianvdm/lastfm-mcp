@@ -1,4 +1,4 @@
-name = "discogs-mcp"
+name = "lastfm-mcp"
 main = "src/index.ts"
 compatibility_date = "2024-12-01"
 compatibility_flags = ["global_fetch_strictly_public"]
@@ -21,7 +21,7 @@ id = "a0bc40f523d54a6ab70fa947ac3daeaf"
 
 # Production environment
 [env.production]
-name = "discogs-mcp-prod"
+name = "lastfm-mcp-prod"
 
 [[env.production.kv_namespaces]]
 binding = "MCP_LOGS"
@@ -36,6 +36,6 @@ binding = "MCP_SESSIONS"
 id = "e45edcc5347e4b409169c1d0a9b2ed5d"
 
 # Secrets (set via wrangler secret put):
-# - DISCOGS_CONSUMER_KEY
-# - DISCOGS_CONSUMER_SECRET
+# - LASTFM_API_KEY
+# - LASTFM_SHARED_SECRET
 # - JWT_SECRET 

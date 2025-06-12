@@ -1,10 +1,10 @@
-# Discogs MCP Server
+# Last.fm MCP Server
 
-A Cloudflare Workers-based service that allows authenticated users to interact with their personal Discogs music collection via natural language commands using the MCP (Model Context Protocol).
+A Cloudflare Workers-based service that allows authenticated users to interact with their Last.fm listening history and music data via natural language commands using the MCP (Model Context Protocol).
 
 ## Overview
 
-This server processes plain-text queries and returns rich, markdown-formatted responses suitable for display in natural language clients like ChatGPT or Claude. It features intelligent mood mapping that translates emotional descriptors like "mellow," "energetic," or "Sunday evening vibes" into relevant Discogs genres and styles.
+This server processes MCP JSON-RPC requests and returns structured responses with Last.fm listening data. It provides access to your music history, statistics, and discovery features through AI assistants like Claude. The server features intelligent music analysis that provides insights into your listening patterns and helps discover new music based on your preferences.
 
 ## Quick Start
 
@@ -16,17 +16,17 @@ This server processes plain-text queries and returns rich, markdown-formatted re
 ```json
 {
 	"mcpServers": {
-		"discogs": {
+		"lastfm": {
 			"command": "npx",
-			"args": ["mcp-remote", "https://discogs-mcp-prod.rian-db8.workers.dev/sse"]
+			"args": ["mcp-remote", "https://lastfm-mcp-prod.your-domain.workers.dev/sse"]
 		}
 	}
 }
 ```
 
 3. Restart Claude Desktop
-4. Ask something like "What can you tell me about my Discogs collection?"
-5. Visit the provided login URL to connect your Discogs account
+4. Ask something like "What can you tell me about my Last.fm listening history?"
+5. Visit the provided login URL to connect your Last.fm account
 6. Come back and enjoy! See below for things you can ask about
 
 ### Adding to Other MCP Clients
@@ -34,60 +34,70 @@ This server processes plain-text queries and returns rich, markdown-formatted re
 For other MCP-compatible clients, like the [Cloudflare Workers LLM Playground](https://playground.ai.cloudflare.com/), use the server endpoint:
 
 ```
-https://discogs-mcp-prod.rian-db8.workers.dev/sse
+https://lastfm-mcp-prod.your-domain.workers.dev/sse
 ```
 
 ## Key Features
 
-- **OAuth Authentication**: Secure login via Discogs OAuth
-- **Advanced Search Intelligence**: Enhanced search algorithms with multiple matching strategies:
-  - **OR Logic for Genre Searches**: Queries like "psychedelic rock prog rock space rock" find releases matching ANY of the terms, not requiring all terms to match
-  - **Relevance Scoring**: Multi-word searches prioritize results by number of matching terms - albums matching more terms rank higher
-  - **Smart Context Detection**: Automatically detects whether you're searching for specific albums vs. mood-based recommendations
-- **Intelligent Mood Mapping**: Translate emotional descriptors and contextual cues into music recommendations:
-  - Mood descriptors: "mellow," "energetic," "melancholy," "romantic," "dark"
-  - Contextual awareness: "Sunday evening," "studying," "workout," "rainy day"
-  - Time and seasonal contexts: "morning," "midnight," "winter," "summer"
-  - **Enhanced Album Recognition**: Distinguishes between specific searches like "Dark Side of the Moon" vs. mood queries like "dark ambient music"
-- **Collection Search**: Search through your Discogs collection by artist, album, genre, year, or mood
-- **Release Details**: Get detailed information about specific releases including tracklists, formats, and metadata
-- **Collection Statistics**: Analyze your collection with breakdowns by genre, decade, format, and more
-- **Context-Aware Recommendations**: Get intelligent recommendations from your own collection based on:
-  - **Multi-Genre Support**: Combine multiple genres like "psychedelic rock prog rock space rock" using flexible separator detection
-  - Mood and emotional context (e.g., "mellow Sunday evening vibes")
-  - Time periods (e.g., "1960s", "1970s", "1980s")
-  - Similar artists or albums (e.g., "similar to Miles Davis")
-  - Natural language queries (e.g., "hard bop albums from the 60s that I own")
-- **Smart Caching**: Intelligent KV-based caching system for improved performance and rate limit optimization
-- **Natural Language Interface**: Process commands via MCP protocol
-- **Rich Responses**: Structured output optimized for AI assistants
-- **Rate Limiting**: Per-user request throttling via Workers KV
+- **Last.fm Web Authentication**: Secure login via Last.fm's authentication flow
+- **Listening History Access**: Complete access to your Last.fm scrobbling data:
+  - Recent tracks with timestamps and metadata
+  - Top artists and albums by time period (7 days to overall)
+  - Loved tracks and personal statistics
+- **Music Discovery**: Intelligent recommendations based on your listening patterns:
+  - Similar artists and tracks with relevance scores
+  - Genre-based recommendations from your history
+  - Contextual suggestions for different moods and activities
+- **Comprehensive Music Data**: Get detailed information about:
+  - Track metadata, play counts, and tags
+  - Artist biographies, similar artists, and top tracks
+  - Album information with track listings and statistics
+- **Listening Analytics**: Analyze your music habits with:
+  - Listening statistics by time period
+  - Genre distribution and trends
+  - Artist and album play count analysis
+  - Temporal listening patterns
+- **User Profile Integration**: Access to your Last.fm profile data:
+  - Registration date and total scrobbles
+  - User demographics (if public)
+  - Social features and compatibility scores
+- **Smart Caching**: Intelligent caching system optimized for Last.fm API rate limits
+- **MCP Protocol Compliance**: Full JSON-RPC 2.0 implementation with proper error handling
+- **Real-time Data**: Live access to Last.fm API without local storage requirements
+- **Rate Limiting**: Respect Last.fm API limits with intelligent request throttling
 
 ## Available Tools
 
-- **`search_collection`** - Enhanced search with intelligent matching and relevance scoring
-  - **Smart genre detection**: Use OR logic for genre searches like "psychedelic rock prog rock"
-  - **Relevance ranking**: Multi-word searches prioritize releases with more matching terms
-  - **Mood and contextual awareness**: Supports mood descriptors and contextual cues
-  - **Flexible input**: Accepts genres separated by spaces, commas, or other separators
-  - Examples: "mellow", "energetic", "Sunday evening", "ambient drone progressive"
-- **`get_release`** - Get detailed information about a specific release
-- **`get_collection_stats`** - View statistics about your collection
-- **`get_recommendations`** - Enhanced context-aware recommendations with multi-genre support
-  - **Multi-genre filtering**: Combine genres like "psychedelic rock prog rock space rock"
-  - **Similarity matching**: Find releases similar to specific artists/albums
-  - **Advanced scoring**: Combines genre matching, style matching, era matching, and personal ratings
-  - **Intelligent filtering**: OR logic for genre/mood queries, smart context detection
-  - Examples: "mellow jazz for studying", "energetic workout music", "psychedelic rock prog rock"
+- **`get_recent_tracks`** - Get your recently played tracks with timestamps and metadata
+  - Supports time filtering (from/to dates)
+  - Configurable limit (1-200 tracks)
+  - Real-time scrobbling data
+- **`get_top_artists`** - Get your most played artists by time period
+  - Time periods: 7day, 1month, 3month, 6month, 12month, overall
+  - Play count statistics and rankings
+  - Artist metadata and tags
+- **`get_top_albums`** - Get your most played albums with statistics
+- **`get_loved_tracks`** - Access your loved/favorite tracks
+- **`get_track_info`** - Detailed information about specific tracks
+  - Play counts, tags, similar tracks
+  - Personal statistics (if username provided)
+- **`get_artist_info`** - Artist biographies, similar artists, and statistics
+- **`get_album_info`** - Album details with track listings and metadata
+- **`get_user_info`** - User profile information and statistics
+- **`get_similar_artists`** - Find artists similar to your favorites
+- **`get_similar_tracks`** - Discover tracks similar to ones you love
+- **`get_listening_stats`** - Comprehensive listening analytics
+- **`get_music_recommendations`** - Personalized recommendations based on your history
 
 ## Architecture
 
 Built on Cloudflare Workers with:
 
 - Workers KV for request logging and rate limiting
-- Discogs API for collection data
+- Last.fm API for listening data and music metadata
 - MCP (Model Context Protocol) for AI assistant integration
-- No persistent storage or caching
+- Intelligent caching system for performance optimization
+- Last.fm web authentication flow with session management
 - Automated CI/CD deployment to production
 
 ## Development
@@ -108,7 +118,7 @@ For local development, use the configuration in `config/claude-desktop-config.js
 ```json
 {
 	"mcpServers": {
-		"discogs-local": {
+		"lastfm-local": {
 			"command": "npx",
 			"args": ["mcp-remote", "http://localhost:8787/sse"]
 		}
@@ -121,7 +131,7 @@ For production, use the configuration in `config/claude-desktop-config-productio
 ```json
 {
 	"mcpServers": {
-		"discogs": {
+		"lastfm": {
 			"command": "npx",
 			"args": ["mcp-remote", "https://your-worker-domain.workers.dev/sse"]
 		}
@@ -172,8 +182,8 @@ For production deployment, set these secrets in your Cloudflare account and GitH
 
 **Cloudflare Secrets** (set via `wrangler secret put`):
 
-- `DISCOGS_CONSUMER_KEY` - Your Discogs app consumer key
-- `DISCOGS_CONSUMER_SECRET` - Your Discogs app consumer secret
+- `LASTFM_API_KEY` - Your Last.fm API key
+- `LASTFM_SHARED_SECRET` - Your Last.fm shared secret
 - `JWT_SECRET` - Strong random string for JWT signing
 
 **GitHub Secrets** (for automated deployment):
@@ -192,51 +202,80 @@ Each environment has isolated KV storage for logs, rate limiting, and sessions.
 
 ## Example Queries
 
-### Enhanced Multi-Genre Searches (New!)
+### Listening History Analysis
 
-- "psychedelic rock prog rock space rock" - Finds releases matching ANY of these genre terms
-- "ambient drone progressive experimental" - Uses OR logic for broader, more relevant results  
-- "jazz fusion bebop hard bop" - Combines multiple jazz subgenres intelligently
-- "electronic techno house trance" - Searches across electronic music styles
-- "Show me releases similar to Pink Floyd Dark Side of the Moon" - Uses similarity matching with genre filtering
+- "What have I been listening to lately?"
+- "Show me my most played artists this month"
+- "What are my top albums from last year?"
+- "Which tracks have I loved recently?"
+- "What's my listening history for the past week?"
 
-### Traditional Genre-Based Queries
+### Music Discovery
 
-- "Give me some ideas for hard bop albums from the 60s that I own"
-- "What do I own that is similar to REM?"
-- "Show me my highest-rated Jazz albums from the 1970s"
-- "Find electronic music in my collection from the 1980s"
-- "What are my best rock albums?"
+- "Find artists similar to Radiohead"
+- "What tracks are similar to 'Bohemian Rhapsody'?"
+- "Recommend music based on my listening history"
+- "Show me artists I might like based on my top genres"
+- "Find new music similar to my loved tracks"
 
-### Mood-Based Queries (Enhanced!)
+### Statistics and Analytics
 
-- "I want to listen to something mellow on CD tonight"
-- "Find me energetic music for working out"
-- "What do I have that fits Sunday evening melancholy vibes?"
-- "Show me romantic music for a dinner date"
-- "I need something dark and brooding for a rainy day" - (Note: "dark" mood vs "Dark Side of the Moon" album detection)
-- "Give me chill music for studying"
-- "What's good for a cozy winter evening?"
-- "moody melancholy introspective sad contemplative" - Multi-mood OR logic finds releases matching any mood term
+- "What are my listening statistics?"
+- "How many songs have I scrobbled total?"
+- "What genres do I listen to most?"
+- "Show me my music taste evolution over time"
+- "What are my listening patterns by day/time?"
 
-### Contextual Queries
+### Artist and Track Information
 
-- "Suggest albums for a road trip"
-- "What's perfect for cooking dinner?"
-- "Find music for late night listening"
-- "Show me something uplifting for Monday morning"
+- "Tell me about Pink Floyd"
+- "What's the story behind 'Stairway to Heaven'?"
+- "Show me information about the album 'OK Computer'"
+- "What are the top tracks by The Beatles?"
+- "Give me details about my favorite artist"
 
-### Search Intelligence Features
+### Contextual Music Suggestions
 
-The system now features **advanced search intelligence** that:
+- "What should I listen to for working out?"
+- "Recommend music for studying"
+- "Find something relaxing for bedtime"
+- "What's good for a road trip playlist?"
+- "Suggest music for a dinner party"
 
-- **Automatically detects search intent**: Distinguishes between specific album searches ("Dark Side of the Moon") vs. mood-based queries ("dark ambient music")
-- **Uses flexible matching logic**: OR logic for genre/mood searches provides broader results, while AND logic for specific searches maintains precision
-- **Prioritizes relevance**: Multi-word searches rank results by number of matching terms - releases matching more terms appear first
-- **Supports flexible input**: Accepts multiple genres separated by spaces, commas, semicolons, or other separators
-- **Handles complex queries**: Combines genre filtering, similarity matching, mood analysis, and relevance scoring intelligently
+### Personal Music Insights
 
-Whether you're looking for specific albums, exploring genres, or discovering music based on mood and context, the system adapts its search strategy to provide the most relevant results from your collection.
+The system provides **intelligent music analysis** that:
+
+- **Analyzes your listening patterns**: Identifies your most active listening times, favorite genres, and music discovery trends
+- **Provides personalized recommendations**: Uses your scrobbling history to suggest new artists and tracks
+- **Tracks your musical journey**: Shows how your taste has evolved over time
+- **Contextual understanding**: Learns from your listening habits to provide situational music suggestions
+- **Social insights**: Compares your taste with similar users and provides compatibility scores
+
+Whether you're exploring your musical identity, discovering new artists, or analyzing your listening habits, the system provides deep insights into your Last.fm data.
+
+## Getting Started with Last.fm
+
+### Setting up Last.fm API Access
+
+1. **Create a Last.fm account** at [last.fm](https://www.last.fm) if you don't have one
+2. **Get API credentials**:
+   - Visit [Last.fm API Account](https://www.last.fm/api/account/create)
+   - Fill out the application form
+   - Note your API Key and Shared Secret
+3. **Start scrobbling**: Use a Last.fm scrobbler to track your listening:
+   - Spotify: Enable scrobbling in Settings > Social > Last.fm
+   - iTunes/Music: Use official Last.fm Desktop Scrobbler
+   - Other players: Check Last.fm's supported applications
+
+### Authentication Flow
+
+The server uses Last.fm's web authentication:
+
+1. Click the login link provided by the MCP server
+2. Authorize the application on Last.fm
+3. You'll be redirected back with access to your data
+4. Your session remains active for future requests
 
 ## License
 

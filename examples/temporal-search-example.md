@@ -1,6 +1,6 @@
 # Temporal Search Examples
 
-The Discogs MCP server now supports intelligent temporal query interpretation. When you use temporal keywords in your search queries, the system will automatically interpret them and apply appropriate sorting.
+The Last.fm MCP server supports intelligent temporal query interpretation for listening history. When you use temporal keywords in your queries, the system will automatically interpret them and apply appropriate time filtering.
 
 ## How It Works
 

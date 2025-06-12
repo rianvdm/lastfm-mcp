@@ -1,6 +1,6 @@
 {
 	"mcpServers": {
-		"discogs-local": {
+		"lastfm-local": {
 			"command": "npx",
 			"args": ["mcp-remote", "http://localhost:8787/sse"]
 		}

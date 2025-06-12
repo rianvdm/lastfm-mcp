@@ -6,10 +6,10 @@
 
 ## Phase 1 – Project Conversion Setup
 
-- [ ] **A1** Update package.json name, description, and keywords for Last.fm
-- [ ] **A2** Update README.md with Last.fm-specific information
-- [ ] **A3** Update all configuration files and examples for Last.fm
-- [ ] **A4** Remove or update Discogs-specific documentation
+- [x] **A1** Update package.json name, description, and keywords for Last.fm
+- [x] **A2** Update README.md with Last.fm-specific information
+- [x] **A3** Update all configuration files and examples for Last.fm
+- [x] **A4** Remove or update Discogs-specific documentation
 
 ## Phase 2 – Authentication System Overhaul
 
