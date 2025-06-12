@@ -31,20 +31,23 @@ import {
 	ValidationError,
 } from './validation'
 import { verifySessionToken, SessionPayload } from '../auth/jwt'
-import { discogsClient, type DiscogsCollectionItem } from '../clients/discogs'
-import { getCachedDiscogsClient, type CachedDiscogsClient } from '../clients/cachedDiscogs'
+import { LastfmClient } from '../clients/lastfm'
+import { CachedLastfmClient } from '../clients/cachedLastfm'
+import { LASTFM_RESOURCES, parseLastfmUri } from '../types/lastfm-mcp'
 import { analyzeMoodQuery, hasMoodContent, generateMoodSearchTerms } from '../utils/moodMapping'
 import { isConnectionAuthenticated } from '../transport/sse'
 
 /**
- * Get cached Discogs client instance
+ * Get cached Last.fm client instance
  */
-function getCachedClient(env?: Env): CachedDiscogsClient | null {
-	if (!env?.MCP_SESSIONS) {
-		console.warn('No KV storage available, falling back to direct client')
+function getCachedLastfmClient(env?: Env): CachedLastfmClient | null {
+	if (!env?.LASTFM_API_KEY) {
+		console.warn('No Last.fm API key available')
 		return null
 	}
-	return getCachedDiscogsClient(env.MCP_SESSIONS)
+	
+	const client = new LastfmClient(env.LASTFM_API_KEY)
+	return new CachedLastfmClient(client, env?.MCP_SESSIONS)
 }
 
 /**
@@ -203,28 +206,7 @@ export function handleInitialized(): void {
  * Handle resources/list request
  */
 export function handleResourcesList(): ResourcesListResult {
-	const resources: Resource[] = [
-		{
-			uri: 'discogs://collection',
-			name: 'User Collection',
-			description: 'Complete Discogs collection for the authenticated user',
-			mimeType: 'application/json',
-		},
-		{
-			uri: 'discogs://release/{id}',
-			name: 'Release Details',
-			description: 'Detailed information about a specific Discogs release. Replace {id} with the release ID.',
-			mimeType: 'application/json',
-		},
-		{
-			uri: 'discogs://search?q={query}',
-			name: 'Collection Search',
-			description: "Search results from user's collection. Replace {query} with search terms.",
-			mimeType: 'application/json',
-		},
-	]
-
-	return { resources }
+	return { resources: LASTFM_RESOURCES }
 }
 
 /**
@@ -237,95 +219,99 @@ export async function handleResourcesRead(params: unknown, session: SessionPaylo
 	const { uri } = params
 
 	try {
-		// Get cached client instance or fall back to direct client
-		const cachedClient = getCachedClient(env)
-		const client = cachedClient || discogsClient
+		// Get cached Last.fm client instance
+		const client = getCachedLastfmClient(env)
+		if (!client) {
+			throw new Error('Last.fm API client not available')
+		}
 
-		// Parse the URI to determine what resource is being requested
-		if (uri === 'discogs://collection') {
-			// Get user's complete collection
-			const consumerKey = env?.DISCOGS_CONSUMER_KEY || ''
-			const consumerSecret = env?.DISCOGS_CONSUMER_SECRET || ''
+		// Parse the Last.fm URI to determine what resource is being requested
+		const parsedUri = parseLastfmUri(uri)
+		if (!parsedUri) {
+			throw new Error(`Invalid Last.fm URI format: ${uri}`)
+		}
 
-			const userProfile = await client.getUserProfile(session.accessToken, session.accessTokenSecret, consumerKey, consumerSecret)
-			const collection = await client.searchCollection(
-				userProfile.username,
-				session.accessToken,
-				session.accessTokenSecret,
+		let data: unknown
+
+		switch (parsedUri.type) {
+			case 'user': {
+				if (!parsedUri.username) {
+					throw new Error('Username is required for user resources')
+				}
+
+				switch (parsedUri.subtype) {
+					case 'recent':
+						data = await client.getRecentTracks(parsedUri.username, 50)
+						break
+					case 'top-artists':
+						data = await client.getTopArtists(parsedUri.username, 'overall', 50)
+						break
+					case 'top-albums':
+						data = await client.getTopAlbums(parsedUri.username, 'overall', 50)
+						break
+					case 'loved':
+						data = await client.getLovedTracks(parsedUri.username, 50)
+						break
+					case 'profile':
+						data = await client.getUserInfo(parsedUri.username)
+						break
+					default:
+						throw new Error(`Unsupported user resource subtype: ${parsedUri.subtype}`)
+				}
+				break
+			}
+
+			case 'track': {
+				if (!parsedUri.artist || !parsedUri.track) {
+					throw new Error('Artist and track names are required for track resources')
+				}
+
+				if (parsedUri.subtype === 'similar') {
+					data = await client.getSimilarTracks(parsedUri.artist, parsedUri.track, 30)
+				} else {
+					data = await client.getTrackInfo(parsedUri.artist, parsedUri.track, session.username)
+				}
+				break
+			}
+
+			case 'artist': {
+				if (!parsedUri.artist) {
+					throw new Error('Artist name is required for artist resources')
+				}
+
+				if (parsedUri.subtype === 'similar') {
+					data = await client.getSimilarArtists(parsedUri.artist, 30)
+				} else {
+					data = await client.getArtistInfo(parsedUri.artist, session.username)
+				}
+				break
+			}
+
+			case 'album': {
+				if (!parsedUri.artist || !parsedUri.album) {
+					throw new Error('Artist and album names are required for album resources')
+				}
+
+				data = await client.getAlbumInfo(parsedUri.artist, parsedUri.album, session.username)
+				break
+			}
+
+			default:
+				throw new Error(`Unsupported resource type: ${parsedUri.type}`)
+		}
+
+		return {
+			contents: [
 				{
-					per_page: 100, // Start with first 100 items
+					uri,
+					mimeType: 'application/json',
+					text: JSON.stringify(data, null, 2),
 				},
-				consumerKey,
-				consumerSecret,
-			)
-
-			return {
-				contents: [
-					{
-						uri,
-						mimeType: 'application/json',
-						text: JSON.stringify(collection, null, 2),
-					},
-				],
-			}
-		} else if (uri.startsWith('discogs://release/')) {
-			// Get specific release details
-			const releaseId = uri.replace('discogs://release/', '')
-			if (!releaseId || releaseId.includes('{')) {
-				throw new Error('Invalid release URI - must specify a release ID')
-			}
-
-			const release = await client.getRelease(releaseId, session.accessToken, session.accessTokenSecret)
-
-			return {
-				contents: [
-					{
-						uri,
-						mimeType: 'application/json',
-						text: JSON.stringify(release, null, 2),
-					},
-				],
-			}
-		} else if (uri.startsWith('discogs://search?q=')) {
-			// Search user's collection
-			const url = new URL(uri.replace('discogs://', 'https://example.com/'))
-			const query = url.searchParams.get('q')
-
-			if (!query) {
-				throw new Error('Invalid search URI - query parameter is required')
-			}
-
-			const consumerKey = env?.DISCOGS_CONSUMER_KEY || ''
-			const consumerSecret = env?.DISCOGS_CONSUMER_SECRET || ''
-
-			const userProfile = await client.getUserProfile(session.accessToken, session.accessTokenSecret, consumerKey, consumerSecret)
-			const searchResults = await client.searchCollection(
-				userProfile.username,
-				session.accessToken,
-				session.accessTokenSecret,
-				{
-					query,
-					per_page: 50,
-				},
-				consumerKey,
-				consumerSecret,
-			)
-
-			return {
-				contents: [
-					{
-						uri,
-						mimeType: 'application/json',
-						text: JSON.stringify(searchResults, null, 2),
-					},
-				],
-			}
-		} else {
-			throw new Error(`Unsupported resource URI: ${uri}`)
+			],
 		}
 	} catch (error) {
-		console.error('Error reading resource:', error)
-		throw new Error(`Failed to read resource: ${error instanceof Error ? error.message : 'Unknown error'}`)
+		console.error('Error reading Last.fm resource:', error)
+		throw new Error(`Failed to read Last.fm resource: ${error instanceof Error ? error.message : 'Unknown error'}`)
 	}
 }
 

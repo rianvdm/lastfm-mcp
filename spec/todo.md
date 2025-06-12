@@ -33,11 +33,11 @@
 
 ## Phase 4 – Data Type Updates
 
-- [ ] **D1** Update `src/types/` with Last.fm data structures
-- [ ] **D2** Replace Discogs types with Last.fm equivalents
-- [ ] **D3** Update MCP resource and tool schemas
-- [ ] **D4** Update validation schemas for Last.fm data
-- [ ] **D5** Test type compatibility across the system
+- [x] **D1** Update `src/types/` with Last.fm data structures
+- [x] **D2** Replace Discogs types with Last.fm equivalents
+- [x] **D3** Update MCP resource and tool schemas
+- [x] **D4** Update validation schemas for Last.fm data
+- [x] **D5** Test type compatibility across the system
 
 ## Phase 5 – MCP Resources Conversion
 
