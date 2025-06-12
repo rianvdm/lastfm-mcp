@@ -5,8 +5,8 @@
 
 export interface SessionPayload {
 	userId: string
-	accessToken: string
-	accessTokenSecret: string
+	sessionKey: string
+	username: string
 	iat: number // issued at
 	exp: number // expires at
 }

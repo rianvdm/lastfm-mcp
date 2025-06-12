@@ -1,6 +1,6 @@
 /**
- * Discogs MCP Server - Cloudflare Worker
- * Implements Model Context Protocol for Discogs collection access
+ * Last.fm MCP Server - Cloudflare Worker
+ * Implements Model Context Protocol for Last.fm listening data access
  */
 
 import { parseMessage, createError, serializeResponse } from './protocol/parser'
@@ -8,7 +8,7 @@ import { handleMethod, verifyAuthentication } from './protocol/handlers'
 import { createSessionToken } from './auth/jwt'
 import { ErrorCode, JSONRPCError } from './types/jsonrpc'
 import { createSSEResponse, getConnection, authenticateConnection } from './transport/sse'
-import { DiscogsAuth } from './auth/discogs'
+import { LastfmAuth } from './auth/lastfm'
 import { KVLogger } from './utils/kvLogger'
 import { RateLimiter } from './utils/rateLimit'
 import type { Env } from './types/env'
@@ -56,14 +56,14 @@ export default {
 				} else if (request.method === 'GET') {
 					return new Response(
 						JSON.stringify({
-							name: 'Discogs MCP Server',
+							name: 'Last.fm MCP Server',
 							version: '1.0.0',
-							description: 'Model Context Protocol server for Discogs collection access',
+							description: 'Model Context Protocol server for Last.fm listening data access',
 							endpoints: {
 								'/': 'POST - MCP JSON-RPC endpoint',
 								'/sse': 'GET - Server-Sent Events endpoint',
-								'/login': 'GET - OAuth login',
-								'/callback': 'GET - OAuth callback',
+								'/login': 'GET - Last.fm authentication',
+								'/callback': 'GET - Last.fm authentication callback',
 								'/mcp-auth': 'GET - MCP authentication',
 								'/health': 'GET - Health check',
 							},
@@ -94,14 +94,14 @@ export default {
 				}
 
 			case '/login':
-				// OAuth login - redirect to Discogs
+				// Last.fm authentication - redirect to Last.fm
 				if (request.method !== 'GET') {
 					return new Response('Method not allowed', { status: 405 })
 				}
 				return handleLogin(request, env)
 
 			case '/callback':
-				// OAuth callback - exchange tokens
+				// Last.fm authentication callback - exchange tokens
 				if (request.method !== 'GET') {
 					return new Response('Method not allowed', { status: 405 })
 				}
@@ -121,7 +121,7 @@ export default {
 						status: 'ok',
 						timestamp: new Date().toISOString(),
 						version: '1.0.0',
-						service: 'discogs-mcp',
+						service: 'lastfm-mcp',
 					}),
 					{
 						status: 200,
@@ -139,58 +139,52 @@ export default {
 }
 
 /**
- * Handle OAuth login request
+ * Handle Last.fm authentication login request
  */
 async function handleLogin(request: Request, env: Env): Promise<Response> {
 	try {
 		// Debug: Log environment variables (without secrets)
 		console.log('Environment check:', {
-			hasConsumerKey: !!env.DISCOGS_CONSUMER_KEY,
-			hasConsumerSecret: !!env.DISCOGS_CONSUMER_SECRET,
-			consumerKeyLength: env.DISCOGS_CONSUMER_KEY?.length || 0,
-			consumerSecretLength: env.DISCOGS_CONSUMER_SECRET?.length || 0,
+			hasApiKey: !!env.LASTFM_API_KEY,
+			hasSharedSecret: !!env.LASTFM_SHARED_SECRET,
+			apiKeyLength: env.LASTFM_API_KEY?.length || 0,
+			sharedSecretLength: env.LASTFM_SHARED_SECRET?.length || 0,
 		})
 
-		if (!env.DISCOGS_CONSUMER_KEY || !env.DISCOGS_CONSUMER_SECRET) {
-			console.error('Missing Discogs OAuth credentials')
-			return new Response('OAuth configuration error: Missing credentials', { status: 500 })
+		if (!env.LASTFM_API_KEY || !env.LASTFM_SHARED_SECRET) {
+			console.error('Missing Last.fm API credentials')
+			return new Response('Authentication configuration error: Missing credentials', { status: 500 })
 		}
 
-		const auth = new DiscogsAuth(env.DISCOGS_CONSUMER_KEY, env.DISCOGS_CONSUMER_SECRET)
+		const auth = new LastfmAuth(env.LASTFM_API_KEY, env.LASTFM_SHARED_SECRET)
 
 		// Get callback URL based on the current request URL
 		const url = new URL(request.url)
 		const connectionId = url.searchParams.get('connection_id')
 		const callbackUrl = `${url.protocol}//${url.host}/callback${connectionId ? `?connection_id=${connectionId}` : ''}`
 
-		console.log('Requesting OAuth token from Discogs...', { connectionId })
+		console.log('Redirecting to Last.fm authentication...', { connectionId })
 
-		// Get request token
-		const { oauth_token, oauth_token_secret } = await auth.getRequestToken(callbackUrl)
+		// Store connection ID temporarily for callback
+		if (connectionId) {
+			await env.MCP_SESSIONS.put(`auth-connection:${connectionId}`, JSON.stringify({
+				connectionId: connectionId,
+				timestamp: Date.now(),
+			}), {
+				expirationTtl: 600, // 10 minutes - Authentication flow should complete within this time
+			})
+		}
 
-		console.log('Successfully received OAuth token:', {
-			tokenLength: oauth_token.length,
-			secretLength: oauth_token_secret.length,
-		})
-
-		// Store token secret temporarily with connection ID
-		await env.MCP_SESSIONS.put(`oauth-token:${oauth_token}`, JSON.stringify({
-			tokenSecret: oauth_token_secret,
-			connectionId: connectionId || 'unknown'
-		}), {
-			expirationTtl: 600, // 10 minutes - OAuth flow should complete within this time
-		})
-
-		// Redirect to Discogs authorization page
-		const authorizeUrl = auth.getAuthorizeUrl(oauth_token)
+		// Redirect to Last.fm authorization page
+		const authorizeUrl = auth.getAuthUrl(callbackUrl)
 		console.log('Redirecting to:', authorizeUrl)
 
 		return Response.redirect(authorizeUrl, 302)
 	} catch (error) {
-		console.error('OAuth login error:', error)
+		console.error('Last.fm authentication error:', error)
 
 		// Provide more detailed error information
-		let errorMessage = 'OAuth login failed'
+		let errorMessage = 'Last.fm authentication failed'
 		if (error instanceof Error) {
 			errorMessage += `: ${error.message}`
 		}
@@ -200,63 +194,60 @@ async function handleLogin(request: Request, env: Env): Promise<Response> {
 }
 
 /**
- * Handle OAuth callback
+ * Handle Last.fm authentication callback
  */
 async function handleCallback(request: Request, env: Env): Promise<Response> {
 	try {
 		const url = new URL(request.url)
-		const oauthToken = url.searchParams.get('oauth_token')
-		const oauthVerifier = url.searchParams.get('oauth_verifier')
+		const token = url.searchParams.get('token')
 		const connectionId = url.searchParams.get('connection_id')
 
-		if (!oauthToken || !oauthVerifier) {
-			return new Response('Missing OAuth parameters', { status: 400 })
+		if (!token) {
+			return new Response('Missing authentication token from Last.fm', { status: 400 })
 		}
 
-		// Retrieve token secret and connection ID
-		const tokenDataStr = await env.MCP_SESSIONS.get(`oauth-token:${oauthToken}`)
-		if (!tokenDataStr) {
-			return new Response('Invalid OAuth token', { status: 400 })
+		if (!env.LASTFM_API_KEY || !env.LASTFM_SHARED_SECRET) {
+			console.error('Missing Last.fm API credentials')
+			return new Response('Authentication configuration error: Missing credentials', { status: 500 })
 		}
 
-		const tokenData = JSON.parse(tokenDataStr)
-		const { tokenSecret: oauthTokenSecret, connectionId: storedConnectionId } = tokenData
-
-		// Clean up temporary storage
-		// Note: KV delete method exists but TypeScript definitions might be outdated
-		// Using TTL on the put operation instead for automatic cleanup
-		// await env.MCP_SESSIONS.delete(`oauth-token:${oauthToken}`)
-
-		// Use connection ID from callback URL or stored connection ID
-		const finalConnectionId = connectionId || storedConnectionId
-
-		// Exchange for access token
-		const auth = new DiscogsAuth(env.DISCOGS_CONSUMER_KEY, env.DISCOGS_CONSUMER_SECRET)
-		const { oauth_token: accessToken, oauth_token_secret: accessTokenSecret } = await auth.getAccessToken(
-			oauthToken,
-			oauthTokenSecret,
-			oauthVerifier,
-		)
+		// Exchange token for session key
+		const auth = new LastfmAuth(env.LASTFM_API_KEY, env.LASTFM_SHARED_SECRET)
+		const { sessionKey, username } = await auth.getSessionKey(token)
 
 		// Create JWT session token
 		const sessionToken = await createSessionToken(
 			{
-				userId: accessToken, // Use access token as user ID for now
-				accessToken,
-				accessTokenSecret,
+				userId: username,
+				sessionKey,
+				username,
 			},
 			env.JWT_SECRET,
 			24, // expires in 24 hours
 		)
+
+		// Determine final connection ID
+		let finalConnectionId = connectionId || 'unknown'
+		
+		// Try to retrieve stored connection ID if not provided
+		if (!connectionId) {
+			// Look for any stored connection for this session
+			// This is a fallback for cases where connection ID isn't preserved
+			const storedConnectionData = await env.MCP_SESSIONS.get(`auth-connection:last`)
+			if (storedConnectionData) {
+				const data = JSON.parse(storedConnectionData)
+				finalConnectionId = data.connectionId || 'unknown'
+			}
+		}
 
 		// Store session in KV with connection-specific key
 		if (env.MCP_SESSIONS && finalConnectionId !== 'unknown') {
 			try {
 				const sessionData = {
 					token: sessionToken,
-					userId: accessToken,
-					accessToken,
-					accessTokenSecret,
+					userId: username,
+					sessionKey,
+					username,
 					timestamp: Date.now(),
 					expiresAt: Date.now() + 24 * 60 * 60 * 1000, // 24 hours
 					connectionId: finalConnectionId,
@@ -269,10 +260,10 @@ async function handleCallback(request: Request, env: Env): Promise<Response> {
 				// Mark the SSE connection as authenticated (only for non-mcp-remote connections)
 				// mcp-remote connections don't have SSE connections, they use HTTP POST
 				if (!finalConnectionId.startsWith('mcp-remote-')) {
-					authenticateConnection(finalConnectionId, accessToken)
+					authenticateConnection(finalConnectionId, username)
 				}
 				
-				console.log(`Session stored for connection ${finalConnectionId}`)
+				console.log(`Last.fm session stored for connection ${finalConnectionId}, user: ${username}`)
 			} catch (error) {
 				console.warn('Could not save session to KV:', error)
 			}
@@ -288,8 +279,8 @@ async function handleCallback(request: Request, env: Env): Promise<Response> {
 		].join('; ')
 
 		const responseMessage = finalConnectionId !== 'unknown' 
-			? `Authentication successful! Your MCP connection is now authenticated and ready to use.`
-			: `Authentication successful! You can now use the MCP server to access your Discogs collection.`
+			? `Authentication successful! Your Last.fm account (${username}) is now connected to your MCP session.`
+			: `Authentication successful! You can now use the MCP server to access your Last.fm listening data for ${username}.`
 
 		return new Response(responseMessage, {
 			status: 200,
@@ -299,8 +290,8 @@ async function handleCallback(request: Request, env: Env): Promise<Response> {
 			},
 		})
 	} catch (error) {
-		console.error('OAuth callback error:', error)
-		return new Response('OAuth callback failed', { status: 500 })
+		console.error('Last.fm authentication callback error:', error)
+		return new Response(`Last.fm authentication callback failed: ${error instanceof Error ? error.message : 'Unknown error'}`, { status: 500 })
 	}
 }
 
@@ -583,7 +574,7 @@ async function handleMCPAuth(request: Request, env: Env): Promise<Response> {
 			}
 		}
 
-		const baseUrl = 'https://discogs-mcp-prod.rian-db8.workers.dev'
+		const baseUrl = 'https://lastfm-mcp-prod.rian-db8.workers.dev'
 	
 	// Check for connection ID to provide connection-specific login URL
 	const connectionId = request.headers.get('X-Connection-ID')
@@ -592,7 +583,7 @@ async function handleMCPAuth(request: Request, env: Env): Promise<Response> {
 	return new Response(
 		JSON.stringify({
 			error: 'Not authenticated',
-			message: `Please visit ${loginUrl} to authenticate with Discogs first`,
+			message: `Please visit ${loginUrl} to authenticate with Last.fm first`,
 		}),
 		{
 			status: 401,

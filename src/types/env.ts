@@ -2,9 +2,9 @@
  * Environment variables and bindings for the Cloudflare Worker
  */
 export interface Env {
-	// Discogs OAuth credentials
-	DISCOGS_CONSUMER_KEY: string
-	DISCOGS_CONSUMER_SECRET: string
+	// Last.fm API credentials
+	LASTFM_API_KEY: string
+	LASTFM_SHARED_SECRET: string
 
 	// JWT secret for signing session cookies
 	JWT_SECRET: string
