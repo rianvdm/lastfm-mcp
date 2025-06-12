@@ -336,13 +336,13 @@ export function handlePromptsGet(params: unknown): PromptsGetResult {
 	switch (name) {
 		case 'browse_collection': {
 			return {
-				description: 'Browse and explore your Discogs music collection',
+				description: 'Browse and explore your Last.fm listening data',
 				messages: [
 					{
 						role: 'user',
 						content: {
 							type: 'text',
-							text: 'Help me explore my Discogs music collection. Show me interesting insights, recommend albums to listen to, or help me discover patterns in my collection. You can use the available tools to search my collection, get detailed release information, view collection statistics, and get personalized recommendations.',
+							text: 'Help me explore my Last.fm listening data. Show me interesting insights, recommend artists to listen to, or help me discover patterns in my music taste. You can use the available tools to get my recent tracks, top artists, loved tracks, and personalized recommendations.',
 						},
 					},
 				],
@@ -355,13 +355,13 @@ export function handlePromptsGet(params: unknown): PromptsGetResult {
 				throw new Error('find_music prompt requires a query argument')
 			}
 			return {
-				description: 'Find specific music in your collection',
+				description: 'Find specific music in your listening data',
 				messages: [
 					{
 						role: 'user',
 						content: {
 							type: 'text',
-							text: `Help me find music in my Discogs collection related to: "${query}". Search through my collection and provide detailed information about any matching releases. If you find multiple matches, help me understand the differences and recommend which ones might be most interesting.`,
+							text: `Help me find music related to: "${query}". Search through Last.fm data and provide detailed information about tracks, artists, or albums. If you find multiple matches, help me understand the differences and recommend which ones might be most interesting.`,
 						},
 					},
 				],
@@ -370,13 +370,13 @@ export function handlePromptsGet(params: unknown): PromptsGetResult {
 
 		case 'collection_insights': {
 			return {
-				description: 'Get insights about your music collection',
+				description: 'Get insights about your music listening habits',
 				messages: [
 					{
 						role: 'user',
 						content: {
 							type: 'text',
-							text: 'Analyze my Discogs music collection and provide interesting insights. Look at my collection statistics, identify patterns in genres, decades, formats, and artists. Help me understand what my collection says about my musical tastes and suggest areas where I might want to expand my collection.',
+							text: 'Analyze my Last.fm listening data and provide interesting insights. Look at my listening statistics, identify patterns in genres, time periods, and artists. Help me understand what my listening history says about my musical tastes and suggest areas where I might want to explore new music.',
 						},
 					},
 				],

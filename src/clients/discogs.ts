@@ -787,7 +787,7 @@ export class DiscogsClient {
 		consumerKey: string,
 		consumerSecret: string,
 	): Promise<{ username: string; id: number }> {
-		console.log('Making OAuth request to /oauth/identity with token:', accessToken.substring(0, 10) + '...')
+		console.log('Making OAuth request to /oauth/identity with token:', accessToken ? accessToken.substring(0, 10) + '...' : 'undefined')
 
 		const url = `${this.baseUrl}/oauth/identity`
 		const authHeader = await this.createOAuthHeader(url, 'GET', accessToken, accessTokenSecret, consumerKey, consumerSecret)
