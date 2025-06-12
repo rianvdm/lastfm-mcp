@@ -33,7 +33,7 @@ import {
 import { verifySessionToken, SessionPayload } from '../auth/jwt'
 import { LastfmClient } from '../clients/lastfm'
 import { CachedLastfmClient } from '../clients/cachedLastfm'
-import { LASTFM_RESOURCES, parseLastfmUri } from '../types/lastfm-mcp'
+import { LASTFM_RESOURCES, LASTFM_TOOLS, parseLastfmUri } from '../types/lastfm-mcp'
 import { analyzeMoodQuery, hasMoodContent, generateMoodSearchTerms } from '../utils/moodMapping'
 import { isConnectionAuthenticated } from '../transport/sse'
 
@@ -474,7 +474,7 @@ async function handleToolsCall(params: unknown, httpRequest?: Request): Promise<
 
 	switch (name) {
 		case 'ping': {
-			const message = args?.message || 'Hello from Discogs MCP!'
+			const message = args?.message || 'Hello from Last.fm MCP!'
 			return {
 				content: [
 					{
@@ -487,14 +487,14 @@ async function handleToolsCall(params: unknown, httpRequest?: Request): Promise<
 		case 'server_info': {
 			// Provide connection-specific authentication URL if available
 			const connectionId = httpRequest?.headers.get('X-Connection-ID')
-			const baseUrl = 'https://discogs-mcp-prod.rian-db8.workers.dev'
+			const baseUrl = 'https://lastfm-mcp-prod.rian-db8.workers.dev'
 			const authUrl = connectionId ? `${baseUrl}/login?connection_id=${connectionId}` : `${baseUrl}/login`
 			
 			return {
 				content: [
 					{
 						type: 'text',
-						text: `Discogs MCP Server v1.0.0\n\nStatus: Running\nProtocol: MCP 2024-11-05\nFeatures:\n- Resources: Collection, Releases, Search\n- Authentication: OAuth 1.0a\n- Rate Limiting: Enabled\n\nTo get started, authenticate at ${authUrl}`,
+						text: `Last.fm MCP Server v1.0.0\n\nStatus: Running\nProtocol: MCP 2024-11-05\nFeatures:\n- Resources: User Listening Data, Track/Artist/Album Info\n- Authentication: Last.fm Web Auth\n- Rate Limiting: Enabled\n\nTo get started, authenticate at ${authUrl}`,
 					},
 				],
 			}
@@ -503,7 +503,7 @@ async function handleToolsCall(params: unknown, httpRequest?: Request): Promise<
 			// Provide unauthenticated status with connection-specific instructions
 			const connectionId = httpRequest?.headers.get('X-Connection-ID')
 			const connectionInfo = connectionId ? `\n🔗 **Connection ID:** ${connectionId}` : ''
-			const baseUrl = 'https://discogs-mcp-prod.rian-db8.workers.dev'
+			const baseUrl = 'https://lastfm-mcp-prod.rian-db8.workers.dev'
 			const loginUrl = connectionId ? `${baseUrl}/login?connection_id=${connectionId}` : `${baseUrl}/login`
 			
 			return {
@@ -512,23 +512,23 @@ async function handleToolsCall(params: unknown, httpRequest?: Request): Promise<
 						type: 'text',
 						text: `🔐 **Authentication Status: Not Authenticated**${connectionInfo}
 
-You are not currently authenticated with Discogs. To access your personal music collection, you need to authenticate first.
+You are not currently authenticated with Last.fm. To access your personal listening data, you need to authenticate first.
 
 **How to authenticate:**
 1. Visit: ${loginUrl}
-2. Sign in with your Discogs account
-3. Authorize access to your collection
+2. Sign in with your Last.fm account
+3. Authorize access to your listening data
 4. Return here and try your query again
 
 **What you'll be able to do after authentication:**
-• Search your music collection with natural language queries
-• Get detailed information about your releases
-• View collection statistics and insights  
-• Get personalized music recommendations
-• Use mood-based queries like "mellow Sunday evening music"
-• Find music by contextual cues like "energetic workout songs"
+• Get your recent tracks and listening history
+• View your top artists and albums by time period
+• Access your loved tracks and user profile
+• Get detailed information about tracks, artists, and albums
+• Discover similar music and get personalized recommendations
+• Analyze your listening patterns and statistics
 
-Your authentication will be secure and connection-specific - only you will have access to your collection data.
+Your authentication will be secure and connection-specific - only you will have access to your listening data.
 
 **Available without authentication:**
 • \`ping\` - Test server connectivity
@@ -554,49 +554,16 @@ async function handleAuthenticatedToolsCall(params: unknown, session: SessionPay
 
 	const { name, arguments: args } = params
 
-	// Get cached client instance or fall back to direct client
-	const cachedClient = getCachedClient(env)
-	const client = cachedClient || discogsClient
+	// Get cached Last.fm client instance
+	const client = getCachedLastfmClient(env)
+	if (!client) {
+		throw new Error('Last.fm API client not available')
+	}
 
-	// Get tool schema for validation
-	const toolSchemas: Record<string, unknown> = {
-		search_collection: {
-			type: 'object',
-			properties: {
-				query: { type: 'string' },
-				per_page: { type: 'number', minimum: 1, maximum: 100 },
-			},
-			required: ['query'],
-		},
-		get_release: {
-			type: 'object',
-			properties: {
-				release_id: { type: 'string' },
-			},
-			required: ['release_id'],
-		},
-		get_collection_stats: {
-			type: 'object',
-			properties: {},
-			required: [],
-		},
-		get_recommendations: {
-			type: 'object',
-			properties: {
-				limit: { type: 'number', minimum: 1, maximum: 50 },
-				genre: { type: 'string' },
-				decade: { type: 'string' },
-				similar_to: { type: 'string' },
-				query: { type: 'string' },
-				format: { type: 'string' },
-			},
-			required: [],
-		},
-		get_cache_stats: {
-			type: 'object',
-			properties: {},
-			required: [],
-		},
+	// Get tool schema for validation (use the schemas from LASTFM_TOOLS)
+	const toolSchemas: Record<string, unknown> = {}
+	for (const tool of LASTFM_TOOLS) {
+		toolSchemas[tool.name] = tool.inputSchema
 	}
 
 	// Validate tool arguments against schema
@@ -1390,8 +1357,13 @@ export async function handleMethod(request: JSONRPCRequest, httpRequest?: Reques
 		}
 
 		case 'tools/list': {
-			// Return all available Discogs tools
-			const tools = [
+			// Return all available Last.fm tools
+			return hasId(request) ? createResponse(id!, { tools: LASTFM_TOOLS }) : null
+		}
+
+		case 'tools/call-old': {
+			// Legacy Discogs tools (keeping for reference but not used)
+			const legacyTools = [
 				{
 					name: 'ping',
 					description: 'Test connectivity to the Discogs MCP server',
@@ -1519,7 +1491,8 @@ export async function handleMethod(request: JSONRPCRequest, httpRequest?: Reques
 					},
 				},
 			]
-			return hasId(request) ? createResponse(id!, { tools }) : null
+			// This is legacy code - tools/call-old is not a real endpoint
+			return null
 		}
 
 		case 'tools/call': {

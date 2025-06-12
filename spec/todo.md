@@ -41,15 +41,15 @@
 
 ## Phase 5 – MCP Resources Conversion
 
-- [ ] **E1** Update resource URIs for Last.fm (lastfm://track/{artist}/{track}, etc.)
-- [ ] **E2** Implement track resource handler
-- [ ] **E3** Implement artist resource handler
-- [ ] **E4** Implement album resource handler
-- [ ] **E5** Implement user listening history resources (recent, top artists, top albums)
-- [ ] **E6** Implement user profile resource
-- [ ] **E7** Implement similar artists and similar tracks resources
-- [ ] **E8** Add pagination support for large datasets
-- [ ] **E9** Test all new resource implementations
+- [x] **E1** Update resource URIs for Last.fm (lastfm://track/{artist}/{track}, etc.)
+- [x] **E2** Implement track resource handler
+- [x] **E3** Implement artist resource handler
+- [x] **E4** Implement album resource handler
+- [x] **E5** Implement user listening history resources (recent, top artists, top albums)
+- [x] **E6** Implement user profile resource
+- [x] **E7** Implement similar artists and similar tracks resources
+- [x] **E8** Add pagination support for large datasets
+- [x] **E9** Test all new resource implementations
 
 ## Phase 6 – MCP Tools Conversion
 
