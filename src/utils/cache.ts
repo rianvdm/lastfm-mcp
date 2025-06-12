@@ -1,5 +1,5 @@
 /**
- * Smart caching utility for Discogs MCP server
+ * Smart caching utility for Last.fm MCP server
  * Supports TTL-based caching, request deduplication, and cache warming
  */
 
@@ -14,19 +14,39 @@ declare global {
 }
 
 export interface CacheConfig {
-	collections: number // 30 minutes
-	releases: number // 24 hours  
-	stats: number // 1 hour
-	searches: number // 15 minutes
-	userProfiles: number // 6 hours
+	// User data (changes frequently)
+	userRecentTracks: number // 5 minutes
+	userTopArtists: number // 1 hour 
+	userTopAlbums: number // 1 hour
+	userLovedTracks: number // 30 minutes
+	userInfo: number // 6 hours
+	userListeningStats: number // 1 hour
+	userRecommendations: number // 24 hours
+	
+	// Static music data (changes rarely)
+	trackInfo: number // 24 hours
+	artistInfo: number // 24 hours
+	albumInfo: number // 24 hours
+	similarArtists: number // 7 days
+	similarTracks: number // 7 days
 }
 
 export const DEFAULT_CACHE_CONFIG: CacheConfig = {
-	collections: 30 * 60, // 30 minutes in seconds
-	releases: 24 * 60 * 60, // 24 hours in seconds
-	stats: 60 * 60, // 1 hour in seconds
-	searches: 15 * 60, // 15 minutes in seconds
-	userProfiles: 6 * 60 * 60, // 6 hours in seconds
+	// User data (changes frequently)
+	userRecentTracks: 5 * 60, // 5 minutes in seconds
+	userTopArtists: 60 * 60, // 1 hour in seconds
+	userTopAlbums: 60 * 60, // 1 hour in seconds
+	userLovedTracks: 30 * 60, // 30 minutes in seconds
+	userInfo: 6 * 60 * 60, // 6 hours in seconds
+	userListeningStats: 60 * 60, // 1 hour in seconds
+	userRecommendations: 24 * 60 * 60, // 24 hours in seconds
+	
+	// Static music data (changes rarely)
+	trackInfo: 24 * 60 * 60, // 24 hours in seconds
+	artistInfo: 24 * 60 * 60, // 24 hours in seconds
+	albumInfo: 24 * 60 * 60, // 24 hours in seconds
+	similarArtists: 7 * 24 * 60 * 60, // 7 days in seconds
+	similarTracks: 7 * 24 * 60 * 60, // 7 days in seconds
 }
 
 export interface CacheEntry<T> {
@@ -280,29 +300,91 @@ export class SmartCache {
  * Cache key generators for consistent naming
  */
 export const CacheKeys = {
-	collection: (username: string, page?: number, sort?: string) => 
-		`${username}:${page || 'all'}:${sort || 'default'}`,
+	// User data keys
+	userRecentTracks: (username: string, limit?: number, from?: number, to?: number) => 
+		`${username}:${limit || 50}:${from || ''}:${to || ''}`,
 	
-	collectionSearch: (username: string, query: string, page?: number) => 
-		`${username}:${encodeURIComponent(query)}:${page || 1}`,
+	userTopArtists: (username: string, period?: string, limit?: number) => 
+		`${username}:${period || 'overall'}:${limit || 50}`,
 	
-	release: (releaseId: string) => releaseId,
+	userTopAlbums: (username: string, period?: string, limit?: number) => 
+		`${username}:${period || 'overall'}:${limit || 50}`,
 	
-	stats: (username: string) => username,
+	userLovedTracks: (username: string, limit?: number) => 
+		`${username}:${limit || 50}`,
 	
-	userProfile: (userId: string) => userId,
+	userInfo: (username: string) => username,
+	
+	userListeningStats: (username: string, period?: string) => 
+		`${username}:${period || 'overall'}`,
+	
+	userRecommendations: (username: string, limit?: number, genre?: string) => 
+		`${username}:${limit || 20}:${genre || 'all'}`,
+	
+	// Static music data keys
+	trackInfo: (artist: string, track: string, username?: string) => 
+		`${encodeURIComponent(artist)}:${encodeURIComponent(track)}:${username || 'global'}`,
+	
+	artistInfo: (artist: string, username?: string) => 
+		`${encodeURIComponent(artist)}:${username || 'global'}`,
+	
+	albumInfo: (artist: string, album: string, username?: string) => 
+		`${encodeURIComponent(artist)}:${encodeURIComponent(album)}:${username || 'global'}`,
+	
+	similarArtists: (artist: string, limit?: number) => 
+		`${encodeURIComponent(artist)}:${limit || 30}`,
+	
+	similarTracks: (artist: string, track: string, limit?: number) => 
+		`${encodeURIComponent(artist)}:${encodeURIComponent(track)}:${limit || 30}`,
 }
 
 /**
- * Helper for creating collection-specific cache instances
+ * Helper for creating Discogs-specific cache instances (legacy compatibility)
  */
 export function createDiscogsCache(kv: KVNamespace): SmartCache {
 	return new SmartCache(kv, {
+		// Legacy Discogs cache configuration
+		collections: 30 * 60, // 30 minutes
+		releases: 24 * 60 * 60, // 24 hours
+		stats: 60 * 60, // 1 hour
+		searches: 15 * 60, // 15 minutes
+		userProfiles: 6 * 60 * 60, // 6 hours
+	} as any) // Type assertion for backward compatibility
+}
+
+/**
+ * Helper for creating Last.fm-specific cache instances
+ */
+export function createLastfmCache(kv?: KVNamespace): SmartCache {
+	if (!kv) {
+		console.log('No KV storage available, falling back to direct client')
+		// Return a mock cache that doesn't actually cache anything
+		return {
+			async get() { return null },
+			async set() { return },
+			async getOrFetch(_type, _key, fetcher) { return fetcher() },
+			async invalidate() { return },
+			async invalidatePattern() { return },
+			async getStats() { return { totalEntries: 0, entriesByType: {}, pendingRequests: 0 } },
+			cleanupPendingRequests() { return }
+		} as SmartCache
+	}
+	
+	return new SmartCache(kv, {
 		// Tune cache TTLs based on data freshness requirements
-		collections: 30 * 60, // Collections don't change often
-		releases: 24 * 60 * 60, // Release data is mostly static
-		stats: 60 * 60, // Stats can be cached for an hour
-		searches: 15 * 60, // Search results cached for 15 minutes
-		userProfiles: 6 * 60 * 60, // User profiles rarely change
+		userRecentTracks: 5 * 60, // Recent tracks change frequently
+		userTopArtists: 60 * 60, // Top artists change slower
+		userTopAlbums: 60 * 60, // Top albums change slower
+		userLovedTracks: 30 * 60, // Loved tracks change occasionally
+		userInfo: 6 * 60 * 60, // User profiles rarely change
+		userListeningStats: 60 * 60, // Stats can be cached for an hour
+		userRecommendations: 24 * 60 * 60, // Recommendations can be cached longer
+		
+		// Static music data can be cached for a long time
+		trackInfo: 24 * 60 * 60, // Track data is mostly static
+		artistInfo: 24 * 60 * 60, // Artist data is mostly static
+		albumInfo: 24 * 60 * 60, // Album data is mostly static
+		similarArtists: 7 * 24 * 60 * 60, // Similar artists rarely change
+		similarTracks: 7 * 24 * 60 * 60, // Similar tracks rarely change
 	})
 } 

@@ -13,13 +13,13 @@
 
 ## Phase 2 – Authentication System Overhaul
 
-- [ ] **B1** Create new `src/auth/lastfm.ts` web authentication flow
-- [ ] **B2** Remove Discogs OAuth system (`src/auth/discogs.ts`)
-- [ ] **B3** Update authentication middleware for session key validation
-- [ ] **B4** Update environment variables and Wrangler secrets
+- [x] **B1** Create new `src/auth/lastfm.ts` web authentication flow
+- [x] **B2** Remove Discogs OAuth system (`src/auth/discogs.ts`)
+- [x] **B3** Update authentication middleware for session key validation
+- [x] **B4** Update environment variables and Wrangler secrets
 - [ ] **B5** Update authentication tests for Last.fm web auth flow
-- [ ] **B6** Implement MD5 method signature generation
-- [ ] **B7** Add /login and /callback routes for Last.fm auth
+- [x] **B6** Implement MD5 method signature generation
+- [x] **B7** Add /login and /callback routes for Last.fm auth
 
 ## Phase 3 – API Client Replacement
 
