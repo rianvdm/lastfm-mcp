@@ -23,13 +23,13 @@
 
 ## Phase 3 – API Client Replacement
 
-- [ ] **C1** Create new `src/clients/lastfm.ts` API client
-- [ ] **C2** Implement Last.fm API methods (recent tracks, top artists, top albums, etc.)
-- [ ] **C3** Add similar artists and similar tracks endpoints
-- [ ] **C4** Implement retry logic and rate limiting
+- [x] **C1** Create new `src/clients/lastfm.ts` API client
+- [x] **C2** Implement Last.fm API methods (recent tracks, top artists, top albums, etc.)
+- [x] **C3** Add similar artists and similar tracks endpoints
+- [x] **C4** Implement retry logic and rate limiting
 - [ ] **C5** Remove Discogs client (`src/clients/discogs.ts`)
 - [ ] **C6** Update all imports throughout codebase
-- [ ] **C7** Add comprehensive error handling for Last.fm API
+- [x] **C7** Add comprehensive error handling for Last.fm API
 
 ## Phase 4 – Data Type Updates
 

@@ -118,9 +118,46 @@ export interface PromptsGetResult {
 	messages: PromptMessage[]
 }
 
+// MCP Tool types
+export interface Tool {
+	name: string
+	description?: string
+	inputSchema: {
+		type: 'object'
+		properties: Record<string, unknown>
+		required?: string[]
+	}
+}
+
+export interface ToolsListParams {
+	cursor?: string
+}
+
+export interface ToolsListResult {
+	tools: Tool[]
+	nextCursor?: string
+}
+
+export interface ToolsCallParams {
+	name: string
+	arguments?: Record<string, unknown>
+}
+
+export interface ToolContent {
+	type: 'text' | 'image' | 'resource'
+	text?: string
+	data?: string
+	mimeType?: string
+}
+
+export interface ToolsCallResult {
+	content: ToolContent[]
+	isError?: boolean
+}
+
 // Server info
 export const SERVER_INFO = {
-	name: 'discogs-mcp',
+	name: 'lastfm-mcp',
 	version: '1.0.0',
 }
 
