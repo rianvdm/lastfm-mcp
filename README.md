@@ -13,7 +13,7 @@ A **Model Context Protocol (MCP) server** that provides seamless access to Last.
 - 🔐 **Secure Authentication**: Last.fm Web Authentication with JWT sessions
 - ⚡ **Smart Caching**: Intelligent caching with optimized TTLs for performance
 - 🛡️ **Rate Limiting**: Built-in rate limiting respecting Last.fm API limits
-- 🌐 **Production Ready**: Deployed on Cloudflare Workers with global edge
+- 🌐 **Production Ready**: Deployed on Cloudflare Workers with global edge and CI/CD
 
 ## 🚀 Quick Start
 
