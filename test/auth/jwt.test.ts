@@ -36,35 +36,64 @@ describe('JWT Authentication', () => {
 		vi.clearAllMocks()
 		vi.useFakeTimers()
 		
-		// Mock crypto.subtle.importKey
-		mockCrypto.subtle.importKey.mockResolvedValue({
-			type: 'secret',
-			algorithm: { name: 'HMAC', hash: { name: 'SHA-256' } },
+		// Mock crypto.subtle.importKey to return different key objects for different secrets
+		mockCrypto.subtle.importKey.mockImplementation((format, keyData, algorithm, extractable, keyUsages) => {
+			// Create a unique key object based on the input secret
+			const keyBytes = new Uint8Array(keyData as ArrayBuffer)
+			let keyHash = 0
+			for (let i = 0; i < keyBytes.length; i++) {
+				keyHash = ((keyHash << 5) - keyHash + keyBytes[i]) & 0xFFFFFFFF
+			}
+			
+			return Promise.resolve({
+				type: 'secret',
+				algorithm: { name: 'HMAC', hash: { name: 'SHA-256' } },
+				keyHash, // Add unique identifier based on secret
+				keyLength: keyBytes.length,
+			})
 		})
 		
 		// Mock crypto.subtle.sign to return signatures that vary based on secret/data
 		mockCrypto.subtle.sign.mockImplementation((algorithm, key, data) => {
-			// Create pseudo-unique signature based on data input
+			// Create pseudo-unique signature based on data input and key
+			const dataBytes = new Uint8Array(data as ArrayBuffer)
+			
+			// Use a combination of key object properties and data to create unique signatures
+			const keyString = JSON.stringify(key)
 			const encoder = new TextEncoder()
-			const dataBytes = encoder.encode(data.toString())
-			const keyBytes = encoder.encode(JSON.stringify(key))
+			const keyBytes = encoder.encode(keyString)
 			
-			// Simple hash-like function for testing
-			let hash = 0
+			// Create more robust hash that differentiates inputs
+			let hash = 0x12345678
+			
+			// Hash the data bytes
 			for (let i = 0; i < dataBytes.length; i++) {
-				hash = (hash << 5) - hash + dataBytes[i]
-				hash = hash & hash // Convert to 32-bit integer
-			}
-			for (let i = 0; i < keyBytes.length; i++) {
-				hash = (hash << 3) - hash + keyBytes[i]
-				hash = hash & hash
+				hash = ((hash << 7) | (hash >>> 25)) ^ dataBytes[i]
+				hash = hash >>> 0 // Ensure unsigned 32-bit
 			}
 			
-			// Return ArrayBuffer with pseudo-unique bytes
+			// Hash the key bytes with different operation
+			for (let i = 0; i < keyBytes.length; i++) {
+				hash = ((hash << 11) | (hash >>> 21)) ^ (keyBytes[i] << 8)
+				hash = hash >>> 0
+			}
+			
+			// Create secondary hash for more uniqueness
+			let hash2 = 0x87654321
+			for (let i = 0; i < dataBytes.length; i++) {
+				hash2 = ((hash2 << 13) | (hash2 >>> 19)) ^ (dataBytes[i] << 16)
+				hash2 = hash2 >>> 0
+			}
+			
+			// Return ArrayBuffer with pseudo-unique bytes based on both hashes
 			const buffer = new ArrayBuffer(32)
 			const view = new Uint8Array(buffer)
 			for (let i = 0; i < 32; i++) {
-				view[i] = (hash + i) & 0xFF
+				if (i < 16) {
+					view[i] = ((hash + i * 7) ^ (hash2 >> (i % 8))) & 0xFF
+				} else {
+					view[i] = ((hash2 + (i - 16) * 13) ^ (hash >> ((i - 16) % 8))) & 0xFF
+				}
 			}
 			return Promise.resolve(buffer)
 		})
