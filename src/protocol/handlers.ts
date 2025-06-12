@@ -581,706 +581,400 @@ async function handleAuthenticatedToolsCall(params: unknown, session: SessionPay
 			const connectionId = httpRequest?.headers.get('X-Connection-ID')
 			const connectionInfo = connectionId ? `\n🔗 **Connection ID:** ${connectionId}` : ''
 			
-			try {
-				const consumerKey = env?.DISCOGS_CONSUMER_KEY || ''
-				const consumerSecret = env?.DISCOGS_CONSUMER_SECRET || ''
+			return {
+				content: [
+					{
+						type: 'text',
+						text: `🔐 **Authentication Status: Authenticated** (Last.fm)${connectionInfo}
 
-				// Try to get user profile to verify authentication
-				const userProfile = await client.getUserProfile(session.accessToken, session.accessTokenSecret, consumerKey, consumerSecret)
+✅ **Authenticated as:** ${session.username}
+🎵 **Connected to:** Last.fm
+⏰ **Session expires:** Never (permanent session key)
 
-				return {
-					content: [
-						{
-							type: 'text',
-							text: `✅ **Authentication Status: Authenticated**
-
-🎵 **Connected Discogs Account:** ${userProfile.username}
-🆔 **User ID:** ${userProfile.id}${connectionInfo}
-
-You're all set! You can now use all collection tools:
-
-**Available Tools:**
-- **search_collection**: Search your Discogs collection with mood and contextual awareness
-- **get_release**: Get detailed release information  
-- **get_collection_stats**: Get collection statistics
-- **get_recommendations**: Get personalized recommendations with mood support
-- **ping**: Test server connectivity
-- **server_info**: Get server information
+**Available Last.fm tools:**
+• \`get_recent_tracks\` - Get your recent listening history
+• \`get_top_artists\` - Get your top artists by time period
+• \`get_top_albums\` - Get your top albums by time period
+• \`get_loved_tracks\` - Get your loved/favorite tracks
+• \`get_track_info\` - Get detailed track information
+• \`get_artist_info\` - Get detailed artist information
+• \`get_album_info\` - Get detailed album information
+• \`get_user_info\` - Get your profile information
+• \`get_similar_artists\` - Find similar artists
+• \`get_similar_tracks\` - Find similar tracks
+• \`get_listening_stats\` - Get listening statistics
+• \`get_music_recommendations\` - Get personalized recommendations
 
 **Examples to try:**
-- "Search my collection for Beatles albums"
-- "What are my collection stats?"
-- "Recommend some mellow jazz for Sunday evening"
-- "Find energetic workout music in my collection"
-- "Show me melancholy music from the 1970s"
+- "Get my recent tracks"
+- "Show me my top artists from the last month"
+- "Find similar artists to Radiohead"
+- "Get my listening statistics"
+- "Recommend some music based on my taste"
 
 Your authentication is secure and tied to your specific session.`,
-						},
-					],
-				}
-			} catch (error) {
-				const baseUrl = 'https://discogs-mcp-prod.rian-db8.workers.dev'
-				const loginUrl = connectionId 
-					? `${baseUrl}/login?connection_id=${connectionId}` 
-					: `${baseUrl}/login`
-				
-				return {
-					content: [
-						{
-							type: 'text',
-							text: `🔐 **Authentication Status: Authentication Error**
-
-There was an issue verifying your authentication: ${error instanceof Error ? error.message : 'Unknown error'}${connectionInfo}
-
-**How to re-authenticate:**
-1. Visit: ${loginUrl}
-2. Click "Authorize" to allow access to your Discogs collection
-3. You'll be redirected back and your session will be saved
-4. Try again
-
-If the problem persists, please check that your Discogs account is accessible.`,
-						},
-					],
-				}
+					},
+				],
 			}
 		}
 
-		case 'search_collection': {
-			const query = args?.query as string
-			if (!query) {
-				throw new Error('search_collection requires a query parameter')
-			}
+		case 'get_recent_tracks': {
+			const username = args?.username as string || session.username
+			const limit = Math.min(Math.max((args?.limit as number) || 50, 1), 200)
+			const from = args?.from as number
+			const to = args?.to as number
 
-			const perPage = Math.min(Math.max((args?.per_page as number) || 50, 1), 100)
+			const data = await client.getRecentTracks(username, limit, from, to)
+			
+			const tracks = data.recenttracks.track.slice(0, 10) // Show first 10 for summary
+			const trackList = tracks.map(track => {
+				const nowPlaying = track.nowplaying ? ' 🎵 Now Playing' : ''
+				const date = track.date ? new Date(parseInt(track.date.uts) * 1000).toLocaleDateString() : ''
+				return `• ${track.artist['#text']} - ${track.name}${nowPlaying}${date ? ` (${date})` : ''}`
+			}).join('\n')
 
-			try {
-				const consumerKey = env?.DISCOGS_CONSUMER_KEY || ''
-				const consumerSecret = env?.DISCOGS_CONSUMER_SECRET || ''
+			return {
+				content: [
+					{
+						type: 'text',
+						text: `🎵 **Recent Tracks for ${username}**
 
-				const userProfile = await client.getUserProfile(session.accessToken, session.accessTokenSecret, consumerKey, consumerSecret)
+Total tracks: ${data.recenttracks['@attr'].total}
+Showing: ${tracks.length} most recent tracks
 
-				// Check for temporal terms to provide better user feedback
-				const queryWords = query.toLowerCase().split(/\s+/)
-				const hasRecent = queryWords.some(word => ['recent', 'recently', 'new', 'newest', 'latest'].includes(word))
-				const hasOld = queryWords.some(word => ['old', 'oldest', 'earliest'].includes(word))
-				
-				let temporalInfo = ''
-				if (hasRecent) {
-					temporalInfo = `\n**Search Strategy:** Interpreted "${query}" as searching for items with "recent" meaning "most recently added". Sorting by date added (newest first).\n`
-				} else if (hasOld) {
-					temporalInfo = `\n**Search Strategy:** Interpreted "${query}" as searching for items with "old/oldest" meaning "earliest added". Sorting by date added (oldest first).\n`
-				}
+${trackList}
 
-				// Check if query contains mood/contextual language
-				const searchQueries: string[] = [query] // Start with original query
-				let moodInfo = ''
-
-				if (hasMoodContent(query)) {
-					const moodAnalysis = analyzeMoodQuery(query)
-					if (moodAnalysis.confidence >= 0.3) {
-						// Add mood-based search terms while preserving original query
-						const moodTerms = generateMoodSearchTerms(query)
-						if (moodTerms.length > 0) {
-							searchQueries.push(...moodTerms.slice(0, 3)) // Add top 3 mood-based terms
-							moodInfo = `\n**Mood Analysis:** Detected "${moodAnalysis.detectedMoods.join(', ')}" - searching for ${moodTerms.slice(0, 3).join(', ')}\n`
-						}
-					}
-				}
-
-				// Perform searches for all query variations and combine results
-				const allResults: DiscogsCollectionItem[] = []
-				const seenReleaseIds = new Set<string>()
-
-				for (const searchQuery of searchQueries) {
-					const searchResults = await client.searchCollection(
-						userProfile.username,
-						session.accessToken,
-						session.accessTokenSecret,
-						{
-							query: searchQuery,
-							per_page: perPage,
-						},
-						consumerKey,
-						consumerSecret,
-					)
-
-					// Add unique results (avoid duplicates)
-					for (const release of searchResults.releases) {
-						const releaseKey = `${release.id}-${release.instance_id}`
-						if (!seenReleaseIds.has(releaseKey)) {
-							seenReleaseIds.add(releaseKey)
-							allResults.push(release)
-						}
-					}
-				}
-
-				// Sort combined results by rating and date (unless temporal sorting was applied)
-				if (!hasRecent && !hasOld) {
-					allResults.sort((a: DiscogsCollectionItem, b: DiscogsCollectionItem) => {
-						if (a.rating !== b.rating) {
-							return b.rating - a.rating
-						}
-						return new Date(b.date_added).getTime() - new Date(a.date_added).getTime()
-					})
-				}
-
-				// Limit to requested page size
-				const finalResults = allResults.slice(0, perPage)
-
-				const summary = `Found ${allResults.length} results for "${query}" in your collection (showing ${finalResults.length} items):`
-
-				// Create concise formatted list with genres and styles
-				const releaseList = finalResults
-					.map((release: DiscogsCollectionItem) => {
-						const info = release.basic_information
-						const artists = info.artists.map((a: { name: string }) => a.name).join(', ')
-						const formats = info.formats.map((f: { name: string }) => f.name).join(', ')
-						const genres = info.genres?.length ? info.genres.join(', ') : 'Unknown'
-						const styles = info.styles?.length ? ` | Styles: ${info.styles.join(', ')}` : ''
-						const rating = release.rating > 0 ? ` ⭐${release.rating}` : ''
-
-						return `• [ID: ${release.id}] ${artists} - ${info.title} (${info.year})\n  Format: ${formats} | Genre: ${genres}${styles}${rating}`
-					})
-					.join('\n\n')
-
-				return {
-					content: [
-						{
-							type: 'text',
-							text: `${summary}${temporalInfo}${moodInfo}\n${releaseList}\n\n**Tip:** Use the release IDs with the get_release tool for detailed information about specific albums.`,
-						},
-					],
-				}
-			} catch (error) {
-				throw new Error(`Failed to search collection: ${error instanceof Error ? error.message : 'Unknown error'}`)
+${tracks.length < parseInt(data.recenttracks['@attr'].total) ? '\n*Use tools/call with specific parameters to get more tracks*' : ''}`,
+					},
+				],
 			}
 		}
 
-		case 'get_release': {
-			const releaseId = args?.release_id as string
-			if (!releaseId) {
-				throw new Error('get_release requires a release_id parameter')
-			}
+		case 'get_top_artists': {
+			const username = args?.username as string || session.username
+			const period = args?.period as string || 'overall'
+			const limit = Math.min(Math.max((args?.limit as number) || 50, 1), 1000)
 
-			try {
-				const release = await client.getRelease(releaseId, session.accessToken, session.accessTokenSecret)
+			const data = await client.getTopArtists(username, period as any, limit)
+			
+			const artists = data.topartists.artist.slice(0, 15) // Show top 15 for summary
+			const artistList = artists.map((artist, index) => {
+				return `${index + 1}. ${artist.name} (${artist.playcount} plays)`
+			}).join('\n')
 
-				const artists = (release.artists || []).map((a) => a.name).join(', ')
-				const formats = (release.formats || []).map((f) => `${f.name} (${f.qty})`).join(', ')
-				const genres = (release.genres || []).join(', ')
-				const styles = (release.styles || []).join(', ')
-				const labels = (release.labels || []).map((l) => `${l.name} (${l.catno})`).join(', ')
+			return {
+				content: [
+					{
+						type: 'text',
+						text: `🎤 **Top Artists for ${username}** (${period})
 
-				let text = `**${artists} - ${release.title}**\n\n`
-				text += `Year: ${release.year || 'Unknown'}\n`
-				text += `Formats: ${formats}\n`
-				text += `Genres: ${genres}\n`
-				if (styles) text += `Styles: ${styles}\n`
-				text += `Labels: ${labels}\n`
-				if (release.country) text += `Country: ${release.country}\n`
+${artistList}
 
-				if (release.tracklist && release.tracklist.length > 0) {
-					text += `\n**Tracklist:**\n`
-					release.tracklist.forEach((track) => {
-						text += `${track.position}. ${track.title}`
-						if (track.duration) text += ` (${track.duration})`
-						text += '\n'
-					})
-				}
-
-				return {
-					content: [
-						{
-							type: 'text',
-							text,
-						},
-					],
-				}
-			} catch (error) {
-				throw new Error(`Failed to get release: ${error instanceof Error ? error.message : 'Unknown error'}`)
+Total artists: ${data.topartists['@attr'].total}`,
+					},
+				],
 			}
 		}
 
-		case 'get_collection_stats': {
-			try {
-				const consumerKey = env?.DISCOGS_CONSUMER_KEY || ''
-				const consumerSecret = env?.DISCOGS_CONSUMER_SECRET || ''
+		case 'get_top_albums': {
+			const username = args?.username as string || session.username
+			const period = args?.period as string || 'overall'
+			const limit = Math.min(Math.max((args?.limit as number) || 50, 1), 1000)
 
-				const userProfile = await client.getUserProfile(session.accessToken, session.accessTokenSecret, consumerKey, consumerSecret)
-				const stats = await client.getCollectionStats(
-					userProfile.username,
-					session.accessToken,
-					session.accessTokenSecret,
-					consumerKey,
-					consumerSecret,
-				)
+			const data = await client.getTopAlbums(username, period as any, limit)
+			
+			const albums = data.topalbums.album.slice(0, 10) // Show top 10 for summary
+			const albumList = albums.map((album, index) => {
+				const artist = typeof album.artist === 'string' ? album.artist : album.artist.name
+				return `${index + 1}. ${artist} - ${album.name} (${album.playcount} plays)`
+			}).join('\n')
 
-				let text = `**Collection Statistics for ${userProfile.username}**\n\n`
-				text += `Total Releases: ${stats.totalReleases}\n`
-				text += `Average Rating: ${stats.averageRating.toFixed(1)} (${stats.ratedReleases} rated releases)\n\n`
+			return {
+				content: [
+					{
+						type: 'text',
+						text: `💿 **Top Albums for ${username}** (${period})
 
-				text += `**Top Genres:**\n`
-				const topGenres = Object.entries(stats.genreBreakdown)
-					.sort(([, a], [, b]) => b - a)
-					.slice(0, 5)
-				topGenres.forEach(([genre, count]) => {
-					text += `• ${genre}: ${count} releases\n`
-				})
+${albumList}
 
-				text += `\n**By Decade:**\n`
-				const topDecades = Object.entries(stats.decadeBreakdown)
-					.sort(([, a], [, b]) => b - a)
-					.slice(0, 5)
-				topDecades.forEach(([decade, count]) => {
-					text += `• ${decade}s: ${count} releases\n`
-				})
-
-				text += `\n**Top Formats:**\n`
-				const topFormats = Object.entries(stats.formatBreakdown)
-					.sort(([, a], [, b]) => b - a)
-					.slice(0, 5)
-				topFormats.forEach(([format, count]) => {
-					text += `• ${format}: ${count} releases\n`
-				})
-
-				return {
-					content: [
-						{
-							type: 'text',
-							text,
-						},
-					],
-				}
-			} catch (error) {
-				throw new Error(`Failed to get collection stats: ${error instanceof Error ? error.message : 'Unknown error'}`)
+Total albums: ${data.topalbums['@attr'].total}`,
+					},
+				],
 			}
 		}
 
-		case 'get_recommendations': {
-			const limit = Math.min(Math.max((args?.limit as number) || 10, 1), 50)
+		case 'get_loved_tracks': {
+			const username = args?.username as string || session.username
+			const limit = Math.min(Math.max((args?.limit as number) || 50, 1), 1000)
+
+			const data = await client.getLovedTracks(username, limit)
+			
+			const tracks = data.lovedtracks.track.slice(0, 10) // Show first 10 for summary
+			const trackList = tracks.map(track => {
+				return `• ${track.artist.name} - ${track.name}`
+			}).join('\n')
+
+			return {
+				content: [
+					{
+						type: 'text',
+						text: `❤️ **Loved Tracks for ${username}**
+
+${trackList}
+
+Total loved tracks: ${data.lovedtracks['@attr'].total}`,
+					},
+				],
+			}
+		}
+
+		case 'get_track_info': {
+			const artist = args?.artist as string
+			const track = args?.track as string
+			const username = args?.username as string || session.username
+
+			if (!artist || !track) {
+				throw new Error('get_track_info requires artist and track parameters')
+			}
+
+			const data = await client.getTrackInfo(artist, track, username)
+			
+			const tags = data.track.toptags?.tag.slice(0, 5).map(tag => tag.name).join(', ') || 'None'
+			const userPlaycount = data.track.userplaycount || '0'
+			const loved = data.track.userloved === '1' ? ' ❤️' : ''
+
+			return {
+				content: [
+					{
+						type: 'text',
+						text: `🎵 **Track Information**
+
+**Track:** ${data.track.name}${loved}
+**Artist:** ${data.track.artist.name}
+**Album:** ${data.track.album?.['#text'] || 'Unknown'}
+
+**Stats:**
+• Total plays: ${data.track.playcount}
+• Total listeners: ${data.track.listeners}
+• Your plays: ${userPlaycount}
+
+**Tags:** ${tags}
+
+${data.track.wiki?.summary ? `**Description:** ${data.track.wiki.summary.replace(/<[^>]*>/g, '')}` : ''}`,
+					},
+				],
+			}
+		}
+
+		case 'get_artist_info': {
+			const artist = args?.artist as string
+			const username = args?.username as string || session.username
+
+			if (!artist) {
+				throw new Error('get_artist_info requires artist parameter')
+			}
+
+			const data = await client.getArtistInfo(artist, username)
+			
+			const tags = data.artist.tags?.tag.slice(0, 5).map(tag => tag.name).join(', ') || 'None'
+			const userPlaycount = data.artist.stats.userplaycount || '0'
+			const similar = data.artist.similar?.artist.slice(0, 5).map(a => a.name).join(', ') || 'None'
+
+			return {
+				content: [
+					{
+						type: 'text',
+						text: `🎤 **Artist Information**
+
+**Artist:** ${data.artist.name}
+
+**Stats:**
+• Total plays: ${data.artist.stats.playcount}
+• Total listeners: ${data.artist.stats.listeners}
+• Your plays: ${userPlaycount}
+
+**Tags:** ${tags}
+**Similar Artists:** ${similar}
+
+${data.artist.bio?.summary ? `**Bio:** ${data.artist.bio.summary.replace(/<[^>]*>/g, '')}` : ''}`,
+					},
+				],
+			}
+		}
+
+		case 'get_album_info': {
+			const artist = args?.artist as string
+			const album = args?.album as string
+			const username = args?.username as string || session.username
+
+			if (!artist || !album) {
+				throw new Error('get_album_info requires artist and album parameters')
+			}
+
+			const data = await client.getAlbumInfo(artist, album, username)
+			
+			const tags = data.album.tags?.tag.slice(0, 5).map(tag => tag.name).join(', ') || 'None'
+			const userPlaycount = data.album.userplaycount || '0'
+			const tracks = data.album.tracks?.track.slice(0, 10).map((track, i) => `${i + 1}. ${track.name}`).join('\n') || 'Track listing not available'
+
+			return {
+				content: [
+					{
+						type: 'text',
+						text: `💿 **Album Information**
+
+**Album:** ${data.album.name}
+**Artist:** ${data.album.artist}
+
+**Stats:**
+• Total plays: ${data.album.playcount}
+• Total listeners: ${data.album.listeners}
+• Your plays: ${userPlaycount}
+
+**Tags:** ${tags}
+
+**Track Listing:**
+${tracks}
+
+${data.album.wiki?.summary ? `**Description:** ${data.album.wiki.summary.replace(/<[^>]*>/g, '')}` : ''}`,
+					},
+				],
+			}
+		}
+
+		case 'get_user_info': {
+			const username = args?.username as string || session.username
+
+			const data = await client.getUserInfo(username)
+			const user = data.user
+			
+			const registrationDate = new Date(parseInt(user.registered.unixtime) * 1000).toLocaleDateString()
+
+			return {
+				content: [
+					{
+						type: 'text',
+						text: `👤 **User Profile**
+
+**Username:** ${user.name}
+**Real Name:** ${user.realname || 'Not provided'}
+**Country:** ${user.country || 'Not provided'}
+
+**Stats:**
+• Total scrobbles: ${user.playcount}
+• Member since: ${registrationDate}
+• Subscriber: ${user.subscriber === '1' ? 'Yes' : 'No'}
+
+**Profile URL:** ${user.url}`,
+					},
+				],
+			}
+		}
+
+		case 'get_similar_artists': {
+			const artist = args?.artist as string
+			const limit = Math.min(Math.max((args?.limit as number) || 30, 1), 100)
+
+			if (!artist) {
+				throw new Error('get_similar_artists requires artist parameter')
+			}
+
+			const data = await client.getSimilarArtists(artist, limit)
+			
+			const artists = data.similarartists.artist.slice(0, 10)
+			const artistList = artists.map(a => `• ${a.name} (${Math.round(parseFloat(a.match) * 100)}% match)`).join('\n')
+
+			return {
+				content: [
+					{
+						type: 'text',
+						text: `🎤 **Artists Similar to ${artist}**
+
+${artistList}`,
+					},
+				],
+			}
+		}
+
+		case 'get_similar_tracks': {
+			const artist = args?.artist as string
+			const track = args?.track as string
+			const limit = Math.min(Math.max((args?.limit as number) || 30, 1), 100)
+
+			if (!artist || !track) {
+				throw new Error('get_similar_tracks requires artist and track parameters')
+			}
+
+			const data = await client.getSimilarTracks(artist, track, limit)
+			
+			const tracks = data.similartracks.track.slice(0, 10)
+			const trackList = tracks.map(t => `• ${t.artist.name} - ${t.name} (${Math.round(parseFloat(t.match) * 100)}% match)`).join('\n')
+
+			return {
+				content: [
+					{
+						type: 'text',
+						text: `🎵 **Tracks Similar to ${track} by ${artist}**
+
+${trackList}`,
+					},
+				],
+			}
+		}
+
+		case 'get_listening_stats': {
+			const username = args?.username as string || session.username
+			const period = args?.period as string || 'overall'
+
+			const stats = await client.getListeningStats(username, period as any)
+
+			return {
+				content: [
+					{
+						type: 'text',
+						text: `📊 **Listening Statistics for ${username}** (${period})
+
+**Overview:**
+• Total scrobbles: ${stats.totalScrobbles.toLocaleString()}
+• Average tracks per day: ${stats.listeningTrends.averageTracksPerDay}
+• Top artists tracked: ${stats.topArtistsCount}
+• Top albums tracked: ${stats.topAlbumsCount}
+
+**Activity:**
+• Recent activity level: ${stats.listeningTrends.recentActivity} tracked items`,
+					},
+				],
+			}
+		}
+
+		case 'get_music_recommendations': {
+			const username = args?.username as string || session.username
+			const limit = Math.min(Math.max((args?.limit as number) || 20, 1), 50)
 			const genre = args?.genre as string
-			const decade = args?.decade as string
-			const similarTo = args?.similar_to as string
-			const query = args?.query as string
-			const format = args?.format as string
 
-			// Type for release with relevance score
-			type ReleaseWithRelevance = DiscogsCollectionItem & { relevanceScore?: number }
+			const recommendations = await client.getMusicRecommendations(username, limit, genre)
+			
+			const artistRecs = recommendations.recommendedArtists.slice(0, 8)
+			const artistList = artistRecs.map(rec => `• ${rec.name} (${rec.reason})`).join('\n')
 
-			// Analyze mood content in parameters to enhance filtering
-			let moodGenres: string[] = []
-			let moodStyles: string[] = []
-			let moodInfo = ''
+			return {
+				content: [
+					{
+						type: 'text',
+						text: `🎯 **Music Recommendations for ${username}**
+${genre ? `**Genre Filter:** ${genre}\n` : ''}
+**Recommended Artists:**
 
-			// Check for mood content in query parameter
-			if (query && hasMoodContent(query)) {
-				const moodAnalysis = analyzeMoodQuery(query)
-				if (moodAnalysis.confidence >= 0.3) {
-					moodGenres = moodAnalysis.suggestedGenres
-					moodStyles = moodAnalysis.suggestedStyles
-					moodInfo = `\n**Mood Analysis:** Detected "${moodAnalysis.detectedMoods.join(', ')}"${moodAnalysis.contextualHints.length ? ` (${moodAnalysis.contextualHints.join(', ')})` : ''}\n`
-				}
-			}
+${artistList}
 
-			// Also check genre parameter for mood terms
-			if (genre && hasMoodContent(genre)) {
-				const genreMoodAnalysis = analyzeMoodQuery(genre)
-				if (genreMoodAnalysis.confidence >= 0.3) {
-					moodGenres = [...moodGenres, ...genreMoodAnalysis.suggestedGenres]
-					moodStyles = [...moodStyles, ...genreMoodAnalysis.suggestedStyles]
-					if (!moodInfo) {
-						moodInfo = `\n**Mood Analysis:** Detected "${genreMoodAnalysis.detectedMoods.join(', ')}" in genre filter\n`
-					}
-				}
-			}
-
-			// Remove duplicates from mood mappings
-			moodGenres = [...new Set(moodGenres)]
-			moodStyles = [...new Set(moodStyles)]
-
-			try {
-				const consumerKey = env?.DISCOGS_CONSUMER_KEY || ''
-				const consumerSecret = env?.DISCOGS_CONSUMER_SECRET || ''
-
-				const userProfile = await client.getUserProfile(session.accessToken, session.accessTokenSecret, consumerKey, consumerSecret)
-
-				// Get full collection for context-aware recommendations
-				const fullCollection = await client.searchCollection(
-					userProfile.username,
-					session.accessToken,
-					session.accessTokenSecret,
-					{ per_page: 100 }, // Get all items
-					consumerKey,
-					consumerSecret,
-				)
-
-				// Get all collection items by paginating through all pages
-				let allReleases = fullCollection.releases
-				for (let page = 2; page <= fullCollection.pagination.pages; page++) {
-					const pageResults = await client.searchCollection(
-						userProfile.username,
-						session.accessToken,
-						session.accessTokenSecret,
-						{ page, per_page: 100 },
-						consumerKey,
-						consumerSecret,
-					)
-					allReleases = allReleases.concat(pageResults.releases)
-				}
-
-				// Filter releases based on context parameters
-				let filteredReleases = allReleases
-
-				// Filter by genre (enhanced with mood mapping)
-				if (genre || moodGenres.length > 0) {
-					filteredReleases = filteredReleases.filter((release) => {
-						const releaseGenres = release.basic_information.genres?.map((g) => g.toLowerCase()) || []
-						const releaseStyles = release.basic_information.styles?.map((s) => s.toLowerCase()) || []
-
-						// Original genre matching (if genre parameter provided)
-						let genreMatch = false
-						if (genre) {
-							// Split genre parameter by common separators and check each one
-							const genreTerms = genre.toLowerCase().split(/[\s,;|&]+/).filter(term => term.length > 0)
-							genreMatch = genreTerms.some(term => 
-								releaseGenres.some((g) => g.includes(term)) || 
-								releaseStyles.some((s) => s.includes(term))
-							)
-						}
-
-						// Mood-based genre matching
-						let moodMatch = false
-						if (moodGenres.length > 0 || moodStyles.length > 0) {
-							const lowerMoodGenres = moodGenres.map((g) => g.toLowerCase())
-							const lowerMoodStyles = moodStyles.map((s) => s.toLowerCase())
-
-							moodMatch =
-								releaseGenres.some((g) => lowerMoodGenres.some((mg) => g.includes(mg) || mg.includes(g))) ||
-								releaseStyles.some((s) => lowerMoodStyles.some((ms) => s.includes(ms) || ms.includes(s)))
-						}
-
-						// Return true if either genre or mood criteria match (when applicable)
-						if (genre && (moodGenres.length > 0 || moodStyles.length > 0)) {
-							return genreMatch || moodMatch
-						} else if (genre) {
-							return genreMatch
-						} else {
-							return moodMatch
-						}
-					})
-				}
-
-				// Filter by decade
-				if (decade) {
-					const decadeNum = parseInt(decade.replace(/s$/, ''))
-					if (!isNaN(decadeNum)) {
-						filteredReleases = filteredReleases.filter((release) => {
-							const year = release.basic_information.year
-							return year && year >= decadeNum && year < decadeNum + 10
-						})
-					}
-				}
-
-				// Filter by format
-				if (format) {
-					filteredReleases = filteredReleases.filter((release) => {
-						return release.basic_information.formats?.some((f) => f.name.toLowerCase().includes(format.toLowerCase()))
-					})
-				}
-
-				// Filter by similarity to artist/album using musical characteristics
-				if (similarTo) {
-					// Step 1: Find reference release(s) that match the similarTo query
-					const similarTerms = similarTo
-						.toLowerCase()
-						.split(/\s+/)
-						.filter((term) => term.length > 2)
-					const referenceReleases = filteredReleases.filter((release) => {
-						const info = release.basic_information
-						const searchableText = [
-							...(info.artists?.map((artist) => artist.name) || []),
-							info.title,
-							...(info.genres || []),
-							...(info.styles || []),
-							...(info.labels?.map((label) => label.name) || []),
-						]
-							.join(' ')
-							.toLowerCase()
-
-						// Find releases that match the similarTo terms
-						const matchingTerms = similarTerms.filter((term) => searchableText.includes(term)).length
-						return matchingTerms >= Math.ceil(similarTerms.length * 0.5)
-					})
-
-					if (referenceReleases.length > 0) {
-						// Step 2: Extract musical characteristics from reference releases
-						const refGenres = new Set<string>()
-						const refStyles = new Set<string>()
-						const refArtists = new Set<string>()
-						let refEraStart = Infinity
-						let refEraEnd = 0
-
-						referenceReleases.forEach((release) => {
-							const info = release.basic_information
-							info.genres?.forEach((g) => refGenres.add(g.toLowerCase()))
-							info.styles?.forEach((s) => refStyles.add(s.toLowerCase()))
-							info.artists?.forEach((a) => refArtists.add(a.name.toLowerCase()))
-							if (info.year) {
-								refEraStart = Math.min(refEraStart, info.year)
-								refEraEnd = Math.max(refEraEnd, info.year)
-							}
-						})
-
-						// Expand era window by ±5 years for similar releases
-						const eraBuffer = 5
-						refEraStart = refEraStart === Infinity ? 0 : refEraStart - eraBuffer
-						refEraEnd = refEraEnd === 0 ? 9999 : refEraEnd + eraBuffer
-
-						// Step 3: Find releases with similar musical characteristics
-						filteredReleases = filteredReleases.filter((release) => {
-							const info = release.basic_information
-							let similarityScore = 0
-
-							// Genre matching (highest weight)
-							const releaseGenres = (info.genres || []).map((g) => g.toLowerCase())
-							const genreMatches = releaseGenres.filter((g) => refGenres.has(g)).length
-							if (genreMatches > 0) similarityScore += genreMatches * 3
-
-							// Style matching (high weight)
-							const releaseStyles = (info.styles || []).map((s) => s.toLowerCase())
-							const styleMatches = releaseStyles.filter((s) => refStyles.has(s)).length
-							if (styleMatches > 0) similarityScore += styleMatches * 2
-
-							// Era matching (medium weight)
-							const releaseYear = info.year || 0
-							if (releaseYear >= refEraStart && releaseYear <= refEraEnd) {
-								similarityScore += 1
-							}
-
-							// Artist collaboration (bonus points for shared artists)
-							const releaseArtists = (info.artists || []).map((a) => a.name.toLowerCase())
-							const artistMatches = releaseArtists.filter((a) => refArtists.has(a)).length
-							if (artistMatches > 0) similarityScore += artistMatches * 1
-
-							// Require minimum similarity score (at least genre or style match)
-							return similarityScore >= 2
-						})
-					} else {
-						// Fallback: if no reference releases found, keep all releases
-						// This prevents returning empty results if similarTo doesn't match anything
-					}
-				}
-
-				// Filter by general query with smart term matching
-				if (query) {
-					const queryTerms = query
-						.toLowerCase()
-						.split(/\s+/)
-						.filter((term) => term.length > 2) // Split into words, ignore short words
-					
-					// Check if this looks like a genre/style/mood query
-					const genreStyleTerms = [
-						'ambient', 'drone', 'progressive', 'rock', 'jazz', 'blues', 'electronic', 'techno', 'house',
-						'metal', 'punk', 'folk', 'country', 'classical', 'hip', 'hop', 'rap', 'soul', 'funk', 'disco',
-						'reggae', 'ska', 'indie', 'alternative', 'psychedelic', 'experimental', 'avant-garde',
-						'minimal', 'downtempo', 'chillout', 'trance', 'dubstep', 'garage', 'post-rock', 'post-punk',
-						'new wave', 'synthpop', 'industrial', 'gothic', 'darkwave', 'shoegaze', 'grunge', 'hardcore',
-						// Add mood terms as well
-						'moody', 'melancholy', 'melancholic', 'introspective', 'sad', 'contemplative', 'somber', 'nostalgic',
-						'energetic', 'upbeat', 'happy', 'cheerful', 'vibrant', 'mellow', 'chill', 'relaxing', 'peaceful',
-						'dark', 'brooding', 'intense', 'romantic', 'intimate', 'sensual'
-					]
-					
-					const isGenreStyleMoodQuery = queryTerms.some(term => genreStyleTerms.includes(term.toLowerCase()))
-					
-					filteredReleases = filteredReleases.filter((release) => {
-						const info = release.basic_information
-
-						// Create searchable text from all release information
-						const searchableText = [
-							...(info.artists?.map((artist) => artist.name) || []),
-							info.title,
-							...(info.genres || []),
-							...(info.styles || []),
-							...(info.labels?.map((label) => label.name) || []),
-						]
-							.join(' ')
-							.toLowerCase()
-
-						if (isGenreStyleMoodQuery) {
-							// For genre/style/mood queries, use OR logic - at least one term must match
-							const matchingTerms = queryTerms.filter((term) => searchableText.includes(term)).length
-							return matchingTerms >= 1
-						} else {
-							// For other queries, require at least 50% of terms to match for relevance
-							const matchingTerms = queryTerms.filter((term) => searchableText.includes(term)).length
-							return matchingTerms >= Math.ceil(queryTerms.length * 0.5)
-						}
-					})
-				}
-
-				// Calculate relevance scores for query-based searches
-				if (query) {
-					const queryTerms = query
-						.toLowerCase()
-						.split(/\s+/)
-						.filter((term) => term.length > 2)
-
-					filteredReleases = filteredReleases
-						.map((release): ReleaseWithRelevance => {
-							const info = release.basic_information
-							const searchableText = [
-								...(info.artists?.map((artist) => artist.name) || []),
-								info.title,
-								...(info.genres || []),
-								...(info.styles || []),
-								...(info.labels?.map((label) => label.name) || []),
-							]
-								.join(' ')
-								.toLowerCase()
-
-							// Count matching terms for relevance scoring
-							const matchingTerms = queryTerms.filter((term) => searchableText.includes(term)).length
-							const relevanceScore = matchingTerms / queryTerms.length
-
-							return { ...release, relevanceScore }
-						})
-						.sort((a, b) => {
-							// Sort by relevance first, then rating, then date
-							const aRelevance = a.relevanceScore || 0
-							const bRelevance = b.relevanceScore || 0
-							if (aRelevance !== bRelevance) {
-								return bRelevance - aRelevance
-							}
-							if (a.rating !== b.rating) {
-								return b.rating - a.rating
-							}
-							return new Date(b.date_added).getTime() - new Date(a.date_added).getTime()
-						})
-				} else {
-					// Sort by rating (highest first) and then by date added (newest first)
-					filteredReleases.sort((a, b) => {
-						if (a.rating !== b.rating) {
-							return b.rating - a.rating
-						}
-						return new Date(b.date_added).getTime() - new Date(a.date_added).getTime()
-					})
-				}
-
-				// Limit results
-				const recommendations = filteredReleases.slice(0, limit)
-
-				// Build response
-				let text = `**Context-Aware Music Recommendations**\n\n`
-
-				if (genre || decade || similarTo || query || format || moodGenres.length > 0) {
-					text += `**Filters Applied:**\n`
-					if (genre) text += `• Genre: ${genre}\n`
-					if (decade) text += `• Decade: ${decade}\n`
-					if (format) text += `• Format: ${format}\n`
-					if (similarTo) text += `• Similar to: ${similarTo}\n`
-					if (query) text += `• Query: ${query}\n`
-					if (moodGenres.length > 0) text += `• Mood-based genres: ${moodGenres.slice(0, 5).join(', ')}\n`
-					text += `\n`
-				}
-
-				if (moodInfo) {
-					text += moodInfo
-				}
-
-				text += `Found ${filteredReleases.length} matching releases in your collection (showing top ${recommendations.length}):\n\n`
-
-				if (recommendations.length === 0) {
-					text += `No releases found matching your criteria. Try:\n`
-					text += `• Broadening your search terms\n`
-					text += `• Using different genres or decades\n`
-					text += `• Searching for specific artists you own\n`
-					text += `• Using mood descriptors like "mellow", "energetic", "melancholy"\n`
-					text += `• Trying contextual terms like "Sunday evening", "rainy day", "workout"\n`
-				} else {
-					recommendations.forEach((release, index) => {
-						const info = release.basic_information
-						const artists = info.artists.map((a) => a.name).join(', ')
-						const formats = info.formats?.map((f) => f.name).join(', ') || 'Unknown'
-						const genres = info.genres?.join(', ') || 'Unknown'
-						const year = info.year || 'Unknown'
-						const rating = release.rating > 0 ? ` ⭐${release.rating}` : ''
-						const relevance =
-							query && 'relevanceScore' in release ? ` (${Math.round((release as ReleaseWithRelevance).relevanceScore! * 100)}% match)` : ''
-
-						text += `${index + 1}. **${artists} - ${info.title}** (${year})${rating}${relevance}\n`
-						text += `   Format: ${formats} | Genres: ${genres}\n`
-						if (info.styles && info.styles.length > 0) {
-							text += `   Styles: ${info.styles.join(', ')}\n`
-						}
-						text += `   Release ID: ${release.id}\n\n`
-					})
-
-					text += `**Tip:** Use the get_release tool with any Release ID for detailed information about specific albums.`
-				}
-
-				return {
-					content: [
-						{
-							type: 'text',
-							text,
-						},
-					],
-				}
-			} catch (error) {
-				throw new Error(`Failed to get recommendations: ${error instanceof Error ? error.message : 'Unknown error'}`)
-			}
-		}
-
-		case 'get_cache_stats': {
-			try {
-				if (!cachedClient) {
-					return {
-						content: [
-							{
-								type: 'text',
-								text: '**Cache Statistics**\n\nCaching is not available - no KV storage configured. All requests go directly to the Discogs API.',
-							},
-						],
-					}
-				}
-
-				const stats = await cachedClient.getCacheStats()
-				
-				let text = '**Cache Performance Statistics**\n\n'
-				text += `📊 **Total Cache Entries:** ${stats.totalEntries}\n`
-				text += `⏳ **Pending Requests:** ${stats.pendingRequests}\n\n`
-				
-				if (Object.keys(stats.entriesByType).length > 0) {
-					text += '**Cached Data Types:**\n'
-					for (const [type, count] of Object.entries(stats.entriesByType)) {
-						text += `• ${type}: ${count} entries\n`
-					}
-				} else {
-					text += '**No cached data** - Cache is empty or recently cleared\n'
-				}
-				
-				text += '\n**Cache Benefits:**\n'
-				text += '• Reduced API calls to Discogs\n'
-				text += '• Faster response times\n'
-				text += '• Better rate limit compliance\n'
-				text += '• Request deduplication for concurrent users\n'
-
-				return {
-					content: [
-						{
-							type: 'text',
-							text,
-						},
-					],
-				}
-			} catch (error) {
-				throw new Error(`Failed to get cache stats: ${error instanceof Error ? error.message : 'Unknown error'}`)
+*Based on your listening history and similar user preferences*`,
+					},
+				],
 			}
 		}
 
 		default:
-			throw new Error(`Unknown authenticated tool: ${name}`)
+			throw new Error(`Unknown tool: ${name}. Available tools: ${LASTFM_TOOLS.map(t => t.name).join(', ')}`)
 	}
 }
 
