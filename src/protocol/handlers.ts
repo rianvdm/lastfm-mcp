@@ -39,7 +39,7 @@ import { isConnectionAuthenticated } from '../transport/sse'
  */
 function getCachedLastfmClient(env?: Env): CachedLastfmClient | null {
 	if (!env?.LASTFM_API_KEY) {
-		console.warn('No Last.fm API key available')
+		console.warn('No Last.fm API key available', { hasEnv: !!env, hasApiKey: !!env?.LASTFM_API_KEY })
 		return null
 	}
 	
