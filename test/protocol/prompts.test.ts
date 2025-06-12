@@ -37,26 +37,25 @@ describe('MCP Prompts', () => {
 	})
 
 	describe('handlePromptsGet', () => {
-		// Note: The current implementation still has placeholder Discogs prompts
-		// This test checks what actually exists, not what should exist
-		it('should return browse_collection prompt (legacy)', () => {
+		// Tests for Last.fm prompt implementations
+		it('should return browse_collection prompt', () => {
 			const result = handlePromptsGet({ name: 'browse_collection' })
 
 			expect(result).toMatchObject({
-				description: expect.stringContaining('collection'),
+				description: expect.stringContaining('Last.fm'),
 				messages: [
 					{
 						role: 'user',
 						content: {
 							type: 'text',
-							text: expect.stringContaining('collection'),
+							text: expect.stringContaining('Last.fm'),
 						},
 					},
 				],
 			})
 		})
 
-		it('should return find_music prompt (legacy)', () => {
+		it('should return find_music prompt', () => {
 			const result = handlePromptsGet({
 				name: 'find_music',
 				arguments: { query: 'Pink Floyd' },
@@ -76,17 +75,17 @@ describe('MCP Prompts', () => {
 			})
 		})
 
-		it('should return collection_insights prompt (legacy)', () => {
+		it('should return collection_insights prompt', () => {
 			const result = handlePromptsGet({ name: 'collection_insights' })
 
 			expect(result).toMatchObject({
-				description: expect.stringContaining('collection'),
+				description: expect.stringContaining('listening'),
 				messages: [
 					{
 						role: 'user',
 						content: {
 							type: 'text',
-							text: expect.stringContaining('collection'),
+							text: expect.stringContaining('listening'),
 						},
 					},
 				],
