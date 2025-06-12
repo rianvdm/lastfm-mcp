@@ -22,6 +22,16 @@ const mockLastfmClient = vi.mocked(lastfmClient)
 // Mock JWT secret for testing
 const mockJwtSecret = 'test-jwt-secret'
 
+// Mock environment for testing
+const mockEnv = {
+	LASTFM_API_KEY: 'test-api-key',
+	LASTFM_SHARED_SECRET: 'test-shared-secret',
+	JWT_SECRET: mockJwtSecret,
+	MCP_SESSIONS: {} as any,
+	MCP_LOGS: {} as any,
+	MCP_RL: {} as any,
+}
+
 // Helper to create mock authenticated request
 async function createMockAuthenticatedRequest(): Promise<Request> {
 	const sessionToken = await createSessionToken(

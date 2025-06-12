@@ -22,8 +22,8 @@ const mockMCP_SESSIONS = {
 }
 
 const mockEnv: Env = {
-	DISCOGS_CONSUMER_KEY: 'test-key',
-	DISCOGS_CONSUMER_SECRET: 'test-secret',
+	LASTFM_API_KEY: 'test-api-key',
+	LASTFM_SHARED_SECRET: 'test-shared-secret',
 	JWT_SECRET: 'test-jwt-secret',
 	MCP_LOGS: mockMCP_LOGS as any,
 	MCP_RL: mockMCP_RL as any,
