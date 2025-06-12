@@ -53,18 +53,18 @@
 
 ## Phase 6 – MCP Tools Conversion
 
-- [ ] **F1** Replace collection tools with Last.fm listening data tools
-- [ ] **F2** Implement get_recent_tracks tool
-- [ ] **F3** Implement get_top_artists and get_top_albums tools
-- [ ] **F4** Implement get_loved_tracks tool
-- [ ] **F5** Implement get_track_info and get_artist_info tools
-- [ ] **F6** Implement get_album_info tool
-- [ ] **F7** Implement get_user_info tool
-- [ ] **F8** Implement get_similar_artists and get_similar_tracks tools
-- [ ] **F9** Implement get_listening_stats tool
-- [ ] **F10** Implement get_music_recommendations tool
-- [ ] **F11** Add comprehensive parameter validation
-- [ ] **F12** Update all tool schemas and validation
+- [x] **F1** Replace collection tools with Last.fm listening data tools
+- [x] **F2** Implement get_recent_tracks tool
+- [x] **F3** Implement get_top_artists and get_top_albums tools
+- [x] **F4** Implement get_loved_tracks tool
+- [x] **F5** Implement get_track_info and get_artist_info tools
+- [x] **F6** Implement get_album_info tool
+- [x] **F7** Implement get_user_info tool
+- [x] **F8** Implement get_similar_artists and get_similar_tracks tools
+- [x] **F9** Implement get_listening_stats tool
+- [x] **F10** Implement get_music_recommendations tool
+- [x] **F11** Add comprehensive parameter validation
+- [x] **F12** Update all tool schemas and validation
 
 ## Phase 7 – MCP Prompts Adaptation
 

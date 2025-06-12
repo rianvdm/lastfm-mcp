@@ -3,7 +3,7 @@
  * Defines resources, tools, and prompts for Last.fm data access
  */
 
-import { Resource, Prompt, PromptArgument } from './mcp'
+import { Resource, Prompt } from './mcp'
 
 // Last.fm MCP Resource Definitions
 export const LASTFM_RESOURCES: Resource[] = [

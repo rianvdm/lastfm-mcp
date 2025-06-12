@@ -10,10 +10,8 @@ import {
 	PROTOCOL_VERSION,
 	SERVER_INFO,
 	DEFAULT_CAPABILITIES,
-	Resource,
 	ResourcesListResult,
 	ResourcesReadResult,
-	Prompt,
 	PromptsListParams,
 	PromptsListResult,
 	PromptsGetResult,
@@ -33,8 +31,7 @@ import {
 import { verifySessionToken, SessionPayload } from '../auth/jwt'
 import { LastfmClient } from '../clients/lastfm'
 import { CachedLastfmClient } from '../clients/cachedLastfm'
-import { LASTFM_RESOURCES, LASTFM_TOOLS, parseLastfmUri } from '../types/lastfm-mcp'
-import { analyzeMoodQuery, hasMoodContent, generateMoodSearchTerms } from '../utils/moodMapping'
+import { LASTFM_RESOURCES, LASTFM_TOOLS, LASTFM_PROMPTS, parseLastfmUri } from '../types/lastfm-mcp'
 import { isConnectionAuthenticated } from '../transport/sse'
 
 /**
@@ -146,14 +143,14 @@ async function getConnectionSession(request: Request, jwtSecret: string, env?: E
  */
 function generateAuthInstructions(request: Request): string {
 	const connectionId = request.headers.get('X-Connection-ID')
-	const baseUrl = 'https://discogs-mcp-prod.rian-db8.workers.dev'
+	const baseUrl = 'https://lastfm-mcp-prod.rian-db8.workers.dev'
 	
 	if (connectionId) {
 		// Connection-specific auth instructions
-		return `visit ${baseUrl}/login?connection_id=${connectionId} to authenticate with your Discogs account`
+		return `visit ${baseUrl}/login?connection_id=${connectionId} to authenticate with your Last.fm account`
 	} else {
 		// Generic auth instructions
-		return `visit ${baseUrl}/login to authenticate with Discogs`
+		return `visit ${baseUrl}/login to authenticate with Last.fm`
 	}
 }
 
@@ -324,29 +321,7 @@ export function handlePromptsList(params?: unknown): PromptsListResult {
 		throw new Error('Invalid prompts/list params')
 	}
 
-	const prompts: Prompt[] = [
-		{
-			name: 'browse_collection',
-			description: 'Browse and explore your Discogs music collection',
-		},
-		{
-			name: 'find_music',
-			description: 'Find specific music in your collection',
-			arguments: [
-				{
-					name: 'query',
-					description: 'Search query for finding music (artist, album, track, etc.)',
-					required: true,
-				},
-			],
-		},
-		{
-			name: 'collection_insights',
-			description: 'Get insights and statistics about your music collection',
-		},
-	]
-
-	return { prompts }
+	return { prompts: LASTFM_PROMPTS }
 }
 
 /**
@@ -434,7 +409,7 @@ interface ToolCallResult {
 /**
  * Handle non-authenticated tools
  */
-async function handleToolsCall(params: unknown, httpRequest?: Request): Promise<ToolCallResult> {
+async function handleToolsCall(params: unknown, httpRequest?: Request, env?: Env): Promise<ToolCallResult> {
 	// Validate params
 	if (!isToolsCallParams(params)) {
 		throw new Error('Invalid tools/call params - name and arguments are required')
@@ -524,7 +499,7 @@ You are not currently authenticated with Last.fm. To access your personal listen
 • Get your recent tracks and listening history
 • View your top artists and albums by time period
 • Access your loved tracks and user profile
-• Get detailed information about tracks, artists, and albums
+• Get detailed information about tracks, artists, and albums (with personal stats)
 • Discover similar music and get personalized recommendations
 • Analyze your listening patterns and statistics
 
@@ -533,11 +508,209 @@ Your authentication will be secure and connection-specific - only you will have 
 **Available without authentication:**
 • \`ping\` - Test server connectivity
 • \`server_info\` - Get server information
-• \`auth_status\` - Check authentication status (this tool)`,
+• \`auth_status\` - Check authentication status (this tool)
+• \`get_track_info\` - Get basic track information
+• \`get_artist_info\` - Get basic artist information  
+• \`get_album_info\` - Get basic album information
+• \`get_similar_artists\` - Find similar artists
+• \`get_similar_tracks\` - Find similar tracks`,
 					},
 				],
 			}
 		}
+
+		// Non-authenticated Last.fm tools that work with public data
+		case 'get_track_info': {
+			const artist = args?.artist as string
+			const track = args?.track as string
+
+			if (!artist || !track) {
+				throw new Error('get_track_info requires artist and track parameters')
+			}
+
+			// Get cached Last.fm client instance
+			const client = getCachedLastfmClient(env)
+			if (!client) {
+				throw new Error('Last.fm API client not available')
+			}
+
+			const data = await client.getTrackInfo(artist, track)
+			
+			const tags = data.track.toptags?.tag.slice(0, 5).map(tag => tag.name).join(', ') || 'None'
+
+			return {
+				content: [
+					{
+						type: 'text',
+						text: `🎵 **Track Information**
+
+**Track:** ${data.track.name}
+**Artist:** ${data.track.artist.name}
+**Album:** ${data.track.album?.['#text'] || 'Unknown'}
+
+**Stats:**
+• Total plays: ${data.track.playcount}
+• Total listeners: ${data.track.listeners}
+
+**Tags:** ${tags}
+
+${data.track.wiki?.summary ? `**Description:** ${data.track.wiki.summary.replace(/<[^>]*>/g, '')}` : ''}
+
+*Note: Sign in to see your personal listening stats for this track*`,
+					},
+				],
+			}
+		}
+
+		case 'get_artist_info': {
+			const artist = args?.artist as string
+
+			if (!artist) {
+				throw new Error('get_artist_info requires artist parameter')
+			}
+
+			// Get cached Last.fm client instance
+			const client = getCachedLastfmClient(env)
+			if (!client) {
+				throw new Error('Last.fm API client not available')
+			}
+
+			const data = await client.getArtistInfo(artist)
+			
+			const tags = data.artist.tags?.tag.slice(0, 5).map(tag => tag.name).join(', ') || 'None'
+			const similar = data.artist.similar?.artist.slice(0, 5).map(a => a.name).join(', ') || 'None'
+
+			return {
+				content: [
+					{
+						type: 'text',
+						text: `🎤 **Artist Information**
+
+**Artist:** ${data.artist.name}
+
+**Stats:**
+• Total plays: ${data.artist.stats.playcount}
+• Total listeners: ${data.artist.stats.listeners}
+
+**Tags:** ${tags}
+**Similar Artists:** ${similar}
+
+${data.artist.bio?.summary ? `**Bio:** ${data.artist.bio.summary.replace(/<[^>]*>/g, '')}` : ''}
+
+*Note: Sign in to see your personal listening stats for this artist*`,
+					},
+				],
+			}
+		}
+
+		case 'get_album_info': {
+			const artist = args?.artist as string
+			const album = args?.album as string
+
+			if (!artist || !album) {
+				throw new Error('get_album_info requires artist and album parameters')
+			}
+
+			// Get cached Last.fm client instance
+			const client = getCachedLastfmClient(env)
+			if (!client) {
+				throw new Error('Last.fm API client not available')
+			}
+
+			const data = await client.getAlbumInfo(artist, album)
+			
+			const tags = data.album.tags?.tag.slice(0, 5).map(tag => tag.name).join(', ') || 'None'
+			const tracks = data.album.tracks?.track.slice(0, 10).map((track, i) => `${i + 1}. ${track.name}`).join('\n') || 'Track listing not available'
+
+			return {
+				content: [
+					{
+						type: 'text',
+						text: `💿 **Album Information**
+
+**Album:** ${data.album.name}
+**Artist:** ${data.album.artist}
+
+**Stats:**
+• Total plays: ${data.album.playcount}
+• Total listeners: ${data.album.listeners}
+
+**Tags:** ${tags}
+
+**Track Listing:**
+${tracks}
+
+${data.album.wiki?.summary ? `**Description:** ${data.album.wiki.summary.replace(/<[^>]*>/g, '')}` : ''}
+
+*Note: Sign in to see your personal listening stats for this album*`,
+					},
+				],
+			}
+		}
+
+		case 'get_similar_artists': {
+			const artist = args?.artist as string
+			const limit = Math.min(Math.max((args?.limit as number) || 30, 1), 100)
+
+			if (!artist) {
+				throw new Error('get_similar_artists requires artist parameter')
+			}
+
+			// Get cached Last.fm client instance
+			const client = getCachedLastfmClient(env)
+			if (!client) {
+				throw new Error('Last.fm API client not available')
+			}
+
+			const data = await client.getSimilarArtists(artist, limit)
+			
+			const artists = data.similarartists.artist.slice(0, 10)
+			const artistList = artists.map(a => `• ${a.name} (${Math.round(parseFloat(a.match) * 100)}% match)`).join('\n')
+
+			return {
+				content: [
+					{
+						type: 'text',
+						text: `🎤 **Artists Similar to ${artist}**
+
+${artistList}`,
+					},
+				],
+			}
+		}
+
+		case 'get_similar_tracks': {
+			const artist = args?.artist as string
+			const track = args?.track as string
+			const limit = Math.min(Math.max((args?.limit as number) || 30, 1), 100)
+
+			if (!artist || !track) {
+				throw new Error('get_similar_tracks requires artist and track parameters')
+			}
+
+			// Get cached Last.fm client instance
+			const client = getCachedLastfmClient(env)
+			if (!client) {
+				throw new Error('Last.fm API client not available')
+			}
+
+			const data = await client.getSimilarTracks(artist, track, limit)
+			
+			const tracks = data.similartracks.track.slice(0, 10)
+			const trackList = tracks.map(t => `• ${t.artist.name} - ${t.name} (${Math.round(parseFloat(t.match) * 100)}% match)`).join('\n')
+
+			return {
+				content: [
+					{
+						type: 'text',
+						text: `🎵 **Tracks Similar to ${track} by ${artist}**
+
+${trackList}`,
+					},
+				],
+			}
+		}
+
 		default:
 			throw new Error(`Unknown tool: ${name}. This tool may require authentication.`)
 	}
@@ -655,7 +828,7 @@ ${tracks.length < parseInt(data.recenttracks['@attr'].total) ? '\n*Use tools/cal
 			const period = args?.period as string || 'overall'
 			const limit = Math.min(Math.max((args?.limit as number) || 50, 1), 1000)
 
-			const data = await client.getTopArtists(username, period as any, limit)
+			const data = await client.getTopArtists(username, period as '7day' | '1month' | '3month' | '6month' | '12month' | 'overall', limit)
 			
 			const artists = data.topartists.artist.slice(0, 15) // Show top 15 for summary
 			const artistList = artists.map((artist, index) => {
@@ -681,7 +854,7 @@ Total artists: ${data.topartists['@attr'].total}`,
 			const period = args?.period as string || 'overall'
 			const limit = Math.min(Math.max((args?.limit as number) || 50, 1), 1000)
 
-			const data = await client.getTopAlbums(username, period as any, limit)
+			const data = await client.getTopAlbums(username, period as '7day' | '1month' | '3month' | '6month' | '12month' | 'overall', limit)
 			
 			const albums = data.topalbums.album.slice(0, 10) // Show top 10 for summary
 			const albumList = albums.map((album, index) => {
@@ -926,7 +1099,7 @@ ${trackList}`,
 			const username = args?.username as string || session.username
 			const period = args?.period as string || 'overall'
 
-			const stats = await client.getListeningStats(username, period as any)
+			const stats = await client.getListeningStats(username, period as '7day' | '1month' | '3month' | '6month' | '12month' | 'overall')
 
 			return {
 				content: [
@@ -1057,7 +1230,7 @@ export async function handleMethod(request: JSONRPCRequest, httpRequest?: Reques
 
 		case 'tools/call-old': {
 			// Legacy Discogs tools (keeping for reference but not used)
-			const legacyTools = [
+			const _legacyTools = [
 				{
 					name: 'ping',
 					description: 'Test connectivity to the Discogs MCP server',
@@ -1214,7 +1387,7 @@ export async function handleMethod(request: JSONRPCRequest, httpRequest?: Reques
 
 			try {
 				// Try non-authenticated tools
-				const result = await handleToolsCall(params, httpRequest)
+				const result = await handleToolsCall(params, httpRequest, env)
 				return hasId(request) ? createResponse(id!, result) : null
 			} catch (error) {
 				// If it's an unknown tool error, it might be an authenticated tool
