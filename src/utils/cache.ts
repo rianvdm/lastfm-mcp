@@ -349,7 +349,7 @@ export function createDiscogsCache(kv: KVNamespace): SmartCache {
 		stats: 60 * 60, // 1 hour
 		searches: 15 * 60, // 15 minutes
 		userProfiles: 6 * 60 * 60, // 6 hours
-	} as any) // Type assertion for backward compatibility
+	} as Partial<CacheConfig>) // Type assertion for backward compatibility
 }
 
 /**
