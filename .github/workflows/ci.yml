@@ -29,6 +29,11 @@ jobs:
 
       - name: Run tests
         run: npm test
+        env:
+          # Provide dummy values for tests that check environment variables
+          LASTFM_API_KEY: test-api-key
+          LASTFM_SHARED_SECRET: test-shared-secret
+          JWT_SECRET: test-jwt-secret
 
       - name: Build project
         run: npm run build
