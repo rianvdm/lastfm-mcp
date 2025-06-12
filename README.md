@@ -1,282 +1,222 @@
-# Last.fm MCP Server
+# 🎵 Last.fm MCP Server
 
-A Cloudflare Workers-based service that allows authenticated users to interact with their Last.fm listening history and music data via natural language commands using the MCP (Model Context Protocol).
+A **Model Context Protocol (MCP) server** that provides seamless access to Last.fm listening data and music information for AI assistants like Claude.
 
-## Overview
+[![Deploy to Cloudflare Workers](https://deploy.workers.cloudflare.com/button)](https://deploy.workers.cloudflare.com/?url=https://github.com/rianvdm/lastfm-mcp)
 
-This server processes MCP JSON-RPC requests and returns structured responses with Last.fm listening data. It provides access to your music history, statistics, and discovery features through AI assistants like Claude. The server features intelligent music analysis that provides insights into your listening patterns and helps discover new music based on your preferences.
+## ✨ Features
 
-## Quick Start
+- 🎧 **Personal Listening Data**: Recent tracks, top artists, albums, loved tracks
+- 🎵 **Music Information**: Detailed track, artist, and album information
+- 🔍 **Music Discovery**: Similar artists/tracks, personalized recommendations
+- 📊 **Listening Statistics**: Comprehensive stats and listening habits analysis
+- 🔐 **Secure Authentication**: Last.fm Web Authentication with JWT sessions
+- ⚡ **Smart Caching**: Intelligent caching with optimized TTLs for performance
+- 🛡️ **Rate Limiting**: Built-in rate limiting respecting Last.fm API limits
+- 🌐 **Production Ready**: Deployed on Cloudflare Workers with global edge
 
-### Adding to Claude Desktop
+## 🚀 Quick Start
 
-1. Open Claude Desktop settings and find the MCP configuration (Settings / Developer / Edit Config)
-2. Add this server configuration:
+### Using with Claude Desktop
 
-```json
-{
-	"mcpServers": {
-		"lastfm": {
-			"command": "npx",
-			"args": ["mcp-remote", "https://lastfm-mcp-prod.your-domain.workers.dev/sse"]
-		}
-	}
-}
-```
-
-3. Restart Claude Desktop
-4. Ask something like "What can you tell me about my Last.fm listening history?"
-5. Visit the provided login URL to connect your Last.fm account
-6. Come back and enjoy! See below for things you can ask about
-
-### Adding to Other MCP Clients
-
-For other MCP-compatible clients, like the [Cloudflare Workers LLM Playground](https://playground.ai.cloudflare.com/), use the server endpoint:
-
-```
-https://lastfm-mcp-prod.your-domain.workers.dev/sse
-```
-
-## Key Features
-
-- **Last.fm Web Authentication**: Secure login via Last.fm's authentication flow
-- **Listening History Access**: Complete access to your Last.fm scrobbling data:
-  - Recent tracks with timestamps and metadata
-  - Top artists and albums by time period (7 days to overall)
-  - Loved tracks and personal statistics
-- **Music Discovery**: Intelligent recommendations based on your listening patterns:
-  - Similar artists and tracks with relevance scores
-  - Genre-based recommendations from your history
-  - Contextual suggestions for different moods and activities
-- **Comprehensive Music Data**: Get detailed information about:
-  - Track metadata, play counts, and tags
-  - Artist biographies, similar artists, and top tracks
-  - Album information with track listings and statistics
-- **Listening Analytics**: Analyze your music habits with:
-  - Listening statistics by time period
-  - Genre distribution and trends
-  - Artist and album play count analysis
-  - Temporal listening patterns
-- **User Profile Integration**: Access to your Last.fm profile data:
-  - Registration date and total scrobbles
-  - User demographics (if public)
-  - Social features and compatibility scores
-- **Smart Caching**: Intelligent caching system optimized for Last.fm API rate limits
-- **MCP Protocol Compliance**: Full JSON-RPC 2.0 implementation with proper error handling
-- **Real-time Data**: Live access to Last.fm API without local storage requirements
-- **Rate Limiting**: Respect Last.fm API limits with intelligent request throttling
-
-## Available Tools
-
-- **`get_recent_tracks`** - Get your recently played tracks with timestamps and metadata
-  - Supports time filtering (from/to dates)
-  - Configurable limit (1-200 tracks)
-  - Real-time scrobbling data
-- **`get_top_artists`** - Get your most played artists by time period
-  - Time periods: 7day, 1month, 3month, 6month, 12month, overall
-  - Play count statistics and rankings
-  - Artist metadata and tags
-- **`get_top_albums`** - Get your most played albums with statistics
-- **`get_loved_tracks`** - Access your loved/favorite tracks
-- **`get_track_info`** - Detailed information about specific tracks
-  - Play counts, tags, similar tracks
-  - Personal statistics (if username provided)
-- **`get_artist_info`** - Artist biographies, similar artists, and statistics
-- **`get_album_info`** - Album details with track listings and metadata
-- **`get_user_info`** - User profile information and statistics
-- **`get_similar_artists`** - Find artists similar to your favorites
-- **`get_similar_tracks`** - Discover tracks similar to ones you love
-- **`get_listening_stats`** - Comprehensive listening analytics
-- **`get_music_recommendations`** - Personalized recommendations based on your history
-
-## Architecture
-
-Built on Cloudflare Workers with:
-
-- Workers KV for request logging and rate limiting
-- Last.fm API for listening data and music metadata
-- MCP (Model Context Protocol) for AI assistant integration
-- Intelligent caching system for performance optimization
-- Last.fm web authentication flow with session management
-- Automated CI/CD deployment to production
-
-## Development
-
-This project uses Wrangler for Cloudflare Workers development.
-
-### Local Development
-
-```bash
-npm install
-npm run dev
-```
-
-### Claude Desktop Configuration
-
-For local development, use the configuration in `config/claude-desktop-config.json`:
+Add this configuration to your Claude Desktop settings:
 
 ```json
 {
-	"mcpServers": {
-		"lastfm-local": {
-			"command": "npx",
-			"args": ["mcp-remote", "http://localhost:8787/sse"]
-		}
-	}
+  "mcpServers": {
+    "lastfm": {
+      "command": "npx",
+      "args": ["mcp-remote", "https://lastfm-mcp-prod.rian-db8.workers.dev/sse"]
+    }
+  }
 }
 ```
 
-For production, use the configuration in `config/claude-desktop-config-production.json`:
+### 🔑 Authentication Flow
 
-```json
-{
-	"mcpServers": {
-		"lastfm": {
-			"command": "npx",
-			"args": ["mcp-remote", "https://your-worker-domain.workers.dev/sse"]
-		}
-	}
-}
+1. Try any authenticated tool (like "Get my recent tracks")
+2. Claude will provide a Last.fm authentication URL
+3. Sign in with your Last.fm account and authorize the app
+4. Return to Claude - you're now authenticated!
+5. Enjoy access to your personal Last.fm data
+
+## 🛠️ Available Tools
+
+### 🔓 **Public Tools** (No Authentication Required)
+| Tool | Description |
+|------|-------------|
+| `get_track_info` | Get detailed information about any track |
+| `get_artist_info` | Get detailed artist information and bio |
+| `get_album_info` | Get album details and track listings |
+| `get_similar_artists` | Find artists similar to a given artist |
+| `get_similar_tracks` | Find tracks similar to a given track |
+| `ping` | Test server connectivity |
+| `server_info` | Get server status and capabilities |
+| `auth_status` | Check your authentication status |
+
+### 🔐 **Personal Tools** (Authentication Required)
+| Tool | Description |
+|------|-------------|
+| `get_recent_tracks` | Your recent listening history |
+| `get_top_artists` | Your top artists by time period |
+| `get_top_albums` | Your top albums by time period |
+| `get_loved_tracks` | Your loved/favorite tracks |
+| `get_user_info` | Your Last.fm profile information |
+| `get_listening_stats` | Comprehensive listening statistics |
+| `get_music_recommendations` | Personalized music recommendations |
+
+## 📚 MCP Resources
+
+Access Last.fm data via standardized MCP resource URIs:
+
+```
+lastfm://user/{username}/recent          # Recent tracks
+lastfm://user/{username}/top-artists     # Top artists  
+lastfm://user/{username}/top-albums      # Top albums
+lastfm://user/{username}/loved           # Loved tracks
+lastfm://user/{username}/profile         # User profile
+lastfm://track/{artist}/{track}          # Track info
+lastfm://artist/{artist}                 # Artist info
+lastfm://album/{artist}/{album}          # Album info
+lastfm://artist/{artist}/similar         # Similar artists
+lastfm://track/{artist}/{track}/similar  # Similar tracks
 ```
 
-### Setup
+## 🏗️ Development
 
-```bash
-npm install
-npm run dev    # Start local development server
-npm test       # Run tests
-npm run build  # Build for production
-```
+### Prerequisites
+- Node.js 18+
+- Cloudflare Workers account  
+- Last.fm API credentials ([Get them here](https://www.last.fm/api/account/create))
 
-## Deployment
+### Local Setup
 
-### Development Deployment
-
-```bash
-npm run deploy  # Deploy to development environment
-```
-
-### Production Deployment
-
-1. **First-time setup**: Create production KV namespaces and set secrets:
-
+1. **Clone and install**:
    ```bash
-   npm run setup:prod
+   git clone https://github.com/rianvdm/lastfm-mcp.git
+   cd lastfm-mcp
+   npm install
    ```
 
-2. **Deploy to production**:
-   ```bash
-   npm run deploy:prod
+2. **Configure environment** (`.dev.vars`):
+   ```env
+   LASTFM_API_KEY=your_api_key_here
+   LASTFM_SHARED_SECRET=your_shared_secret_here  
+   JWT_SECRET=your_secure_jwt_secret
    ```
 
-### Automated Deployment
+3. **Start development server**:
+   ```bash
+   npm run dev
+   ```
 
-The project includes GitHub Actions for automated deployment:
+4. **Test locally**:
+   ```bash
+   curl -X POST http://localhost:8787 \
+     -H "Content-Type: application/json" \
+     -d '{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"get_track_info","arguments":{"artist":"The Beatles","track":"Yesterday"}}}'
+   ```
 
-- **CI Pipeline**: Runs on all pushes and PRs (lint, test, build)
-- **Production Deployment**: Automatically deploys to production when code is pushed to `main` branch
+### 🚀 Deployment
 
-### Required Secrets
+1. **Set production secrets**:
+   ```bash
+   echo "your_api_key" | wrangler secret put LASTFM_API_KEY --env production
+   echo "your_shared_secret" | wrangler secret put LASTFM_SHARED_SECRET --env production  
+   echo "your_jwt_secret" | wrangler secret put JWT_SECRET --env production
+   ```
 
-For production deployment, set these secrets in your Cloudflare account and GitHub repository:
+2. **Deploy**:
+   ```bash
+   wrangler deploy --env production
+   ```
 
-**Cloudflare Secrets** (set via `wrangler secret put`):
+3. **Test production**:
+   ```bash
+   curl https://your-worker.workers.dev
+   ```
 
-- `LASTFM_API_KEY` - Your Last.fm API key
-- `LASTFM_SHARED_SECRET` - Your Last.fm shared secret
-- `JWT_SECRET` - Strong random string for JWT signing
+## 📋 Example Usage
 
-**GitHub Secrets** (for automated deployment):
+**Get track information:**
+```bash
+curl -X POST https://lastfm-mcp-prod.rian-db8.workers.dev \
+  -H "Content-Type: application/json" \
+  -d '{
+    "jsonrpc": "2.0",
+    "id": 1,
+    "method": "tools/call",
+    "params": {
+      "name": "get_track_info",
+      "arguments": {
+        "artist": "Radiohead", 
+        "track": "Paranoid Android"
+      }
+    }
+  }'
+```
 
-- `CLOUDFLARE_API_TOKEN` - Cloudflare API token with Workers:Edit permissions
-- `CLOUDFLARE_ACCOUNT_ID` - Your Cloudflare account ID
+**Find similar artists:**
+```bash
+curl -X POST https://lastfm-mcp-prod.rian-db8.workers.dev \
+  -H "Content-Type: application/json" \
+  -d '{
+    "jsonrpc": "2.0",
+    "id": 1,
+    "method": "tools/call", 
+    "params": {
+      "name": "get_similar_artists",
+      "arguments": {
+        "artist": "Pink Floyd",
+        "limit": 10
+      }
+    }
+  }'
+```
 
-### Environment Configuration
+## 🏗️ Architecture
 
-The project supports multiple environments via `wrangler.toml`:
+- **🌐 Runtime**: Cloudflare Workers (global edge deployment)
+- **📡 Protocol**: Model Context Protocol (MCP) 2024-11-05
+- **🔐 Authentication**: Last.fm Web Auth + JWT sessions
+- **💾 Storage**: Cloudflare KV (sessions, caching, rate limiting)
+- **🎵 API**: Last.fm Web API v2.0
+- **⚡ Performance**: Smart caching, rate limiting, retry logic
 
-- **Development** (default): Uses development KV namespaces
-- **Production** (`--env production`): Uses separate production KV namespaces
+## 🧪 Testing
 
-Each environment has isolated KV storage for logs, rate limiting, and sessions.
+```bash
+# Run tests
+npm test
 
-## Example Queries
+# Type checking  
+npm run typecheck
 
-### Listening History Analysis
+# Linting
+npm run lint
 
-- "What have I been listening to lately?"
-- "Show me my most played artists this month"
-- "What are my top albums from last year?"
-- "Which tracks have I loved recently?"
-- "What's my listening history for the past week?"
+# Build check
+npm run build
+```
 
-### Music Discovery
+## 🤝 Contributing
 
-- "Find artists similar to Radiohead"
-- "What tracks are similar to 'Bohemian Rhapsody'?"
-- "Recommend music based on my listening history"
-- "Show me artists I might like based on my top genres"
-- "Find new music similar to my loved tracks"
+1. **Fork** the repository
+2. **Create** a feature branch (`git checkout -b feature/amazing-feature`)
+3. **Commit** your changes (`git commit -m 'Add amazing feature'`)
+4. **Push** to the branch (`git push origin feature/amazing-feature`)
+5. **Open** a Pull Request
 
-### Statistics and Analytics
+## 📝 License
 
-- "What are my listening statistics?"
-- "How many songs have I scrobbled total?"
-- "What genres do I listen to most?"
-- "Show me my music taste evolution over time"
-- "What are my listening patterns by day/time?"
+MIT License - see [LICENSE](LICENSE) file for details.
 
-### Artist and Track Information
+## 🙏 Acknowledgments
 
-- "Tell me about Pink Floyd"
-- "What's the story behind 'Stairway to Heaven'?"
-- "Show me information about the album 'OK Computer'"
-- "What are the top tracks by The Beatles?"
-- "Give me details about my favorite artist"
+- [Last.fm](https://last.fm) for the comprehensive music API
+- [Model Context Protocol](https://github.com/modelcontextprotocol) for the MCP specification
+- [Cloudflare Workers](https://workers.cloudflare.com) for the serverless runtime
 
-### Contextual Music Suggestions
+---
 
-- "What should I listen to for working out?"
-- "Recommend music for studying"
-- "Find something relaxing for bedtime"
-- "What's good for a road trip playlist?"
-- "Suggest music for a dinner party"
-
-### Personal Music Insights
-
-The system provides **intelligent music analysis** that:
-
-- **Analyzes your listening patterns**: Identifies your most active listening times, favorite genres, and music discovery trends
-- **Provides personalized recommendations**: Uses your scrobbling history to suggest new artists and tracks
-- **Tracks your musical journey**: Shows how your taste has evolved over time
-- **Contextual understanding**: Learns from your listening habits to provide situational music suggestions
-- **Social insights**: Compares your taste with similar users and provides compatibility scores
-
-Whether you're exploring your musical identity, discovering new artists, or analyzing your listening habits, the system provides deep insights into your Last.fm data.
-
-## Getting Started with Last.fm
-
-### Setting up Last.fm API Access
-
-1. **Create a Last.fm account** at [last.fm](https://www.last.fm) if you don't have one
-2. **Get API credentials**:
-   - Visit [Last.fm API Account](https://www.last.fm/api/account/create)
-   - Fill out the application form
-   - Note your API Key and Shared Secret
-3. **Start scrobbling**: Use a Last.fm scrobbler to track your listening:
-   - Spotify: Enable scrobbling in Settings > Social > Last.fm
-   - iTunes/Music: Use official Last.fm Desktop Scrobbler
-   - Other players: Check Last.fm's supported applications
-
-### Authentication Flow
-
-The server uses Last.fm's web authentication:
-
-1. Click the login link provided by the MCP server
-2. Authorize the application on Last.fm
-3. You'll be redirected back with access to your data
-4. Your session remains active for future requests
-
-## License
-
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+**🎵 Built with ❤️ for music lovers and AI enthusiasts**

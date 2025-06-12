@@ -19,6 +19,7 @@ const mockJwtSecret = 'test-secret'
 // Mock the JWT verification to always return a valid session
 vi.mock('../../src/auth/jwt', () => ({
 	verifySessionToken: vi.fn().mockResolvedValue({
+		username: 'testuser',
 		userId: 'test-user',
 		accessToken: 'test-token',
 		accessTokenSecret: 'test-secret',
@@ -180,7 +181,7 @@ describe('MCP Protocol Handlers', () => {
 				result: {
 					resources: expect.arrayContaining([
 						expect.objectContaining({
-							uri: expect.stringMatching(/^discogs:\/\//),
+							uri: expect.stringMatching(/^lastfm:\/\//),
 							name: expect.any(String),
 							mimeType: 'application/json',
 						}),
@@ -227,21 +228,15 @@ describe('MCP Protocol Handlers', () => {
 				result: {
 					prompts: expect.arrayContaining([
 						expect.objectContaining({
-							name: 'browse_collection',
+							name: 'listening_insights',
 							description: expect.any(String),
 						}),
 						expect.objectContaining({
-							name: 'find_music',
+							name: 'music_discovery',
 							description: expect.any(String),
-							arguments: expect.arrayContaining([
-								expect.objectContaining({
-									name: 'query',
-									required: true,
-								}),
-							]),
 						}),
 						expect.objectContaining({
-							name: 'collection_insights',
+							name: 'track_analysis',
 							description: expect.any(String),
 						}),
 					]),
@@ -272,7 +267,7 @@ describe('MCP Protocol Handlers', () => {
 			const response = await handleMethod({
 				jsonrpc: '2.0',
 				method: 'resources/read',
-				params: { uri: 'discogs://collection' },
+				params: { uri: 'lastfm://user/testuser/recent' },
 				id: 2,
 			})
 
@@ -365,7 +360,7 @@ describe('MCP Protocol Handlers', () => {
 				result: {
 					resources: expect.arrayContaining([
 						expect.objectContaining({
-							uri: expect.stringMatching(/^discogs:\/\//),
+							uri: expect.stringMatching(/^lastfm:\/\//),
 							name: expect.any(String),
 							mimeType: 'application/json',
 						}),
@@ -420,21 +415,15 @@ describe('MCP Protocol Handlers', () => {
 				result: {
 					prompts: expect.arrayContaining([
 						expect.objectContaining({
-							name: 'browse_collection',
+							name: 'listening_insights',
 							description: expect.any(String),
 						}),
 						expect.objectContaining({
-							name: 'find_music',
+							name: 'music_discovery',
 							description: expect.any(String),
-							arguments: expect.arrayContaining([
-								expect.objectContaining({
-									name: 'query',
-									required: true,
-								}),
-							]),
 						}),
 						expect.objectContaining({
-							name: 'collection_insights',
+							name: 'track_analysis',
 							description: expect.any(String),
 						}),
 					]),

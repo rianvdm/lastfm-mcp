@@ -2,7 +2,7 @@ import { env, createExecutionContext, waitOnExecutionContext } from 'cloudflare:
 import { describe, it, expect } from 'vitest'
 import worker from '../src'
 
-describe('Discogs MCP Server', () => {
+describe('Last.fm MCP Server', () => {
 	it('should handle initialize request', async () => {
 		const initRequest = {
 			jsonrpc: '2.0',
@@ -46,7 +46,7 @@ describe('Discogs MCP Server', () => {
 					logging: {},
 				},
 				serverInfo: {
-					name: 'discogs-mcp',
+					name: 'lastfm-mcp',
 					version: '1.0.0',
 				},
 			},
@@ -64,9 +64,9 @@ describe('Discogs MCP Server', () => {
 
 		const result = await response.json()
 		expect(result).toMatchObject({
-			name: 'Discogs MCP Server',
+			name: 'Last.fm MCP Server',
 			version: '1.0.0',
-			description: 'Model Context Protocol server for Discogs collection access',
+			description: 'Model Context Protocol server for Last.fm music data access',
 			endpoints: expect.any(Object),
 		})
 	})
