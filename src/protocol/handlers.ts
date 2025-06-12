@@ -127,8 +127,8 @@ async function getConnectionSession(request: Request, jwtSecret: string, env?: E
 		// Return session payload
 		return {
 			userId: sessionData.userId,
-			accessToken: sessionData.accessToken,
-			accessTokenSecret: sessionData.accessTokenSecret,
+			sessionKey: sessionData.sessionKey,
+			username: sessionData.username,
 			iat: Math.floor(Date.now() / 1000),
 			exp: Math.floor(new Date(sessionData.expiresAt).getTime() / 1000),
 		}
