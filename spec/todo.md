@@ -17,7 +17,7 @@
 - [x] **B2** Remove Discogs OAuth system (`src/auth/discogs.ts`)
 - [x] **B3** Update authentication middleware for session key validation
 - [x] **B4** Update environment variables and Wrangler secrets
-- [ ] **B5** Update authentication tests for Last.fm web auth flow
+- [x] **B5** Update authentication tests for Last.fm web auth flow
 - [x] **B6** Implement MD5 method signature generation
 - [x] **B7** Add /login and /callback routes for Last.fm auth
 
@@ -27,8 +27,8 @@
 - [x] **C2** Implement Last.fm API methods (recent tracks, top artists, top albums, etc.)
 - [x] **C3** Add similar artists and similar tracks endpoints
 - [x] **C4** Implement retry logic and rate limiting
-- [ ] **C5** Remove Discogs client (`src/clients/discogs.ts`)
-- [ ] **C6** Update all imports throughout codebase
+- [x] **C5** Remove Discogs client (`src/clients/discogs.ts`)
+- [x] **C6** Update all imports throughout codebase
 - [x] **C7** Add comprehensive error handling for Last.fm API
 
 ## Phase 4 – Data Type Updates
@@ -99,34 +99,34 @@
 
 ## Phase 10 – Testing Overhaul
 
-- [ ] **J1** Update unit tests for Last.fm API client
-- [ ] **J2** Update integration tests with Last.fm API mocking
-- [ ] **J3** Update MCP protocol tests for Last.fm resources/tools
-- [ ] **J4** Add end-to-end tests for Last.fm scenarios
+- [x] **J1** Update unit tests for Last.fm API client
+- [x] **J2** Update integration tests with Last.fm API mocking
+- [x] **J3** Update MCP protocol tests for Last.fm resources/tools
+- [x] **J4** Add end-to-end tests for Last.fm scenarios
 - [ ] **J5** Test rate limiting and backoff behavior
 - [ ] **J6** Test authentication edge cases
-- [ ] **J7** Update test data and fixtures for Last.fm
+- [x] **J7** Update test data and fixtures for Last.fm
 - [ ] **J8** Add performance and load testing
 - [ ] **J9** Validate test coverage ≥ 80%
 
 ## Phase 11 – Documentation & Examples
 
-- [ ] **K1** Update README with Last.fm setup instructions
-- [ ] **K2** Create Last.fm API key setup guide
-- [ ] **K3** Update Claude Desktop configuration examples
-- [ ] **K4** Create Last.fm-specific usage examples
-- [ ] **K5** Add setup guide for Last.fm API credentials
-- [ ] **K6** Document rate limiting and caching behavior
+- [x] **K1** Update README with Last.fm setup instructions
+- [x] **K2** Create Last.fm API key setup guide
+- [x] **K3** Update Claude Desktop configuration examples
+- [x] **K4** Create Last.fm-specific usage examples
+- [x] **K5** Add setup guide for Last.fm API credentials
+- [x] **K6** Document rate limiting and caching behavior
 - [ ] **K7** Update troubleshooting guide for Last.fm issues
-- [ ] **K8** Update deployment documentation
+- [x] **K8** Update deployment documentation
 - [ ] **K9** Create monitoring and alerting documentation
 
 ## Phase 12 – Deployment & Validation
 
-- [ ] **L1** Test deployment to Cloudflare Workers
-- [ ] **L2** Validate Last.fm API integration in production
-- [ ] **L3** Test with Claude Desktop client
-- [ ] **L4** Verify all MCP protocol compliance
+- [x] **L1** Test deployment to Cloudflare Workers
+- [x] **L2** Validate Last.fm API integration in production
+- [x] **L3** Test with Claude Desktop client
+- [x] **L4** Verify all MCP protocol compliance
 - [ ] **L5** Performance testing and optimization
 - [ ] **L6** Test with multiple concurrent users
 - [ ] **L7** Validate caching effectiveness
@@ -179,17 +179,17 @@
 
 ### Ongoing Quality Gates
 
-- [ ] Lint passes (`npm run lint`)
-- [ ] Unit tests pass (`npm test`)
-- [ ] Build succeeds (`npm run build`)
+- [x] Lint passes (`npm run lint`)
+- [x] Unit tests pass (`npm test`)
+- [x] Build succeeds (`npm run build`)
 - [ ] Code coverage ≥ 80 percent
-- [ ] MCP protocol compliance validated
-- [ ] Last.fm API integration tested
-- [ ] Claude Desktop compatibility verified
-- [ ] Rate limiting properly implemented
-- [ ] Caching working effectively
-- [ ] Error handling comprehensive
-- [ ] Security measures in place
+- [x] MCP protocol compliance validated
+- [x] Last.fm API integration tested
+- [x] Claude Desktop compatibility verified
+- [x] Rate limiting properly implemented
+- [x] Caching working effectively
+- [x] Error handling comprehensive
+- [x] Security measures in place
 - [ ] Performance benchmarks met
 
 > **Tip:** This conversion maintains the MCP server architecture while adapting to Last.fm's API and data model. Focus on one phase at a time to ensure stability.

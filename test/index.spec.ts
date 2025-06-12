@@ -66,7 +66,7 @@ describe('Last.fm MCP Server', () => {
 		expect(result).toMatchObject({
 			name: 'Last.fm MCP Server',
 			version: '1.0.0',
-			description: 'Model Context Protocol server for Last.fm music data access',
+			description: 'Model Context Protocol server for Last.fm listening data access',
 			endpoints: expect.any(Object),
 		})
 	})
