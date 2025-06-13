@@ -252,6 +252,17 @@ async function handleCallback(request: Request, env: Env): Promise<Response> {
 					expiresAt: Date.now() + 24 * 60 * 60 * 1000, // 24 hours
 					connectionId: finalConnectionId,
 				}
+				
+				// Debug log what we're storing
+				console.log('Storing session data for connection:', finalConnectionId, {
+					hasUserId: !!sessionData.userId,
+					hasUsername: !!sessionData.username,
+					hasSessionKey: !!sessionData.sessionKey,
+					userId: sessionData.userId,
+					username: sessionData.username,
+					sessionKey: sessionData.sessionKey ? 'present' : 'missing',
+				})
+				
 				// Store with connection-specific key
 				await env.MCP_SESSIONS.put(`session:${finalConnectionId}`, JSON.stringify(sessionData), {
 					expirationTtl: 24 * 60 * 60, // 24 hours

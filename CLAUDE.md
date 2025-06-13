@@ -32,6 +32,7 @@ When we start a new dev session:
 - `npm run deploy` - Deploy to development environment
 - `npm run deploy:prod` - Deploy to production environment
 - `npm run setup:prod` - Setup production secrets and configuration
+- **Auto-deployment**: The worker auto-deploys via GitHub Actions on push to main branch
 
 ### Testing
 - `npm run test:multi-user` - Run multi-user integration tests

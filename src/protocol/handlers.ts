@@ -133,6 +133,12 @@ async function getConnectionSession(request: Request, jwtSecret: string, env?: E
 			return null
 		}
 
+		// Check if session data is complete
+		if (!sessionData.username || !sessionData.sessionKey) {
+			console.log('Session data incomplete, missing username or sessionKey')
+			return null // This will trigger re-authentication
+		}
+		
 		// Return session payload
 		return {
 			userId: sessionData.userId,
