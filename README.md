@@ -82,6 +82,21 @@ lastfm://artist/{artist}/similar         # Similar artists
 lastfm://track/{artist}/{track}/similar  # Similar tracks
 ```
 
+## 🤖 MCP Prompts
+
+Rich AI prompts for music analysis and discovery:
+
+| Prompt | Description | Arguments |
+|--------|-------------|-----------|
+| `listening_insights` | Analyze user's listening habits and patterns | `username`, `period?` |
+| `music_discovery` | Discover new music based on listening history | `username`, `genre?` |
+| `track_analysis` | Get detailed analysis of a specific track | `artist`, `track` |
+| `album_analysis` | Get detailed analysis of a specific album | `artist`, `album` |
+| `artist_analysis` | Get detailed analysis of a specific artist | `artist` |
+| `listening_habits` | Analyze and summarize user's listening habits | `username`, `timeframe?` |
+
+These prompts generate contextual messages that guide AI assistants to provide meaningful music insights using the available Last.fm tools and data.
+
 ## 🏗️ Development
 
 ### Prerequisites

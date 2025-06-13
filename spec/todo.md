@@ -79,23 +79,23 @@
 
 ## Phase 8 – Protocol Handler Updates
 
-- [ ] **H1** Update `src/protocol/handlers.ts` for Last.fm resources
-- [ ] **H2** Update tool call handlers for Last.fm tools
-- [ ] **H3** Update prompt handlers for Last.fm prompts
-- [ ] **H4** Update error handling for Last.fm API errors
-- [ ] **H5** Validate MCP protocol compliance
+- [x] **H1** Update `src/protocol/handlers.ts` for Last.fm resources
+- [x] **H2** Update tool call handlers for Last.fm tools
+- [x] **H3** Update prompt handlers for Last.fm prompts
+- [x] **H4** Update error handling for Last.fm API errors
+- [x] **H5** Validate MCP protocol compliance
 
 ## Phase 9 – Infrastructure & Configuration
 
-- [ ] **I1** Update `wrangler.toml` for Last.fm environment
-- [ ] **I2** Update environment variable names and secrets
-- [ ] **I3** Update KV namespace names and configuration
-- [ ] **I4** Update rate limiting for Last.fm API limits (~5 req/sec)
-- [ ] **I5** Implement caching strategy for performance
-- [ ] **I6** Add monitoring and metrics collection
-- [ ] **I7** Update logging for Last.fm-specific events
-- [ ] **I8** Configure CORS for web clients
-- [ ] **I9** Set up health check endpoints
+- [x] **I1** Update `wrangler.toml` for Last.fm environment
+- [x] **I2** Update environment variable names and secrets
+- [x] **I3** Update KV namespace names and configuration
+- [x] **I4** Update rate limiting for Last.fm API limits (~5 req/sec)
+- [x] **I5** Implement caching strategy for performance
+- [x] **I6** Add monitoring and metrics collection
+- [x] **I7** Update logging for Last.fm-specific events
+- [x] **I8** Configure CORS for web clients
+- [x] **I9** Set up health check endpoints
 
 ## Phase 10 – Testing Overhaul
 

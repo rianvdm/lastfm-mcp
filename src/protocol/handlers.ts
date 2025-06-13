@@ -743,7 +743,7 @@ ${data.album.wiki?.summary ? `**Description:** ${data.album.wiki.summary.replace
 
 			const data = await client.getSimilarArtists(artist, limit)
 			
-			const artists = data.similarartists.artist.slice(0, 10)
+			const artists = data.similarartists.artist.slice(0, limit)
 			const artistList = artists.map(a => `• ${a.name} (${Math.round(parseFloat(a.match) * 100)}% match)`).join('\n')
 
 			return {
@@ -775,7 +775,7 @@ ${artistList}`,
 
 			const data = await client.getSimilarTracks(artist, track, limit)
 			
-			const tracks = data.similartracks.track.slice(0, 10)
+			const tracks = data.similartracks.track.slice(0, limit)
 			const trackList = tracks.map(t => `• ${t.artist.name} - ${t.name} (${Math.round(parseFloat(t.match) * 100)}% match)`).join('\n')
 
 			return {
@@ -878,7 +878,7 @@ Your authentication is secure and tied to your specific session.`,
 
 			const data = await client.getRecentTracks(username, limit, from, to)
 			
-			const tracks = data.recenttracks.track.slice(0, 10) // Show first 10 for summary
+			const tracks = data.recenttracks.track.slice(0, limit)
 			const trackList = tracks.map(track => {
 				const nowPlaying = track.nowplaying ? ' 🎵 Now Playing' : ''
 				const date = track.date ? new Date(parseInt(track.date.uts) * 1000).toLocaleDateString() : ''
@@ -909,7 +909,7 @@ ${tracks.length < parseInt(data.recenttracks['@attr'].total) ? '\n*Use tools/cal
 
 			const data = await client.getTopArtists(username, period as '7day' | '1month' | '3month' | '6month' | '12month' | 'overall', limit)
 			
-			const artists = data.topartists.artist.slice(0, 15) // Show top 15 for summary
+			const artists = data.topartists.artist.slice(0, limit)
 			const artistList = artists.map((artist, index) => {
 				return `${index + 1}. ${artist.name} (${artist.playcount} plays)`
 			}).join('\n')
@@ -935,7 +935,7 @@ Total artists: ${data.topartists['@attr'].total}`,
 
 			const data = await client.getTopAlbums(username, period as '7day' | '1month' | '3month' | '6month' | '12month' | 'overall', limit)
 			
-			const albums = data.topalbums.album.slice(0, 10) // Show top 10 for summary
+			const albums = data.topalbums.album.slice(0, limit)
 			const albumList = albums.map((album, index) => {
 				const artist = typeof album.artist === 'string' ? album.artist : album.artist.name
 				return `${index + 1}. ${artist} - ${album.name} (${album.playcount} plays)`
@@ -961,7 +961,7 @@ Total albums: ${data.topalbums['@attr'].total}`,
 
 			const data = await client.getLovedTracks(username, limit)
 			
-			const tracks = data.lovedtracks.track.slice(0, 10) // Show first 10 for summary
+			const tracks = data.lovedtracks.track.slice(0, limit)
 			const trackList = tracks.map(track => {
 				return `• ${track.artist.name} - ${track.name}`
 			}).join('\n')
@@ -1133,7 +1133,7 @@ ${data.album.wiki?.summary ? `**Description:** ${data.album.wiki.summary.replace
 
 			const data = await client.getSimilarArtists(artist, limit)
 			
-			const artists = data.similarartists.artist.slice(0, 10)
+			const artists = data.similarartists.artist.slice(0, limit)
 			const artistList = artists.map(a => `• ${a.name} (${Math.round(parseFloat(a.match) * 100)}% match)`).join('\n')
 
 			return {
@@ -1159,7 +1159,7 @@ ${artistList}`,
 
 			const data = await client.getSimilarTracks(artist, track, limit)
 			
-			const tracks = data.similartracks.track.slice(0, 10)
+			const tracks = data.similartracks.track.slice(0, limit)
 			const trackList = tracks.map(t => `• ${t.artist.name} - ${t.name} (${Math.round(parseFloat(t.match) * 100)}% match)`).join('\n')
 
 			return {
