@@ -19,7 +19,7 @@ A **Model Context Protocol (MCP) server** that provides seamless access to Last.
 
 ### Using with Claude Desktop
 
-Add this configuration to your Claude Desktop settings:
+Add this configuration to your Claude Desktop settings (Settings / Developer / Edit config):
 
 ```json
 {
