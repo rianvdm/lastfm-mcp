@@ -118,6 +118,15 @@ async function getConnectionSession(request: Request, jwtSecret: string, env?: E
 
 		const sessionData = JSON.parse(sessionDataStr)
 		
+		// Debug log the session data structure
+		console.log('Retrieved session data for connection:', connectionId, {
+			hasUserId: !!sessionData.userId,
+			hasUsername: !!sessionData.username,
+			hasSessionKey: !!sessionData.sessionKey,
+			userId: sessionData.userId,
+			username: sessionData.username,
+		})
+		
 		// Verify the stored session is still valid
 		if (!sessionData.expiresAt || new Date(sessionData.expiresAt) <= new Date()) {
 			console.log('Connection session has expired')
