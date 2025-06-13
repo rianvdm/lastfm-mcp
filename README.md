@@ -32,6 +32,40 @@ Add this configuration to your Claude Desktop settings (Settings / Developer / E
 }
 ```
 
+> **💡 Tip**: This uses the hosted server via `mcp-remote`, which works reliably across all platforms and doesn't require local Node.js setup.
+
+#### 🐛 Platform-Specific Troubleshooting
+
+<details>
+<summary>If you get "spawn npx NOENT" error</summary>
+
+**For NixOS users:**
+```json
+{
+  "mcpServers": {
+    "lastfm": {
+      "command": "/run/current-system/sw/bin/npx",
+      "args": ["mcp-remote", "https://lastfm-mcp-prod.rian-db8.workers.dev/sse"],
+      "env": {
+        "PATH": "/run/current-system/sw/bin:$PATH"
+      }
+    }
+  }
+}
+```
+
+**For other systems:**
+1. Find your npx path: `which npx`
+2. Use the full path in your config:
+```json
+{
+  "command": "/usr/local/bin/npx",  // Use your actual path
+  "args": ["mcp-remote", "https://lastfm-mcp-prod.rian-db8.workers.dev/sse"]
+}
+```
+
+</details>
+
 ### 🔑 Authentication Flow
 
 1. Try any authenticated tool (like "Get my recent tracks")
