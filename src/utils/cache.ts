@@ -301,8 +301,8 @@ export class SmartCache {
  */
 export const CacheKeys = {
 	// User data keys
-	userRecentTracks: (username: string, limit?: number, from?: number, to?: number) => 
-		`${username}:${limit || 50}:${from || ''}:${to || ''}`,
+	userRecentTracks: (username: string, limit?: number, from?: number, to?: number, page?: number) => 
+		`${username}:${limit || 50}:${from || ''}:${to || ''}:${page || 1}`,
 	
 	userTopArtists: (username: string, period?: string, limit?: number) => 
 		`${username}:${period || 'overall'}:${limit || 50}`,

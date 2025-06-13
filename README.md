@@ -57,7 +57,7 @@ Add this configuration to your Claude Desktop settings:
 ### 🔐 **Personal Tools** (Authentication Required)
 | Tool | Description |
 |------|-------------|
-| `get_recent_tracks` | Your recent listening history |
+| `get_recent_tracks` | Your recent listening history (supports pagination) |
 | `get_top_artists` | Your top artists by time period |
 | `get_top_albums` | Your top albums by time period |
 | `get_loved_tracks` | Your loved/favorite tracks |
@@ -184,6 +184,26 @@ curl -X POST https://lastfm-mcp-prod.rian-db8.workers.dev \
       "arguments": {
         "artist": "Pink Floyd",
         "limit": 10
+      }
+    }
+  }'
+```
+
+**Get recent tracks with pagination:**
+```bash
+curl -X POST https://lastfm-mcp-prod.rian-db8.workers.dev \
+  -H "Content-Type: application/json" \
+  -H "Cookie: session=your_session_token" \
+  -d '{
+    "jsonrpc": "2.0",
+    "id": 1,
+    "method": "tools/call",
+    "params": {
+      "name": "get_recent_tracks",
+      "arguments": {
+        "username": "your_username",
+        "limit": 500,
+        "page": 2
       }
     }
   }'

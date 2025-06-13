@@ -376,7 +376,8 @@ export class LastfmClient {
 		username: string,
 		limit = 50,
 		from?: number,
-		to?: number
+		to?: number,
+		page?: number
 	): Promise<LastfmRecentTracksResponse> {
 		const params: Record<string, string> = {
 			method: 'user.getRecentTracks',
@@ -386,6 +387,7 @@ export class LastfmClient {
 
 		if (from) params.from = from.toString()
 		if (to) params.to = to.toString()
+		if (page) params.page = page.toString()
 
 		return this.makeRequest<LastfmRecentTracksResponse>(params)
 	}

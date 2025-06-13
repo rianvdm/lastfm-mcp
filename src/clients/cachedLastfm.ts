@@ -22,14 +22,15 @@ export class CachedLastfmClient {
 		username: string,
 		limit = 50,
 		from?: number,
-		to?: number
+		to?: number,
+		page?: number
 	): Promise<LastfmRecentTracksResponse> {
-		const cacheKey = CacheKeys.userRecentTracks(username, limit, from, to)
+		const cacheKey = CacheKeys.userRecentTracks(username, limit, from, to, page)
 		
 		return this.cache.getOrFetch(
 			'userRecentTracks',
 			cacheKey,
-			() => this.client.getRecentTracks(username, limit, from, to)
+			() => this.client.getRecentTracks(username, limit, from, to, page)
 		)
 	}
 

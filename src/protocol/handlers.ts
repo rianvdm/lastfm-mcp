@@ -872,11 +872,12 @@ Your authentication is secure and tied to your specific session.`,
 
 		case 'get_recent_tracks': {
 			const username = args?.username as string || session.username
-			const limit = Math.min(Math.max((args?.limit as number) || 50, 1), 200)
+			const limit = Math.min(Math.max((args?.limit as number) || 50, 1), 1000)
+			const page = Math.max((args?.page as number) || 1, 1)
 			const from = args?.from as number
 			const to = args?.to as number
 
-			const data = await client.getRecentTracks(username, limit, from, to)
+			const data = await client.getRecentTracks(username, limit, from, to, page)
 			
 			const tracks = data.recenttracks.track.slice(0, limit)
 			const trackList = tracks.map(track => {
@@ -885,18 +886,25 @@ Your authentication is secure and tied to your specific session.`,
 				return `• ${track.artist['#text']} - ${track.name}${nowPlaying}${date ? ` (${date})` : ''}`
 			}).join('\n')
 
+			const currentPage = parseInt(data.recenttracks['@attr'].page)
+			const totalPages = parseInt(data.recenttracks['@attr'].totalPages)
+			const totalTracks = parseInt(data.recenttracks['@attr'].total)
+
 			return {
 				content: [
 					{
 						type: 'text',
 						text: `🎵 **Recent Tracks for ${username}**
 
-Total tracks: ${data.recenttracks['@attr'].total}
-Showing: ${tracks.length} most recent tracks
+📊 **Pagination Info:**
+• Page ${currentPage} of ${totalPages}
+• Showing ${tracks.length} tracks out of ${totalTracks} total
+• Per page: ${data.recenttracks['@attr'].perPage}
 
 ${trackList}
 
-${tracks.length < parseInt(data.recenttracks['@attr'].total) ? '\n*Use tools/call with specific parameters to get more tracks*' : ''}`,
+${currentPage < totalPages ? `\n💡 **Next page:** Use \`page: ${currentPage + 1}\` to get more tracks` : ''}
+${currentPage > 1 ? `\n⬅️ **Previous page:** Use \`page: ${currentPage - 1}\` to go back` : ''}`,
 					},
 				],
 			}

@@ -121,7 +121,7 @@ export const LASTFM_TOOLS: LastfmTool[] = [
 	},
 	{
 		name: 'get_recent_tracks',
-		description: 'Get user\'s recently played tracks',
+		description: 'Get user\'s recently played tracks with pagination support',
 		inputSchema: {
 			type: 'object',
 			properties: {
@@ -131,9 +131,14 @@ export const LASTFM_TOOLS: LastfmTool[] = [
 				},
 				limit: {
 					type: 'number',
-					description: 'Number of tracks to return (1-200)',
+					description: 'Number of tracks to return per page (1-1000)',
 					minimum: 1,
-					maximum: 200,
+					maximum: 1000,
+				},
+				page: {
+					type: 'number',
+					description: 'Page number for pagination (starts at 1)',
+					minimum: 1,
 				},
 				from: {
 					type: 'number',
