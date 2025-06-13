@@ -185,7 +185,7 @@ describe('Tools', () => {
 				expect(responseText).toContain('Available Tools')
 			} else if (response?.error) {
 				// Handle case where API is not available - this is acceptable in test environment
-				expect(response.error.code).toBe(-32603) // Internal error when API not available
+				expect(response.error.code).toBe(-32008) // Last.fm API error when API not available
 			} else {
 				// Fail if neither result nor error is present
 				expect(response).toHaveProperty('result')
@@ -254,7 +254,7 @@ describe('Tools', () => {
 				expect(responseText).toContain('Test Artist')
 			} else if (response?.error) {
 				// Handle case where API is not available - this is acceptable in test environment
-				expect(response.error.code).toBe(-32603) // Internal error when API not available
+				expect(response.error.code).toBe(-32008) // Last.fm API error when API not available
 			} else {
 				// Fail if neither result nor error is present
 				expect(response).toHaveProperty('result')
