@@ -102,7 +102,7 @@ describe('Tools', () => {
 			})
 		})
 
-		it('should provide authentication instructions for auth_status tool', async () => {
+		it('should provide authentication instructions for lastfm_auth_status tool', async () => {
 			// Initialize first
 			await handleMethod({
 				jsonrpc: '2.0',
@@ -125,7 +125,7 @@ describe('Tools', () => {
 				jsonrpc: '2.0',
 				method: 'tools/call',
 				params: {
-					name: 'auth_status',
+					name: 'lastfm_auth_status',
 					arguments: {},
 				},
 				id: 2,
@@ -141,7 +141,7 @@ describe('Tools', () => {
 	})
 
 	describe('Authenticated tools', () => {
-		it('should handle auth_status tool when authenticated', async () => {
+		it('should handle lastfm_auth_status tool when authenticated', async () => {
 			const mockUserProfile = { name: 'testuser', realname: 'Test User', playcount: '1000' }
 			mockLastfmClient.getUserInfo.mockResolvedValue(mockUserProfile)
 
@@ -168,7 +168,7 @@ describe('Tools', () => {
 					jsonrpc: '2.0',
 					method: 'tools/call',
 					params: {
-						name: 'auth_status',
+						name: 'lastfm_auth_status',
 						arguments: {},
 					},
 					id: 2,

@@ -384,7 +384,7 @@ describe('MCP Client Integration Tests', () => {
 				error: {
 					code: -32001, // Unauthorized
 					message:
-						'Authentication required. Please use the "auth_status" tool for detailed authentication instructions, or visit https://lastfm-mcp-prod.rian-db8.workers.dev/login to authenticate with Last.fm',
+						'Authentication required. Please use the "lastfm_auth_status" tool for detailed authentication instructions, or visit https://lastfm-mcp-prod.rian-db8.workers.dev/login to authenticate with Last.fm',
 				},
 			})
 		})

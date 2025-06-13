@@ -510,7 +510,7 @@ async function handleToolsCall(params: unknown, httpRequest?: Request, env?: Env
 			properties: {},
 			required: [],
 		},
-		auth_status: {
+		lastfm_auth_status: {
 			type: 'object',
 			properties: {},
 			required: [],
@@ -553,7 +553,7 @@ async function handleToolsCall(params: unknown, httpRequest?: Request, env?: Env
 				],
 			}
 		}
-		case 'auth_status': {
+		case 'lastfm_auth_status': {
 			// Provide unauthenticated status with connection-specific instructions
 			const connectionId = httpRequest?.headers.get('X-Connection-ID')
 			const connectionInfo = connectionId ? `\n🔗 **Connection ID:** ${connectionId}` : ''
@@ -587,7 +587,7 @@ Your authentication will be secure and connection-specific - only you will have 
 **Available without authentication:**
 • \`ping\` - Test server connectivity
 • \`server_info\` - Get server information
-• \`auth_status\` - Check authentication status (this tool)
+• \`lastfm_auth_status\` - Check authentication status (this tool)
 • \`get_track_info\` - Get basic track information
 • \`get_artist_info\` - Get basic artist information  
 • \`get_album_info\` - Get basic album information
@@ -828,7 +828,7 @@ async function handleAuthenticatedToolsCall(params: unknown, session: SessionPay
 	}
 
 	switch (name) {
-		case 'auth_status': {
+		case 'lastfm_auth_status': {
 			// Get connection information if available
 			const connectionId = httpRequest?.headers.get('X-Connection-ID')
 			const connectionInfo = connectionId ? `\n🔗 **Connection ID:** ${connectionId}` : ''
@@ -1343,7 +1343,7 @@ export async function handleMethod(request: JSONRPCRequest, httpRequest?: Reques
 					},
 				},
 				{
-					name: 'auth_status',
+					name: 'lastfm_auth_status',
 					description: 'Check authentication status and get login instructions if needed',
 					inputSchema: {
 						type: 'object',
@@ -1450,10 +1450,10 @@ export async function handleMethod(request: JSONRPCRequest, httpRequest?: Reques
 		}
 
 		case 'tools/call': {
-			// For tools that exist in both authenticated and non-authenticated handlers (like auth_status),
+			// For tools that exist in both authenticated and non-authenticated handlers (like lastfm_auth_status),
 			// check authentication first to determine which handler to use
 			const toolName = (params as ToolsCallParams)?.name
-			const dualHandlerTools = ['auth_status', 'get_artist_info', 'get_track_info', 'get_album_info'] // Tools that exist in both handlers
+			const dualHandlerTools = ['lastfm_auth_status', 'get_artist_info', 'get_track_info', 'get_album_info'] // Tools that exist in both handlers
 			
 			if (dualHandlerTools.includes(toolName) && httpRequest && jwtSecret) {
 				// Check if user is authenticated first
@@ -1497,7 +1497,7 @@ export async function handleMethod(request: JSONRPCRequest, httpRequest?: Reques
 							? createError(
 									id!,
 									MCPErrorCode.Unauthorized,
-									`Authentication required. Please use the "auth_status" tool for detailed authentication instructions, or ${authInstructions}`,
+									`Authentication required. Please use the "lastfm_auth_status" tool for detailed authentication instructions, or ${authInstructions}`,
 								)
 							: null
 					}
@@ -1553,7 +1553,7 @@ export async function handleMethod(request: JSONRPCRequest, httpRequest?: Reques
 			return createError(
 				id!,
 				MCPErrorCode.Unauthorized,
-				`Authentication required. Please use the "auth_status" tool for detailed authentication instructions, or ${authInstructions}`,
+				`Authentication required. Please use the "lastfm_auth_status" tool for detailed authentication instructions, or ${authInstructions}`,
 			)
 		}
 		return null

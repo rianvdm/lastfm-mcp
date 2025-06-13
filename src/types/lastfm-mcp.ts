@@ -111,8 +111,8 @@ export const LASTFM_TOOLS: LastfmTool[] = [
 		},
 	},
 	{
-		name: 'auth_status',
-		description: 'Check authentication status',
+		name: 'lastfm_auth_status',
+		description: 'Check Last.fm authentication status',
 		inputSchema: {
 			type: 'object',
 			properties: {},
