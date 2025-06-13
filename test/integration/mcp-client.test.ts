@@ -476,7 +476,7 @@ describe('MCP Client Integration Tests', () => {
 				id: 2,
 				error: {
 					code: -32602, // Invalid params
-					message: 'get_track_info requires artist and track parameters',
+					message: 'Missing required parameter: artist',
 				},
 			})
 		})
