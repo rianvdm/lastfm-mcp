@@ -68,14 +68,14 @@
 
 ## Phase 7 – MCP Prompts Adaptation
 
-- [ ] **G1** Update prompt definitions for Last.fm use cases
-- [ ] **G2** Implement listening_insights prompt
-- [ ] **G3** Implement music_discovery prompt
-- [ ] **G4** Implement track_analysis prompt
-- [ ] **G5** Implement album_analysis prompt
-- [ ] **G6** Implement artist_analysis prompt
-- [ ] **G7** Implement listening_habits prompt
-- [ ] **G8** Test all prompt responses and formatting
+- [x] **G1** Update prompt definitions for Last.fm use cases
+- [x] **G2** Implement listening_insights prompt
+- [x] **G3** Implement music_discovery prompt
+- [x] **G4** Implement track_analysis prompt
+- [x] **G5** Implement album_analysis prompt
+- [x] **G6** Implement artist_analysis prompt
+- [x] **G7** Implement listening_habits prompt
+- [x] **G8** Test all prompt responses and formatting
 
 ## Phase 8 – Protocol Handler Updates
 

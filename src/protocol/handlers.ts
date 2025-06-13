@@ -334,49 +334,128 @@ export function handlePromptsGet(params: unknown): PromptsGetResult {
 	const { name, arguments: args } = params
 
 	switch (name) {
-		case 'browse_collection': {
+		case 'listening_insights': {
+			const username = args?.username as string
+			const period = args?.period as string
+			if (!username) {
+				throw new Error('listening_insights prompt requires a username argument')
+			}
+			
+			const periodText = period ? ` over the ${period} period` : ''
 			return {
-				description: 'Browse and explore your Last.fm listening data',
+				description: 'Get insights about user\'s listening habits and patterns',
 				messages: [
 					{
 						role: 'user',
 						content: {
 							type: 'text',
-							text: 'Help me explore my Last.fm listening data. Show me interesting insights, recommend artists to listen to, or help me discover patterns in my music taste. You can use the available tools to get my recent tracks, top artists, loved tracks, and personalized recommendations.',
+							text: `Analyze the listening habits and patterns for Last.fm user "${username}"${periodText}. Use the available tools to gather their recent tracks, top artists, top albums, and listening statistics. Provide insights about their musical preferences, listening patterns, genre diversity, and any interesting trends. Identify their most played artists and tracks, and suggest what their listening data reveals about their musical taste.`,
 						},
 					},
 				],
 			}
 		}
 
-		case 'find_music': {
-			const query = args?.query as string
-			if (!query) {
-				throw new Error('find_music prompt requires a query argument')
+		case 'music_discovery': {
+			const username = args?.username as string
+			const genre = args?.genre as string
+			if (!username) {
+				throw new Error('music_discovery prompt requires a username argument')
 			}
+			
+			const genreText = genre ? ` focusing on ${genre} music` : ''
 			return {
-				description: 'Find specific music in your listening data',
+				description: 'Discover new music based on listening history',
 				messages: [
 					{
 						role: 'user',
 						content: {
 							type: 'text',
-							text: `Help me find music related to: "${query}". Search through Last.fm data and provide detailed information about tracks, artists, or albums. If you find multiple matches, help me understand the differences and recommend which ones might be most interesting.`,
+							text: `Help discover new music for Last.fm user "${username}"${genreText}. Analyze their listening history, top artists, and loved tracks to understand their musical preferences. Use similar artists and tracks data to recommend new music they might enjoy. Provide explanations for why each recommendation would suit their taste based on their listening patterns.`,
 						},
 					},
 				],
 			}
 		}
 
-		case 'collection_insights': {
+		case 'track_analysis': {
+			const artist = args?.artist as string
+			const track = args?.track as string
+			if (!artist || !track) {
+				throw new Error('track_analysis prompt requires both artist and track arguments')
+			}
+			
 			return {
-				description: 'Get insights about your music listening habits',
+				description: 'Get detailed analysis of a specific track',
 				messages: [
 					{
 						role: 'user',
 						content: {
 							type: 'text',
-							text: 'Analyze my Last.fm listening data and provide interesting insights. Look at my listening statistics, identify patterns in genres, time periods, and artists. Help me understand what my listening history says about my musical tastes and suggest areas where I might want to explore new music.',
+							text: `Provide a detailed analysis of the track "${track}" by ${artist}. Use the available tools to gather comprehensive information including track details, tags, similar tracks, and statistics. Analyze the track's musical characteristics, its place in the artist's catalog, its popularity, and what makes it distinctive. Include information about similar tracks and recommendations for listeners who enjoy this song.`,
+						},
+					},
+				],
+			}
+		}
+
+		case 'album_analysis': {
+			const artist = args?.artist as string
+			const album = args?.album as string
+			if (!artist || !album) {
+				throw new Error('album_analysis prompt requires both artist and album arguments')
+			}
+			
+			return {
+				description: 'Get detailed analysis of a specific album',
+				messages: [
+					{
+						role: 'user',
+						content: {
+							type: 'text',
+							text: `Provide a detailed analysis of the album "${album}" by ${artist}. Use the available tools to gather comprehensive information including album details, track listing, tags, and statistics. Analyze the album's musical themes, its significance in the artist's discography, critical reception, and notable tracks. Include information about the album's style, influences, and recommendations for similar albums.`,
+						},
+					},
+				],
+			}
+		}
+
+		case 'artist_analysis': {
+			const artist = args?.artist as string
+			if (!artist) {
+				throw new Error('artist_analysis prompt requires an artist argument')
+			}
+			
+			return {
+				description: 'Get detailed analysis of a specific artist',
+				messages: [
+					{
+						role: 'user',
+						content: {
+							type: 'text',
+							text: `Provide a detailed analysis of the artist ${artist}. Use the available tools to gather comprehensive information including artist bio, top tracks, albums, tags, and similar artists. Analyze their musical style, career highlights, influences, and impact on music. Include information about their most popular works and recommendations for listeners new to this artist.`,
+						},
+					},
+				],
+			}
+		}
+
+		case 'listening_habits': {
+			const username = args?.username as string
+			const timeframe = args?.timeframe as string
+			if (!username) {
+				throw new Error('listening_habits prompt requires a username argument')
+			}
+			
+			const timeframeText = timeframe ? ` with a focus on ${timeframe} listening` : ''
+			return {
+				description: 'Analyze and summarize user\'s listening habits',
+				messages: [
+					{
+						role: 'user',
+						content: {
+							type: 'text',
+							text: `Analyze and summarize the listening habits of Last.fm user "${username}"${timeframeText}. Use the available tools to examine their recent activity, top artists and albums, loved tracks, and overall statistics. Identify patterns in their listening behavior, preferred genres, discovery habits, and music consumption patterns. Provide insights about their musical journey and evolution of taste over time.`,
 						},
 					},
 				],

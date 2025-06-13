@@ -38,67 +38,142 @@ describe('MCP Prompts', () => {
 
 	describe('handlePromptsGet', () => {
 		// Tests for Last.fm prompt implementations
-		it('should return browse_collection prompt', () => {
-			const result = handlePromptsGet({ name: 'browse_collection' })
+		it('should return listening_insights prompt', () => {
+			const result = handlePromptsGet({ 
+				name: 'listening_insights',
+				arguments: { username: 'testuser' }
+			})
 
 			expect(result).toMatchObject({
-				description: expect.stringContaining('Last.fm'),
+				description: expect.stringContaining('listening habits'),
 				messages: [
 					{
 						role: 'user',
 						content: {
 							type: 'text',
-							text: expect.stringContaining('Last.fm'),
+							text: expect.stringContaining('testuser'),
 						},
 					},
 				],
 			})
 		})
 
-		it('should return find_music prompt', () => {
+		it('should return music_discovery prompt', () => {
 			const result = handlePromptsGet({
-				name: 'find_music',
-				arguments: { query: 'Pink Floyd' },
+				name: 'music_discovery',
+				arguments: { username: 'testuser', genre: 'rock' },
 			})
 
 			expect(result).toMatchObject({
-				description: expect.stringContaining('music'),
+				description: expect.stringContaining('new music'),
 				messages: [
 					{
 						role: 'user',
 						content: {
 							type: 'text',
-							text: expect.stringContaining('Pink Floyd'),
+							text: expect.stringContaining('testuser'),
 						},
 					},
 				],
 			})
 		})
 
-		it('should return collection_insights prompt', () => {
-			const result = handlePromptsGet({ name: 'collection_insights' })
+		it('should return track_analysis prompt', () => {
+			const result = handlePromptsGet({ 
+				name: 'track_analysis',
+				arguments: { artist: 'The Beatles', track: 'Come Together' }
+			})
 
 			expect(result).toMatchObject({
-				description: expect.stringContaining('listening'),
+				description: expect.stringContaining('track'),
 				messages: [
 					{
 						role: 'user',
 						content: {
 							type: 'text',
-							text: expect.stringContaining('listening'),
+							text: expect.stringContaining('Come Together'),
 						},
 					},
 				],
 			})
 		})
 
-		it('should throw error for missing query in find_music', () => {
+		it('should return album_analysis prompt', () => {
+			const result = handlePromptsGet({ 
+				name: 'album_analysis',
+				arguments: { artist: 'The Beatles', album: 'Abbey Road' }
+			})
+
+			expect(result).toMatchObject({
+				description: expect.stringContaining('album'),
+				messages: [
+					{
+						role: 'user',
+						content: {
+							type: 'text',
+							text: expect.stringContaining('Abbey Road'),
+						},
+					},
+				],
+			})
+		})
+
+		it('should return artist_analysis prompt', () => {
+			const result = handlePromptsGet({ 
+				name: 'artist_analysis',
+				arguments: { artist: 'The Beatles' }
+			})
+
+			expect(result).toMatchObject({
+				description: expect.stringContaining('artist'),
+				messages: [
+					{
+						role: 'user',
+						content: {
+							type: 'text',
+							text: expect.stringContaining('The Beatles'),
+						},
+					},
+				],
+			})
+		})
+
+		it('should return listening_habits prompt', () => {
+			const result = handlePromptsGet({ 
+				name: 'listening_habits',
+				arguments: { username: 'testuser', timeframe: 'recent' }
+			})
+
+			expect(result).toMatchObject({
+				description: expect.stringContaining('listening habits'),
+				messages: [
+					{
+						role: 'user',
+						content: {
+							type: 'text',
+							text: expect.stringContaining('testuser'),
+						},
+					},
+				],
+			})
+		})
+
+		it('should throw error for missing username in listening_insights', () => {
 			expect(() =>
 				handlePromptsGet({
-					name: 'find_music',
+					name: 'listening_insights',
 					arguments: {},
 				}),
-			).toThrow('find_music prompt requires a query argument')
+			).toThrow('listening_insights prompt requires a username argument')
+		})
+
+		it('should throw error for missing arguments in track_analysis', () => {
+			expect(() =>
+				handlePromptsGet({
+					name: 'track_analysis',
+					arguments: { artist: 'The Beatles' },
+				}),
+			).toThrow('track_analysis prompt requires both artist and track arguments')
 		})
 
 		it('should throw error for unknown prompt', () => {
