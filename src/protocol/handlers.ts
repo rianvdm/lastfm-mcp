@@ -1445,7 +1445,7 @@ export async function handleMethod(request: JSONRPCRequest, httpRequest?: Reques
 			// For tools that exist in both authenticated and non-authenticated handlers (like auth_status),
 			// check authentication first to determine which handler to use
 			const toolName = (params as ToolsCallParams)?.name
-			const dualHandlerTools = ['auth_status'] // Tools that exist in both handlers
+			const dualHandlerTools = ['auth_status', 'get_artist_info', 'get_track_info', 'get_album_info'] // Tools that exist in both handlers
 			
 			if (dualHandlerTools.includes(toolName) && httpRequest && jwtSecret) {
 				// Check if user is authenticated first
