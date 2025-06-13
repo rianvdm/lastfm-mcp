@@ -150,11 +150,6 @@ describe('Authentication Edge Cases', () => {
 			await expect(lastfmAuth.getSessionKey('   ')).rejects.toThrow()
 		})
 
-		it.skip('should handle null/undefined token', async () => {
-			// Skip this test due to timeout issues with retry logic
-			// The authentication system handles null/undefined gracefully in practice
-			expect(true).toBe(true)
-		})
 
 		it('should handle malformed Last.fm API response', async () => {
 			const mockMalformedResponse = new Response('not json', { status: 200 })
