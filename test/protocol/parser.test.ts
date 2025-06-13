@@ -191,13 +191,13 @@ describe('JSON-RPC Parser', () => {
 			expect(result.data).toEqual({ originalMessage: 'Rate limit exceeded' })
 		})
 
-		it('should map Discogs API errors correctly', () => {
-			const error = new Error('Failed to fetch release 123: 404 Not Found')
+		it('should map Last.fm API errors correctly', () => {
+			const error = new Error('Failed to fetch track info: 404 Not Found')
 			const result = mapErrorToJSONRPC(error)
 
-			expect(result.code).toBe(MCPErrorCode.DiscogsAPIError)
-			expect(result.message).toBe('Discogs API error')
-			expect(result.data).toEqual({ originalMessage: 'Failed to fetch release 123: 404 Not Found' })
+			expect(result.code).toBe(MCPErrorCode.LastfmAPIError)
+			expect(result.message).toBe('Last.fm API error')
+			expect(result.data).toEqual({ originalMessage: 'Failed to fetch track info: 404 Not Found' })
 		})
 
 		it('should map resource not found errors correctly', () => {

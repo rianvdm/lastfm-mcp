@@ -1,18 +1,18 @@
 #!/bin/bash
 
-# Production testing script for Discogs MCP Server
+# Production testing script for Last.fm MCP Server
 # Usage: ./scripts/test-production.sh https://your-worker-domain.workers.dev
 
 set -e
 
 if [ $# -eq 0 ]; then
     echo "Usage: $0 <worker-url>"
-    echo "Example: $0 https://discogs-mcp-prod.your-subdomain.workers.dev"
+    echo "Example: $0 https://lastfm-mcp-prod.your-subdomain.workers.dev"
     exit 1
 fi
 
 WORKER_URL="$1"
-echo "🧪 Testing Discogs MCP Server at: $WORKER_URL"
+echo "🧪 Testing Last.fm MCP Server at: $WORKER_URL"
 echo ""
 
 # Colors for output
@@ -64,7 +64,7 @@ run_test "Health endpoint" \
 # Test 2: Root endpoint responds
 run_test "Root endpoint" \
     "curl -s -f '$WORKER_URL/'" \
-    "Discogs MCP Server"
+    "Last.fm MCP Server"
 
 echo ""
 echo "🔧 MCP Protocol Tests"
@@ -78,17 +78,17 @@ run_test "MCP Initialize" \
 # Test 4: Tools list
 run_test "Tools list" \
     "curl -s -X POST '$WORKER_URL' -H 'Content-Type: application/json' -d '{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"tools/list\",\"params\":{}}'" \
-    '"name":"search_collection"'
+    '"name":"get_recent_tracks"'
 
 # Test 5: Resources list
 run_test "Resources list" \
     "curl -s -X POST '$WORKER_URL' -H 'Content-Type: application/json' -d '{\"jsonrpc\":\"2.0\",\"id\":3,\"method\":\"resources/list\",\"params\":{}}'" \
-    '"uri":"discogs://collection"'
+    '"uri":"lastfm://user"'
 
 # Test 6: Prompts list
 run_test "Prompts list" \
     "curl -s -X POST '$WORKER_URL' -H 'Content-Type: application/json' -d '{\"jsonrpc\":\"2.0\",\"id\":4,\"method\":\"prompts/list\",\"params\":{}}'" \
-    '"name":"browse_collection"'
+    '"name":"listening_insights"'
 
 echo ""
 echo "🔐 Authentication Tests"
@@ -97,11 +97,11 @@ echo "────────────────────────�
 # Test 7: Login endpoint
 run_test "Login endpoint" \
     "curl -s -f '$WORKER_URL/login'" \
-    "discogs.com/oauth/authorize"
+    "last.fm/api/auth"
 
 # Test 8: Unauthenticated tool call (should fail)
 run_test "Unauthenticated tool rejection" \
-    "curl -s -X POST '$WORKER_URL' -H 'Content-Type: application/json' -d '{\"jsonrpc\":\"2.0\",\"id\":5,\"method\":\"tools/call\",\"params\":{\"name\":\"search_collection\",\"arguments\":{\"query\":\"test\"}}}'" \
+    "curl -s -X POST '$WORKER_URL' -H 'Content-Type: application/json' -d '{\"jsonrpc\":\"2.0\",\"id\":5,\"method\":\"tools/call\",\"params\":{\"name\":\"get_recent_tracks\",\"arguments\":{\"username\":\"test\"}}}'" \
     '"error"'
 
 echo ""
@@ -141,7 +141,7 @@ echo -e "Total tests: $((TESTS_PASSED + TESTS_FAILED))"
 
 if [ $TESTS_FAILED -eq 0 ]; then
     echo ""
-    echo -e "${GREEN}🎉 All tests passed! Your Discogs MCP Server is working correctly.${NC}"
+    echo -e "${GREEN}🎉 All tests passed! Your Last.fm MCP Server is working correctly.${NC}"
     echo ""
     echo "Next steps:"
     echo "1. Configure Claude Desktop with this server URL"

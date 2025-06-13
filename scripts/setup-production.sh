@@ -5,7 +5,7 @@
 
 set -e
 
-echo "🚀 Setting up Discogs MCP Server for production deployment..."
+echo "🚀 Setting up Last.fm MCP Server for production deployment..."
 
 # Create production KV namespaces
 echo "📦 Creating production KV namespaces..."
@@ -39,15 +39,15 @@ echo "id = \"$SESSIONS_ID\""
 echo ""
 
 echo "🔐 Setting up secrets (you'll be prompted for each)..."
-echo "Please have your Discogs app credentials ready."
+echo "Please have your Last.fm app credentials ready."
 echo ""
 
 # Set production secrets
-echo "Setting DISCOGS_CONSUMER_KEY..."
-wrangler secret put DISCOGS_CONSUMER_KEY --env production
+echo "Setting LASTFM_API_KEY..."
+wrangler secret put LASTFM_API_KEY --env production
 
-echo "Setting DISCOGS_CONSUMER_SECRET..."
-wrangler secret put DISCOGS_CONSUMER_SECRET --env production
+echo "Setting LASTFM_SHARED_SECRET..."
+wrangler secret put LASTFM_SHARED_SECRET --env production
 
 echo "Setting JWT_SECRET (use a strong random string)..."
 wrangler secret put JWT_SECRET --env production

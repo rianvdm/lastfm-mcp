@@ -47,10 +47,10 @@ export enum MCPErrorCode {
 	ToolNotFound = -32005,
 	ToolExecutionError = -32006,
 	PromptNotFound = -32007,
-	DiscogsAPIError = -32008,
+	LastfmAPIError = -32008,
 	AuthenticationFailed = -32009,
 	ServerNotInitialized = -32010,
-	DiscogsRateLimited = -32011,
+	LastfmRateLimited = -32011,
 }
 
 // Type guards
@@ -89,15 +89,15 @@ export function mapErrorToJSONRPC(error: unknown): { code: number; message: stri
 			}
 		}
 
-		// Discogs API rate limiting (check before generic rate limiting)
-		if (message.includes('Discogs API rate limit exceeded')) {
+		// Last.fm API rate limiting (check before generic rate limiting)
+		if (message.includes('Last.fm API rate limit exceeded')) {
 			return {
-				code: MCPErrorCode.DiscogsRateLimited,
-				message: 'Discogs API rate limit exceeded',
+				code: MCPErrorCode.LastfmRateLimited,
+				message: 'Last.fm API rate limit exceeded',
 				data: {
 					originalMessage: message,
 					retryAfter: 60, // Default to 60 seconds
-					suggestion: 'The Discogs API has rate limits. Please wait a moment before trying again.',
+					suggestion: 'The Last.fm API has rate limits. Please wait a moment before trying again.',
 				},
 			}
 		}
@@ -111,11 +111,11 @@ export function mapErrorToJSONRPC(error: unknown): { code: number; message: stri
 			}
 		}
 
-		// Discogs API errors (check after rate limiting)
-		if (message.includes('Failed to fetch') || message.includes('Discogs') || message.includes('Failed to search')) {
+		// Last.fm API errors (check after rate limiting)
+		if (message.includes('Failed to fetch') || message.includes('Last.fm') || message.includes('Failed to search')) {
 			return {
-				code: MCPErrorCode.DiscogsAPIError,
-				message: 'Discogs API error',
+				code: MCPErrorCode.LastfmAPIError,
+				message: 'Last.fm API error',
 				data: { originalMessage: message },
 			}
 		}

@@ -2,7 +2,7 @@
 
 /**
  * Multi-User Authentication Test Script
- * Tests the multi-user functionality of the Discogs MCP server
+ * Tests the multi-user functionality of the Last.fm MCP server
  */
 
 const serverUrl = process.env.SERVER_URL || 'http://localhost:8787';
@@ -38,8 +38,8 @@ async function testUnauthenticatedAccess() {
   
   // Try to access protected tool
   const result = await makeMCPRequest(connectionId, 'tools/call', {
-    name: 'search_collection',
-    arguments: { query: 'test' }
+    name: 'get_recent_tracks',
+    arguments: { username: 'test' }
   });
   
   if (result.error && result.error.code === -32001) {
@@ -133,7 +133,7 @@ async function testConcurrentRequests() {
   
   // Check that all requests succeeded
   const allSucceeded = results.every(result => 
-    result.result && result.result.content[0].text.includes('Discogs MCP Server')
+    result.result && result.result.content[0].text.includes('Last.fm MCP Server')
   );
   
   if (allSucceeded) {

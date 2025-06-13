@@ -291,7 +291,7 @@ export function validateResourceURI(uri: string): void {
 	}
 
 	// Basic URI validation - should start with a scheme
-	if (!uri.includes('://') && !uri.startsWith('discogs:')) {
+	if (!uri.includes('://') && !uri.startsWith('lastfm:')) {
 		throw new ValidationError('Resource URI must have a valid scheme')
 	}
 }

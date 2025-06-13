@@ -14,8 +14,7 @@ describe('MCP Prompts', () => {
 		it('should return all available prompts', () => {
 			const result = handlePromptsList()
 
-			// The current implementation still returns the Last.fm prompts list
-			// but the handlers are still using old Discogs logic
+			// The current implementation returns the Last.fm prompts list
 			expect(result.prompts).toHaveLength(6)
 			expect(result.prompts.some(p => p.name === 'listening_insights')).toBe(true)
 			expect(result.prompts.some(p => p.name === 'music_discovery')).toBe(true)

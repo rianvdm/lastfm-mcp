@@ -1,6 +1,6 @@
 /**
  * Mood to Genre/Style Mapping Utility
- * Maps emotional descriptors and contextual cues to relevant Discogs genres and styles
+ * Maps emotional descriptors and contextual cues to relevant Last.fm tags and genres
  */
 
 export interface MoodMappingResult {

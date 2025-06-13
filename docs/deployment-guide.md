@@ -48,11 +48,11 @@ This script will:
    - `LASTFM_SHARED_SECRET` - Your Last.fm shared secret
    - `JWT_SECRET` - A strong random string for JWT signing
 
-### Getting Discogs Credentials
+### Getting Last.fm Credentials
 
-1. Go to [Discogs Developer Settings](https://www.discogs.com/settings/developers)
+1. Go to [Last.fm API Account](https://www.last.fm/api/account/create)
 2. Create a new application or use an existing one
-3. Note down the Consumer Key and Consumer Secret
+3. Note down the API Key and Shared Secret
 4. Set the callback URL to: `https://your-worker-domain.workers.dev/callback`
 
 ## Step 3: Update Production Configuration
@@ -132,7 +132,7 @@ This script tests:
 ### 5.3 Test OAuth Flow
 
 1. Visit: `https://your-worker-domain.workers.dev/login`
-2. Complete Discogs OAuth authorization
+2. Complete Last.fm OAuth authorization
 3. Verify successful callback and session creation
 
 ## Step 6: Configure Claude Desktop
@@ -147,7 +147,7 @@ Add the MCP server to your Claude Desktop configuration file:
 ```json
 {
 	"mcpServers": {
-		"discogs": {
+		"lastfm": {
 			"command": "npx",
 			"args": ["mcp-remote", "https://your-worker-domain.workers.dev/sse"]
 		}
@@ -161,15 +161,15 @@ Add the MCP server to your Claude Desktop configuration file:
 2. **Start a new conversation** and try these commands:
 
 ```
-Can you help me search my Discogs collection?
+Can you show me my recent Last.fm listening history?
 ```
 
 ```
-What are some statistics about my music collection?
+What are some statistics about my Last.fm listening habits?
 ```
 
 ```
-Find jazz albums from the 1960s in my collection
+Find my most played jazz artists from this year
 ```
 
 ## Step 7: Production Verification Checklist
@@ -186,7 +186,7 @@ Use this checklist to verify your production deployment:
 ### Authentication
 
 - [ ] OAuth login flow works
-- [ ] Discogs callback URL configured correctly
+- [ ] Last.fm callback URL configured correctly
 - [ ] JWT sessions created and validated
 - [ ] Rate limiting functional
 
@@ -199,9 +199,9 @@ Use this checklist to verify your production deployment:
 
 ### Functionality
 
-- [ ] Collection search works
+- [ ] Listening history retrieval works
 - [ ] Release details retrieval works
-- [ ] Collection statistics generation works
+- [ ] Listening statistics generation works
 - [ ] Recommendations system works
 - [ ] Error handling graceful
 
@@ -209,7 +209,7 @@ Use this checklist to verify your production deployment:
 
 - [ ] MCP server appears in Claude Desktop
 - [ ] Authentication flow completes in Claude
-- [ ] Collection queries work through Claude
+- [ ] Listening data queries work through Claude
 - [ ] Responses properly formatted
 
 ## Troubleshooting
@@ -223,7 +223,7 @@ Use this checklist to verify your production deployment:
 
 **2. "Authentication failed" error**
 
-- Verify Discogs consumer key/secret are correct
+- Verify Last.fm API key/shared secret are correct
 - Check callback URL matches exactly
 - Ensure JWT secret is set
 
@@ -294,9 +294,9 @@ Monitor KV usage for:
 
 - **Rate Limits**: Adjust per-user limits based on usage
 - **KV Storage**: Implement TTL cleanup for old data
-- **Caching**: Consider adding response caching for collection data
+- **Caching**: Consider adding response caching for listening data
 - **Multiple Regions**: Deploy to multiple Cloudflare regions if needed
 
 ---
 
-This guide ensures your Discogs MCP Server is properly deployed, configured, and working with Claude Desktop in production.
+This guide ensures your Last.fm MCP Server is properly deployed, configured, and working with Claude Desktop in production.

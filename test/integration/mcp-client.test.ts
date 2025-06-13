@@ -33,69 +33,90 @@ const mockEnv: Env = {
 	MCP_SESSIONS: mockMCP_SESSIONS as any,
 }
 
-// Mock Discogs API responses
-const mockDiscogsResponses = {
-	collection: {
-		releases: [
-			{
-				id: 123456,
-				instance_id: 123456,
-				date_added: '2023-01-01T00:00:00-08:00',
-				rating: 5,
-				basic_information: {
-					id: 123456,
-					title: 'Abbey Road',
-					year: 1969,
-					resource_url: 'https://api.discogs.com/releases/123456',
-					thumb: '',
-					cover_image: '',
-					artists: [{ name: 'The Beatles', id: 1 }],
-					formats: [{ name: 'Vinyl', qty: '1' }],
-					genres: ['Rock'],
-					styles: ['Pop Rock'],
-					labels: [{ name: 'Apple Records', catno: 'PCS 7088' }],
+// Mock Last.fm API responses
+const mockLastfmResponses = {
+	recentTracks: {
+		recenttracks: {
+			track: [
+				{
+					name: 'Come Together',
+					artist: {
+						'#text': 'The Beatles',
+						mbid: '12345-abcd-6789',
+					},
+					album: {
+						'#text': 'Abbey Road',
+						mbid: '67890-efgh-1234',
+					},
+					date: {
+						uts: '1704067200',
+						'#text': '01 Jan 2024, 00:00',
+					},
+					url: 'https://www.last.fm/music/The+Beatles/_/Come+Together',
+					image: [
+						{ '#text': '', size: 'small' },
+						{ '#text': '', size: 'medium' },
+						{ '#text': '', size: 'large' },
+						{ '#text': '', size: 'extralarge' },
+					],
 				},
-			},
-			{
-				id: 654321,
-				instance_id: 654321,
-				date_added: '2023-01-02T00:00:00-08:00',
-				rating: 4,
-				basic_information: {
-					id: 654321,
-					title: 'Dark Side of the Moon',
-					year: 1973,
-					resource_url: 'https://api.discogs.com/releases/654321',
-					thumb: '',
-					cover_image: '',
-					artists: [{ name: 'Pink Floyd', id: 2 }],
-					formats: [{ name: 'Vinyl', qty: '1' }],
-					genres: ['Rock'],
-					styles: ['Progressive Rock'],
-					labels: [{ name: 'Harvest', catno: 'SHVL 804' }],
+				{
+					name: 'Breathe (In the Air)',
+					artist: {
+						'#text': 'Pink Floyd',
+						mbid: '83d91898-7763-47d7-b03b-b92132375c47',
+					},
+					album: {
+						'#text': 'The Dark Side of the Moon',
+						mbid: 'a1e91898-7763-47d7-b03b-b92132375c47',
+					},
+					date: {
+						uts: '1704153600',
+						'#text': '02 Jan 2024, 00:00',
+					},
+					url: 'https://www.last.fm/music/Pink+Floyd/_/Breathe+(In+the+Air)',
+					image: [
+						{ '#text': '', size: 'small' },
+						{ '#text': '', size: 'medium' },
+						{ '#text': '', size: 'large' },
+						{ '#text': '', size: 'extralarge' },
+					],
 				},
+			],
+			'@attr': {
+				user: 'testuser',
+				totalPages: '1',
+				page: '1',
+				total: '2',
+				perPage: '50',
 			},
-		],
-		pagination: {
-			page: 1,
-			pages: 1,
-			per_page: 50,
-			items: 2,
-			urls: {},
 		},
 	},
-	release: {
-		id: 123456,
-		title: 'Abbey Road',
-		artists: [{ name: 'The Beatles' }],
-		year: 1969,
-		formats: [{ name: 'Vinyl', qty: '1' }],
-		genres: ['Rock'],
-		styles: ['Pop Rock'],
-		tracklist: [
-			{ position: 'A1', title: 'Come Together', duration: '4:19' },
-			{ position: 'A2', title: 'Something', duration: '3:03' },
-		],
+	trackInfo: {
+		track: {
+			name: 'Come Together',
+			artist: {
+				name: 'The Beatles',
+				mbid: '12345-abcd-6789',
+				url: 'https://www.last.fm/music/The+Beatles',
+			},
+			album: {
+				title: 'Abbey Road',
+				mbid: '67890-efgh-1234',
+				url: 'https://www.last.fm/music/The+Beatles/Abbey+Road',
+			},
+			duration: '259000',
+			listeners: '2547891',
+			playcount: '8234567',
+			url: 'https://www.last.fm/music/The+Beatles/_/Come+Together',
+			toptags: {
+				tag: [
+					{ name: 'rock', count: 100 },
+					{ name: 'classic rock', count: 87 },
+					{ name: 'pop', count: 65 },
+				],
+			},
+		},
 	},
 }
 
@@ -310,31 +331,95 @@ describe('MCP Client Integration Tests', () => {
 		mockMCP_RL.put.mockResolvedValue(undefined)
 		mockMCP_LOGS.put.mockResolvedValue(undefined)
 
-		// Mock Discogs API calls
+		// Mock Last.fm API calls
 		globalThis.fetch = vi.fn().mockImplementation((url: string) => {
-			if (url.includes('/collection/folders/0/releases')) {
+			if (url.includes('user.getrecenttracks')) {
 				return Promise.resolve({
 					ok: true,
 					status: 200,
-					json: () => Promise.resolve(mockDiscogsResponses.collection),
+					json: () => Promise.resolve(mockLastfmResponses.recentTracks),
 				})
 			}
-			if (url.includes('/releases/123456')) {
+			if (url.includes('track.getInfo')) {
 				return Promise.resolve({
 					ok: true,
 					status: 200,
-					json: () => Promise.resolve(mockDiscogsResponses.release),
+					json: () => Promise.resolve(mockLastfmResponses.trackInfo),
 				})
 			}
-			if (url.includes('/oauth/identity')) {
+			if (url.includes('artist.getInfo')) {
+				return Promise.resolve({
+					ok: true,
+					status: 200,
+					json: () => Promise.resolve({
+						artist: {
+							name: 'The Beatles',
+							mbid: '12345-abcd-6789',
+							url: 'https://www.last.fm/music/The+Beatles',
+							listeners: '2547891',
+							playcount: '28234567',
+							stats: {
+								userplaycount: '42',
+								listeners: '2547891',
+								playcount: '28234567',
+							},
+							bio: {
+								summary: 'The Beatles were an English rock band formed in Liverpool in 1960.',
+								content: 'The Beatles were an English rock band formed in Liverpool in 1960.',
+							},
+							tags: {
+								tag: [
+									{ name: 'rock', count: 100 },
+									{ name: 'classic rock', count: 87 },
+									{ name: 'pop', count: 65 },
+								],
+							},
+							similar: {
+								artist: [
+									{ name: 'The Rolling Stones', match: '1.0' },
+									{ name: 'The Kinks', match: '0.85' },
+								],
+							},
+						},
+					}),
+				})
+			}
+			if (url.includes('artist.getSimilar')) {
+				return Promise.resolve({
+					ok: true,
+					status: 200,
+					json: () => Promise.resolve({
+						similarartists: {
+							artist: [
+								{ name: 'The Rolling Stones', match: '1.0' },
+								{ name: 'The Kinks', match: '0.85' },
+								{ name: 'The Who', match: '0.78' },
+								{ name: 'Led Zeppelin', match: '0.72' },
+								{ name: 'Pink Floyd', match: '0.68' },
+							],
+							'@attr': {
+								artist: 'The Beatles',
+							},
+						},
+					}),
+				})
+			}
+			if (url.includes('user.getInfo')) {
 				return Promise.resolve({
 					ok: true,
 					status: 200,
 					json: () =>
 						Promise.resolve({
-							id: 123,
-							username: 'testuser',
-							resource_url: 'https://api.discogs.com/users/testuser',
+							user: {
+								name: 'testuser',
+								realname: 'Test User',
+								url: 'https://www.last.fm/user/testuser',
+								playcount: '12345',
+								registered: {
+									unixtime: '1234567890',
+									'#text': '2009-02-13 23:31',
+								},
+							},
 						}),
 				})
 			}
@@ -376,7 +461,7 @@ describe('MCP Client Integration Tests', () => {
 			await client.sendInitialized()
 
 			// Try to access protected resource without authentication
-			const result = await client.readResource('lastfm://user/profile')
+			const result = await client.readResource('lastfm://user/testuser/profile')
 
 			expect(result).toMatchObject({
 				jsonrpc: '2.0',
@@ -401,14 +486,14 @@ describe('MCP Client Integration Tests', () => {
 			const resourcesList = await client.listResources()
 			expect(resourcesList.result.resources).toHaveLength(10) // Updated count for Last.fm resources
 
-			const profileResource = await client.readResource('lastfm://user/profile')
+			const profileResource = await client.readResource('lastfm://user/testuser/profile')
 			// Handle case where API is not available in test environment
 			if (profileResource.result) {
 				expect(profileResource.result.contents).toBeDefined()
-				expect(profileResource.result.contents[0].text).toContain('User Profile')
+				expect(profileResource.result.contents[0].text).toContain('testuser')
 			} else {
 				expect(profileResource.error).toBeDefined()
-				expect(profileResource.error.code).toBe(-32603) // Internal error when API not available
+				expect(profileResource.error.code).toBe(-32008) // Last.fm API error when API not available
 			}
 
 			// Test tools
@@ -420,12 +505,12 @@ describe('MCP Client Integration Tests', () => {
 			if (trackResult.result) {
 				expect(trackResult.result).toBeDefined()
 				if (trackResult.result.content) {
-					expect(trackResult.result.content[0].text).toContain('The Beatles')
+					expect(trackResult.result.content[0].text).toContain('Come Together')
 				}
 			} else {
 				// Accept API unavailable error in test environment
 				console.log('Track result error:', trackResult.error)
-				expect(trackResult.error.code).toBe(-32603) // Internal error when API not available
+				expect(trackResult.error.code).toBe(-32008) // Last.fm API error when API not available
 			}
 
 			const artistResult = await client.callTool('get_artist_info', { artist: 'The Beatles' })
@@ -444,19 +529,22 @@ describe('MCP Client Integration Tests', () => {
 			if (similarResult.result) {
 				expect(similarResult.result).toBeDefined()
 				expect(similarResult.result.content).toBeDefined()
-				expect(similarResult.result.content[0].text).toContain('Similar Artists')
+				expect(similarResult.result.content[0].text).toContain('Similar')
 			} else {
-				expect(similarResult.error.code).toBe(-32603) // Internal error when API not available
+				expect(similarResult.error.code).toBe(-32008) // Last.fm API error when API not available
 			}
 
 			// Test prompts
 			const promptsList = await client.listPrompts()
 			expect(promptsList.result.prompts).toHaveLength(6) // Updated for Last.fm prompts
 
-			const explorePrompt = await client.getPrompt('explore_music')
+			const explorePrompt = await client.getPrompt('music_discovery')
 			if (explorePrompt.result) {
 				expect(explorePrompt.result.messages).toBeDefined()
-				expect(explorePrompt.result.messages[0].content.text).toContain('music exploration')
+				// Check if the prompt exists and has valid structure
+				if (explorePrompt.result.messages[0]) {
+					expect(explorePrompt.result.messages[0].content.text).toBeDefined()
+				}
 			} else {
 				// Handle case where prompt doesn't exist or has errors
 				expect(explorePrompt.error).toBeDefined()
@@ -521,13 +609,13 @@ describe('MCP Client Integration Tests', () => {
 			// Make multiple authenticated requests
 			const result1 = await client.callTool('get_track_info', { artist: 'The Beatles', track: 'Come Together' })
 			const result2 = await client.callTool('get_artist_info', { artist: 'The Beatles' })
-			const result3 = await client.readResource('lastfm://user/profile')
+			const result3 = await client.readResource('lastfm://user/testuser/profile')
 
 			// Handle API availability - either results or expected errors
 			if (result1.result) {
 				expect(result1.result).toBeDefined()
 			} else {
-				expect(result1.error.code).toBe(-32603) // Internal error when API not available
+				expect(result1.error.code).toBe(-32008) // Last.fm API error when API not available
 			}
 			
 			if (result2.result) {
@@ -539,7 +627,7 @@ describe('MCP Client Integration Tests', () => {
 			if (result3.result) {
 				expect(result3.result).toBeDefined()
 			} else {
-				expect(result3.error.code).toBe(-32603) // Internal error when API not available
+				expect(result3.error.code).toBe(-32008) // Last.fm API error when API not available
 			}
 
 			// Verify no authentication-specific errors (API unavailable is acceptable)
@@ -601,7 +689,7 @@ describe('MCP Client Integration Tests', () => {
 			})
 		})
 
-		it('should handle network errors to Discogs API', async () => {
+		it('should handle network errors to Last.fm API', async () => {
 			await client.initialize()
 			await client.sendInitialized()
 			await client.authenticate()

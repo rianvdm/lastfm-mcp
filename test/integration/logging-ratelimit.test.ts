@@ -178,8 +178,8 @@ describe('Logging and Rate Limiting Integration', () => {
 
 	it('should handle missing KV namespaces gracefully', async () => {
 		const envWithoutKV: Env = {
-			DISCOGS_CONSUMER_KEY: 'test-key',
-			DISCOGS_CONSUMER_SECRET: 'test-secret',
+			LASTFM_API_KEY: 'test-key',
+			LASTFM_SHARED_SECRET: 'test-secret',
 			JWT_SECRET: 'test-jwt-secret',
 			MCP_LOGS: undefined as any,
 			MCP_RL: undefined as any,

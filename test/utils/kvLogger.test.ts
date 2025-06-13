@@ -93,7 +93,7 @@ describe('KVLogger', () => {
 				timestamp: '2023-01-01T00:01:40.000Z',
 				userId: 'user123',
 				method: 'resources/read',
-				params: { uri: 'discogs://collection' },
+				params: { uri: 'lastfm://user/testuser/recent' },
 				result: { status: 'success', latency: 200 },
 			}
 

@@ -52,8 +52,8 @@ class MockKVNamespace {
 	}
 }
 
-// Mock Discogs Client with API call tracking
-class MockDiscogsClient {
+// Mock Last.fm Client with API call tracking
+class MockLastfmClient {
 	private apiCallCount = 0
 	private mockDelay = 100 // Simulate API latency
 
@@ -65,83 +65,90 @@ class MockDiscogsClient {
 		this.apiCallCount = 0
 	}
 
-	async getUserProfile(): Promise<{ username: string; id: number }> {
+	async getUserInfo(username: string): Promise<any> {
 		await this.simulateApiCall()
-		return { username: 'testuser', id: 12345 }
+		return { 
+			user: {
+				name: username,
+				realname: 'Test User',
+				playcount: '12345',
+				registered: { unixtime: '1234567890' },
+				country: 'US',
+				url: `https://last.fm/user/${username}`
+			}
+		}
 	}
 
-	async searchCollection(
+	async getRecentTracks(
 		username: string,
-		accessToken: string,
-		accessTokenSecret: string,
-		options: any = {},
-		consumerKey: string,
-		consumerSecret: string,
+		limit: number = 50,
+		from?: number,
+		to?: number,
+		page: number = 1
 	): Promise<any> {
 		await this.simulateApiCall()
 		
-		// Simulate different responses based on query
-		const query = options.query || ''
-		const page = options.page || 1
-		
 		return {
-			pagination: {
-				pages: 3,
-				page,
-				per_page: 50,
-				items: 150,
-				urls: {},
-			},
-			releases: Array.from({ length: Math.min(50, 150 - (page - 1) * 50) }, (_, i) => ({
-				id: 1000 + (page - 1) * 50 + i,
-				instance_id: 2000 + (page - 1) * 50 + i,
-				date_added: new Date().toISOString(),
-				rating: Math.floor(Math.random() * 5) + 1,
-				basic_information: {
-					id: 1000 + (page - 1) * 50 + i,
-					title: `Test Album ${i + 1} - ${query}`,
-					year: 1960 + Math.floor(Math.random() * 60),
-					artists: [{ name: `Test Artist ${i + 1}`, id: 3000 + i }],
-					genres: ['Rock', 'Jazz', 'Electronic'][Math.floor(Math.random() * 3)],
-					styles: ['Alternative', 'Fusion', 'Ambient'][Math.floor(Math.random() * 3)],
-					formats: [{ name: 'Vinyl', qty: '1' }],
-					labels: [{ name: 'Test Label', catno: 'TL001' }],
+			recenttracks: {
+				'@attr': {
+					user: username,
+					page: page.toString(),
+					perPage: limit.toString(),
+					totalPages: '3',
+					total: '150'
 				},
-			})),
+				track: Array.from({ length: Math.min(limit, 150 - (page - 1) * limit) }, (_, i) => ({
+					artist: { '#text': `Test Artist ${i + 1}`, mbid: '' },
+					name: `Test Track ${i + 1}`,
+					album: { '#text': `Test Album ${i + 1}`, mbid: '' },
+					date: { uts: (Date.now() / 1000 - i * 3600).toString() },
+					url: `https://last.fm/music/Test+Artist+${i + 1}/_/Test+Track+${i + 1}`
+				}))
+			}
 		}
 	}
 
-	async getRelease(releaseId: string): Promise<any> {
+	async getTrackInfo(artist: string, track: string, username?: string): Promise<any> {
 		await this.simulateApiCall()
 		
 		return {
-			id: parseInt(releaseId),
-			title: `Test Release ${releaseId}`,
-			artists: [{ name: 'Test Artist', id: 3000 }],
-			year: 1970,
-			formats: [{ name: 'Vinyl', qty: '1' }],
-			genres: ['Rock'],
-			styles: ['Alternative'],
-			labels: [{ name: 'Test Label', catno: 'TL001' }],
-			tracklist: [
-				{ position: '1', title: 'Track 1', duration: '3:30' },
-				{ position: '2', title: 'Track 2', duration: '4:15' },
-			],
+			track: {
+				name: track,
+				artist: { name: artist, mbid: '' },
+				album: { '#text': `Album for ${track}`, mbid: '' },
+				playcount: '12345',
+				listeners: '1000',
+				userplaycount: username ? '5' : undefined,
+				userloved: username ? '0' : undefined,
+				toptags: {
+					tag: [
+						{ name: 'rock', count: 100 },
+						{ name: 'alternative', count: 80 }
+					]
+				}
+			}
 		}
 	}
 
-	async getCollectionStats(): Promise<any> {
+	async getTopArtists(username: string, period: string = 'overall', limit: number = 50): Promise<any> {
 		await this.simulateApiCall()
 		
 		return {
-			totalReleases: 150,
-			totalValue: 0,
-			genreBreakdown: { Rock: 50, Jazz: 60, Electronic: 40 },
-			decadeBreakdown: { '1970s': 30, '1980s': 40, '1990s': 50, '2000s': 30 },
-			formatBreakdown: { Vinyl: 100, CD: 40, Cassette: 10 },
-			labelBreakdown: { 'Test Label': 150 },
-			averageRating: 3.5,
-			ratedReleases: 120,
+			topartists: {
+				'@attr': {
+					user: username,
+					page: '1',
+					perPage: limit.toString(),
+					totalPages: '2',
+					total: '100'
+				},
+				artist: Array.from({ length: Math.min(limit, 100) }, (_, i) => ({
+					name: `Top Artist ${i + 1}`,
+					playcount: (1000 - i * 10).toString(),
+					url: `https://last.fm/music/Top+Artist+${i + 1}`,
+					mbid: ''
+				}))
+			}
 		}
 	}
 
@@ -154,7 +161,7 @@ class MockDiscogsClient {
 // Test runner
 class CacheTestRunner {
 	private mockKV = new MockKVNamespace()
-	private mockClient = new MockDiscogsClient()
+	private mockClient = new MockLastfmClient()
 	private cachedClient: any
 	
 	constructor() {

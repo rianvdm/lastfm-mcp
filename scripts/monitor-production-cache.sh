@@ -1,9 +1,9 @@
 #!/bin/bash
 
-# Monitor Discogs MCP Production Cache Performance
+# Monitor Last.fm MCP Production Cache Performance
 # Usage: ./monitor-production-cache.sh
 
-echo "🔍 Discogs MCP Production Cache Monitor"
+echo "🔍 Last.fm MCP Production Cache Monitor"
 echo "======================================="
 
 NAMESPACE_ID="e45edcc5347e4b409169c1d0a9b2ed5d"
@@ -18,15 +18,15 @@ if [ "$TOTAL_KEYS" -eq 0 ]; then
     echo "💡 Cache will populate when users authenticate and use the system"
     echo ""
     echo "🎯 Expected cache entries after user activity:"
-    echo "   • cache:collections:username:page:sort"
-    echo "   • cache:searches:username:query:page" 
-    echo "   • cache:releases:123456"
-    echo "   • cache:stats:username"
-    echo "   • cache:userProfiles:token"
+    echo "   • cache:recentTracks:username:limit:page"
+    echo "   • cache:topArtists:username:period:limit" 
+    echo "   • cache:trackInfo:artist:track:username"
+    echo "   • cache:artistInfo:artist:username"
+    echo "   • cache:userInfo:username"
     echo ""
     echo "🔧 To trigger caching:"
-    echo "   1. Visit: https://discogs-mcp-prod.rian-db8.workers.dev/login"
-    echo "   2. Use MCP tools: search_collection, get_release, get_collection_stats"
+    echo "   1. Visit: https://lastfm-mcp-prod.rian-db8.workers.dev/login"
+    echo "   2. Use MCP tools: get_recent_tracks, get_top_artists, get_track_info"
     echo "   3. Re-run this script to see cache population"
 else
     # Break down by cache type

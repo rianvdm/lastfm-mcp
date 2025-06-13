@@ -10,17 +10,17 @@
 
 **Session A (User A):**
 1. Visit: `http://localhost:8787/login?connection_id=test-user-a`
-2. Complete OAuth flow with Discogs Account A
+2. Complete OAuth flow with Last.fm Account A
 3. Note the success message
 
 **Session B (User B):**
 1. Visit: `http://localhost:8787/login?connection_id=test-user-b`  
-2. Complete OAuth flow with Discogs Account B
+2. Complete OAuth flow with Last.fm Account B
 3. Note the success message
 
 **Session C (User C):**
 1. Visit: `http://localhost:8787/login?connection_id=test-user-c`
-2. Complete OAuth flow with Discogs Account C
+2. Complete OAuth flow with Last.fm Account C
 3. Note the success message
 
 ### Verification
@@ -43,7 +43,7 @@ curl -X POST http://localhost:8787/ \
     "id": 1,
     "method": "tools/call",
     "params": {
-      "name": "auth_status",
+      "name": "lastfm_auth_status",
       "arguments": {}
     }
   }'
@@ -57,15 +57,15 @@ curl -X POST http://localhost:8787/ \
     "id": 1,
     "method": "tools/call",
     "params": {
-      "name": "auth_status",
+      "name": "lastfm_auth_status",
       "arguments": {}
     }
   }'
 ```
 
 ### Expected Results
-- User A sees: "Connected Discogs Account: [User A's username]"
-- User B sees: "Connected Discogs Account: [User B's username]"
+- User A sees: "Connected Last.fm Account: [User A's username]"
+- User B sees: "Connected Last.fm Account: [User B's username]"
 - No cross-contamination of data
 
 ## Test Scenario 3: Session Storage Verification
@@ -112,8 +112,8 @@ curl -X POST http://localhost:8787/ \
     "id": 1, 
     "method": "tools/call",
     "params": {
-      "name": "search_collection",
-      "arguments": {"query": "test"}
+      "name": "get_recent_tracks",
+      "arguments": {"limit": 10}
     }
   }'
 ```

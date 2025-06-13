@@ -1,9 +1,9 @@
 #!/bin/bash
 
-# Monitor Discogs MCP Cache Performance
+# Monitor Last.fm MCP Cache Performance
 # Usage: ./monitor-cache.sh
 
-echo "🔍 Discogs MCP Cache Monitor"
+echo "🔍 Last.fm MCP Cache Monitor"
 echo "================================"
 
 # Check total cache entries
@@ -14,16 +14,24 @@ echo "📊 Total cache entries: $TOTAL_KEYS"
 echo ""
 echo "📂 Cache breakdown:"
 wrangler kv key list --namespace-id a0bc40f523d54a6ab70fa947ac3daeaf | jq -r '.[] | .name' | while read key; do
-  if [[ $key == cache:collections:* ]]; then
-    echo "  Collections: +1"
-  elif [[ $key == cache:releases:* ]]; then
-    echo "  Releases: +1"
-  elif [[ $key == cache:searches:* ]]; then
-    echo "  Searches: +1"
-  elif [[ $key == cache:stats:* ]]; then
-    echo "  Stats: +1"
-  elif [[ $key == cache:userProfiles:* ]]; then
-    echo "  User Profiles: +1"
+  if [[ $key == cache:recentTracks:* ]]; then
+    echo "  Recent Tracks: +1"
+  elif [[ $key == cache:topArtists:* ]]; then
+    echo "  Top Artists: +1"
+  elif [[ $key == cache:topAlbums:* ]]; then
+    echo "  Top Albums: +1"
+  elif [[ $key == cache:trackInfo:* ]]; then
+    echo "  Track Info: +1"
+  elif [[ $key == cache:artistInfo:* ]]; then
+    echo "  Artist Info: +1"
+  elif [[ $key == cache:albumInfo:* ]]; then
+    echo "  Album Info: +1"
+  elif [[ $key == cache:userInfo:* ]]; then
+    echo "  User Info: +1"
+  elif [[ $key == cache:similarArtists:* ]]; then
+    echo "  Similar Artists: +1"
+  elif [[ $key == cache:similarTracks:* ]]; then
+    echo "  Similar Tracks: +1"
   fi
 done | sort | uniq -c
 

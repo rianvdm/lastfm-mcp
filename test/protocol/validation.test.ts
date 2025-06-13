@@ -194,7 +194,7 @@ describe('MCP Protocol Validation', () => {
 	describe('validateResourcesReadParams', () => {
 		it('should validate valid params', () => {
 			const validParams = {
-				uri: 'discogs://collection',
+				uri: 'lastfm://user/testuser/recent',
 			}
 
 			expect(() => validateResourcesReadParams(validParams)).not.toThrow()

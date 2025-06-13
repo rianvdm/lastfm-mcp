@@ -338,19 +338,6 @@ export const CacheKeys = {
 		`${encodeURIComponent(artist)}:${encodeURIComponent(track)}:${limit || 30}`,
 }
 
-/**
- * Helper for creating Discogs-specific cache instances (legacy compatibility)
- */
-export function createDiscogsCache(kv: KVNamespace): SmartCache {
-	return new SmartCache(kv, {
-		// Legacy Discogs cache configuration
-		collections: 30 * 60, // 30 minutes
-		releases: 24 * 60 * 60, // 24 hours
-		stats: 60 * 60, // 1 hour
-		searches: 15 * 60, // 15 minutes
-		userProfiles: 6 * 60 * 60, // 6 hours
-	} as Partial<CacheConfig>) // Type assertion for backward compatibility
-}
 
 /**
  * Helper for creating Last.fm-specific cache instances
