@@ -2,8 +2,6 @@
 
 A **Model Context Protocol (MCP) server** that provides seamless access to Last.fm listening data and music information for AI assistants like Claude.
 
-[![Deploy to Cloudflare Workers](https://deploy.workers.cloudflare.com/button)](https://deploy.workers.cloudflare.com/?url=https://github.com/rianvdm/lastfm-mcp)
-
 ## ✨ Features
 
 - 🎧 **Personal Listening Data**: Recent tracks, top artists, albums, loved tracks
