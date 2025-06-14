@@ -1,65 +1,53 @@
-# Claude Desktop Integration Analysis
+# Direct Integration Support for Claude Desktop
 
-## Issue: Tools May Not Appear in Claude Desktop
+## Problem
+Claude Desktop's Integrations UI expects a standard MCP JSON-RPC endpoint that works without:
+- SSE connections
+- Connection ID headers
+- Cookie authentication
 
-Based on the codebase analysis and research, here are the potential issues with Claude Desktop integrations and MCP servers:
+## Solution
+We've implemented support for direct integration by automatically generating stable connection IDs for requests that don't provide them. This maintains full multi-user support - each user gets their own unique connection ID and session.
 
-## Current Implementation Status
+## Implementation Completed ✅
 
-The Last.fm MCP server appears to be correctly implemented according to MCP specification:
+### 1. **Modified handleMCPRequest** to generate stable connection IDs for direct integrations:
 
-### ✅ Correct serverInfo Response
-```typescript
-// From src/types/mcp.ts
-export const SERVER_INFO = {
-	name: 'lastfm-mcp',
-	version: '1.0.0',
-}
+The server now automatically detects when a request doesn't have a connection ID and generates one based on:
+- Client IP address
+- User-Agent string
+- Daily timestamp (rotates every 24 hours)
+
+This creates a deterministic connection ID with the format: `direct-{16-char-hash}`
+
+### 2. **Updated getConnectionSession** to handle direct- prefixed connections:
+
+Direct integration connections (prefixed with `direct-`) are now treated similarly to mcp-remote connections:
+- No SSE connection check required
+- Sessions stored in KV storage
+- Full authentication support maintained
+
+### 3. **Updated authentication callback** to handle direct connections:
+
+The authentication flow now properly handles direct- prefixed connections, storing sessions in KV without attempting to authenticate non-existent SSE connections.
+
+## How It Works
+
+1. **Connection ID Generation**: When Claude Desktop connects without a connection ID, the server generates one automatically
+2. **Session Persistence**: Each unique client gets their own session stored in Cloudflare KV for 24 hours
+3. **Multi-User Support**: Different users connecting from different locations get different connection IDs and separate sessions
+4. **Authentication Flow**: Users can authenticate by visiting the URL with their connection ID: `https://lastfm-mcp-prod.rian-db8.workers.dev/login?connection_id=direct-{hash}`
+
+## Usage
+
+### Option 1: Direct Integration (New!)
+Add the server directly in Claude Desktop's Integrations section:
+```
+https://lastfm-mcp-prod.rian-db8.workers.dev/
 ```
 
-### ✅ Proper Initialize Response
-```typescript
-// From src/protocol/handlers.ts
-export function handleInitialize(params: unknown): InitializeResult {
-	return {
-		protocolVersion: PROTOCOL_VERSION,
-		capabilities: DEFAULT_CAPABILITIES,
-		serverInfo: SERVER_INFO,
-	}
-}
-```
-
-### ✅ Comprehensive Tool List
-The server returns 15 tools including both authenticated and non-authenticated tools.
-
-### ✅ CORS Headers
-```typescript
-// From src/index.ts
-function addCorsHeaders(headers: HeadersInit = {}): Headers {
-	const corsHeaders = new Headers(headers)
-	corsHeaders.set('Access-Control-Allow-Origin', '*')
-	corsHeaders.set('Access-Control-Allow-Methods', 'GET, POST, OPTIONS')
-	corsHeaders.set('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Connection-ID, Cookie')
-	return corsHeaders
-}
-```
-
-## Potential Issues
-
-### 1. Protocol Version Compatibility
-- **Current**: Server uses MCP protocol version `2024-11-05`
-- **Potential Issue**: Claude Desktop might expect a different or newer protocol version
-- **Solution**: Monitor for protocol version mismatches in logs
-
-### 2. Connection ID Generation
-The server generates connection IDs for direct integrations:
-```typescript
-// Direct integration detection in src/index.ts
-if (userAgent.includes('Claude') || userAgent.includes('MCP') || userAgent.includes('Desktop'))
-```
-
-### 3. mcp-remote Configuration
-Current Claude Desktop config uses mcp-remote:
+### Option 2: Continue Using mcp-remote
+Keep your existing configuration:
 ```json
 {
   "mcpServers": {
@@ -71,62 +59,13 @@ Current Claude Desktop config uses mcp-remote:
 }
 ```
 
-## Debugging Steps
+Both methods work and maintain full multi-user capabilities!
 
-### 1. Check Claude Desktop Logs
-Look for MCP server logs: `mcp-server-lastfm.log`
+## Testing
 
-### 2. Manual Testing
-Test the server endpoints directly:
-```bash
-# Test initialize
-curl -X POST https://lastfm-mcp-prod.rian-db8.workers.dev/ \
-  -H "Content-Type: application/json" \
-  -d '{
-    "jsonrpc": "2.0",
-    "method": "initialize",
-    "params": {
-      "protocolVersion": "2024-11-05",
-      "capabilities": {},
-      "clientInfo": {"name": "TestClient", "version": "1.0.0"}
-    },
-    "id": 1
-  }'
-
-# Test tools list
-curl -X POST https://lastfm-mcp-prod.rian-db8.workers.dev/ \
-  -H "Content-Type: application/json" \
-  -d '{
-    "jsonrpc": "2.0",
-    "method": "tools/list",
-    "id": 2
-  }'
-```
-
-### 3. Alternative Configuration
-Try direct HTTP configuration (experimental):
-```json
-{
-  "mcpServers": {
-    "lastfm-direct": {
-      "command": "curl",
-      "args": ["-X", "POST", "https://lastfm-mcp-prod.rian-db8.workers.dev/"]
-    }
-  }
-}
-```
-
-## Recommendations
-
-1. **Add Logging**: Enhanced logging for Claude Desktop detection
-2. **Protocol Version Check**: Log the client's requested protocol version
-3. **Connection Debugging**: Add more detailed connection ID logging
-4. **Alternative Transport**: Consider implementing WebSocket transport for better Claude Desktop compatibility
-
-## Files to Monitor
-
-- `/Users/rian/Documents/GitHub/lastfm-mcp/src/protocol/handlers.ts` - Initialization handling
-- `/Users/rian/Documents/GitHub/lastfm-mcp/src/index.ts` - Connection detection
-- `/Users/rian/Documents/GitHub/lastfm-mcp/src/types/mcp.ts` - ServerInfo definition
-
-The server implementation appears compliant with MCP specification. Issues are likely configuration-related or due to Claude Desktop version compatibility.
+All tests pass with the new implementation:
+- ✅ Direct integration connection ID generation
+- ✅ Session management for direct connections
+- ✅ Authentication flow with connection-specific URLs
+- ✅ Multi-user support maintained
+- ✅ Backward compatibility with mcp-remote
