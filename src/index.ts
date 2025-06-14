@@ -388,32 +388,29 @@ async function handleMCPRequest(request: Request, env?: Env): Promise<Response> 
 			const clientIP = request.headers.get('CF-Connecting-IP') || request.headers.get('X-Forwarded-For') || 'unknown'
 			const userAgent = request.headers.get('User-Agent') || 'unknown'
 			
-			// Check if this is likely a direct integration (Claude Desktop or similar)
-			// These clients typically have specific user agents or come from direct API calls
-			if (userAgent.includes('Claude') || userAgent.includes('MCP') || userAgent.includes('Desktop') || !userAgent.includes('mcp-remote')) {
-				// Use daily timestamp to ensure connection ID is stable for 24 hours
-				const timestamp = Math.floor(Date.now() / (1000 * 60 * 60 * 24)) // Changes every 24 hours
-				
-				// Create a hash-based connection ID that's consistent for the same client/day
-				const encoder = new TextEncoder()
-				const data = encoder.encode(`${clientIP}-${userAgent}-${timestamp}`)
-				const hashBuffer = await crypto.subtle.digest('SHA-256', data)
-				const hashArray = new Uint8Array(hashBuffer)
-				const hashHex = Array.from(hashArray).map(b => b.toString(16).padStart(2, '0')).join('')
-				
-				connectionId = `direct-${hashHex.substring(0, 16)}`
-				
-				// Update the request to include the connection ID
-				const newHeaders = new Headers(request.headers)
-				newHeaders.set('X-Connection-ID', connectionId)
-				request = new Request(request.url, {
-					method: request.method,
-					headers: newHeaders,
-					body: request.body,
-				})
-				
-				console.log(`Generated direct integration connection ID: ${connectionId}`)
-			}
+			// Generate connection ID for any request without one (for direct MCP connections)
+			// Use daily timestamp to ensure connection ID is stable for 24 hours
+			const timestamp = Math.floor(Date.now() / (1000 * 60 * 60 * 24)) // Changes every 24 hours
+			
+			// Create a hash-based connection ID that's consistent for the same client/day
+			const encoder = new TextEncoder()
+			const data = encoder.encode(`${clientIP}-${userAgent}-${timestamp}`)
+			const hashBuffer = await crypto.subtle.digest('SHA-256', data)
+			const hashArray = new Uint8Array(hashBuffer)
+			const hashHex = Array.from(hashArray).map(b => b.toString(16).padStart(2, '0')).join('')
+			
+			connectionId = `direct-${hashHex.substring(0, 16)}`
+			
+			// Update the request to include the connection ID
+			const newHeaders = new Headers(request.headers)
+			newHeaders.set('X-Connection-ID', connectionId)
+			request = new Request(request.url, {
+				method: request.method,
+				headers: newHeaders,
+				body: request.body,
+			})
+			
+			console.log(`Generated direct integration connection ID: ${connectionId} for User-Agent: ${userAgent}`)
 		} else {
 			// Validate existing connection ID for SSE connections
 			const connection = getConnection(connectionId)
