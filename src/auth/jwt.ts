@@ -17,7 +17,7 @@ export interface SessionPayload {
 export async function createSessionToken(
 	payload: Omit<SessionPayload, 'iat' | 'exp'>,
 	secret: string,
-	expiresInHours = 24,
+	expiresInHours = 168,
 ): Promise<string> {
 	const now = Math.floor(Date.now() / 1000)
 	const fullPayload: SessionPayload = {
