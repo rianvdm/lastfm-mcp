@@ -137,7 +137,7 @@ describe('JWT Authentication', () => {
 				sessionKey: 'lastfm-session-key',
 				username: 'testuser',
 				iat: Math.floor(now / 1000),
-				exp: Math.floor(now / 1000) + 24 * 3600, // Default 24 hours
+				exp: Math.floor(now / 1000) + 168 * 3600, // Default 7 days
 			})
 		})
 
