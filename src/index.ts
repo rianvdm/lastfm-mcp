@@ -269,7 +269,7 @@ async function handleCallback(request: Request, env: Env): Promise<Response> {
 
 				// Store with connection-specific key
 				await env.MCP_SESSIONS.put(`session:${finalConnectionId}`, JSON.stringify(sessionData), {
-					expirationTtl: 24 * 60 * 60, // 24 hours
+					expirationTtl: 7 * 24 * 60 * 60, // 7 days to match JWT expiration
 				})
 
 				// Mark the SSE connection as authenticated (only for non-mcp-remote connections)
