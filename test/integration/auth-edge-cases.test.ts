@@ -63,23 +63,23 @@ describe('Authentication Edge Cases', () => {
 	beforeEach(() => {
 		vi.clearAllMocks()
 		vi.useFakeTimers()
-		
+
 		// Reset rate limiting
 		mockMCP_RL.get.mockResolvedValue(null)
 		mockMCP_RL.put.mockResolvedValue(undefined)
 		mockMCP_LOGS.put.mockResolvedValue(undefined)
-		
+
 		// Setup fetchWithRetry mock to behave like regular fetch by default
 		vi.mocked(fetchWithRetry).mockImplementation(async (url, init) => {
 			return globalThis.fetch(url, init)
 		})
-		
+
 		// Mock Web Crypto API
 		mockCrypto.subtle.importKey.mockResolvedValue({
 			type: 'secret',
 			algorithm: { name: 'HMAC', hash: { name: 'SHA-256' } },
 		})
-		
+
 		mockCrypto.subtle.sign.mockImplementation((algorithm, key, data) => {
 			const dataBytes = new Uint8Array(data as ArrayBuffer)
 			let hash = 0x12345678
@@ -90,11 +90,11 @@ describe('Authentication Edge Cases', () => {
 			const buffer = new ArrayBuffer(32)
 			const view = new Uint8Array(buffer)
 			for (let i = 0; i < 32; i++) {
-				view[i] = (hash + i * 7) & 0xFF
+				view[i] = (hash + i * 7) & 0xff
 			}
 			return Promise.resolve(buffer)
 		})
-		
+
 		mockCrypto.subtle.digest.mockImplementation((algorithm, data) => {
 			const dataBytes = new Uint8Array(data as ArrayBuffer)
 			let hash = 0x9e3779b9
@@ -105,7 +105,7 @@ describe('Authentication Edge Cases', () => {
 			const buffer = new ArrayBuffer(16)
 			const view = new Uint8Array(buffer)
 			for (let i = 0; i < 16; i++) {
-				view[i] = (hash + i * 13) & 0xFF
+				view[i] = (hash + i * 13) & 0xff
 			}
 			return Promise.resolve(buffer)
 		})
@@ -130,10 +130,7 @@ describe('Authentication Edge Cases', () => {
 
 		it('should handle empty token in getSessionKey', async () => {
 			// Mock Last.fm API error response
-			const mockErrorResponse = new Response(
-				JSON.stringify({ error: 4, message: 'Invalid token' }),
-				{ status: 200 }
-			)
+			const mockErrorResponse = new Response(JSON.stringify({ error: 4, message: 'Invalid token' }), { status: 200 })
 			vi.mocked(fetchWithRetry).mockResolvedValue(mockErrorResponse)
 
 			await expect(lastfmAuth.getSessionKey('')).rejects.toThrow()
@@ -141,15 +138,11 @@ describe('Authentication Edge Cases', () => {
 
 		it('should handle whitespace-only token', async () => {
 			// Mock Last.fm API error response
-			const mockErrorResponse = new Response(
-				JSON.stringify({ error: 4, message: 'Invalid token' }),
-				{ status: 200 }
-			)
+			const mockErrorResponse = new Response(JSON.stringify({ error: 4, message: 'Invalid token' }), { status: 200 })
 			vi.mocked(fetchWithRetry).mockResolvedValue(mockErrorResponse)
 
 			await expect(lastfmAuth.getSessionKey('   ')).rejects.toThrow()
 		})
-
 
 		it('should handle malformed Last.fm API response', async () => {
 			const mockMalformedResponse = new Response('not json', { status: 200 })
@@ -159,10 +152,7 @@ describe('Authentication Edge Cases', () => {
 		})
 
 		it('should handle Last.fm API error responses', async () => {
-			const mockErrorResponse = new Response(
-				JSON.stringify({ error: 4, message: 'Invalid token' }),
-				{ status: 200 }
-			)
+			const mockErrorResponse = new Response(JSON.stringify({ error: 4, message: 'Invalid token' }), { status: 200 })
 			globalThis.fetch = vi.fn().mockResolvedValue(mockErrorResponse)
 
 			await expect(lastfmAuth.getSessionKey('invalid-token')).rejects.toThrow('Last.fm API error 4: Invalid token')
@@ -184,7 +174,7 @@ describe('Authentication Edge Cases', () => {
 		it('should handle incomplete session response', async () => {
 			const mockIncompleteResponse = new Response(
 				JSON.stringify({ session: { name: 'user' } }), // missing key
-				{ status: 200 }
+				{ status: 200 },
 			)
 			globalThis.fetch = vi.fn().mockResolvedValue(mockIncompleteResponse)
 
@@ -202,7 +192,7 @@ describe('Authentication Edge Cases', () => {
 						subscriber: 1,
 					},
 				}),
-				{ status: 200 }
+				{ status: 200 },
 			)
 			globalThis.fetch = vi.fn().mockResolvedValue(mockResponse)
 
@@ -213,10 +203,7 @@ describe('Authentication Edge Cases', () => {
 
 		it('should validate session keys correctly', async () => {
 			// Mock successful validation
-			const mockValidResponse = new Response(
-				JSON.stringify({ user: { name: 'testuser' } }),
-				{ status: 200 }
-			)
+			const mockValidResponse = new Response(JSON.stringify({ user: { name: 'testuser' } }), { status: 200 })
 			globalThis.fetch = vi.fn().mockResolvedValue(mockValidResponse)
 
 			const isValid = await lastfmAuth.validateSessionKey('valid-session-key')
@@ -225,10 +212,7 @@ describe('Authentication Edge Cases', () => {
 
 		it('should detect invalid session keys', async () => {
 			// Mock error response for invalid session
-			const mockInvalidResponse = new Response(
-				JSON.stringify({ error: 9, message: 'Invalid session key' }),
-				{ status: 200 }
-			)
+			const mockInvalidResponse = new Response(JSON.stringify({ error: 9, message: 'Invalid session key' }), { status: 200 })
 			globalThis.fetch = vi.fn().mockResolvedValue(mockInvalidResponse)
 
 			const isValid = await lastfmAuth.validateSessionKey('invalid-session-key')
@@ -386,7 +370,7 @@ describe('Authentication Edge Cases', () => {
 			mockMCP_SESSIONS.get.mockResolvedValue(null)
 
 			const response = await worker.fetch(request, mockEnv, {} as any)
-			
+
 			// Should handle gracefully without crashing
 			expect(response.status).toBeGreaterThanOrEqual(200)
 		})
@@ -458,7 +442,7 @@ describe('Authentication Edge Cases', () => {
 			mockMCP_SESSIONS.get.mockResolvedValue(JSON.stringify(expiredSessionData))
 
 			const response = await worker.fetch(request, mockEnv, {} as any)
-			
+
 			// Should require re-authentication for expired session
 			if (response.status !== 200) {
 				const responseData = await response.json()
@@ -497,7 +481,7 @@ describe('Authentication Edge Cases', () => {
 			mockMCP_SESSIONS.get.mockResolvedValue(JSON.stringify(incompleteSessionData))
 
 			const response = await worker.fetch(request, mockEnv, {} as any)
-			
+
 			// Should require re-authentication for incomplete session
 			if (response.status !== 200) {
 				const responseData = await response.json()
@@ -512,7 +496,7 @@ describe('Authentication Edge Cases', () => {
 
 		it('should handle very long connection IDs', async () => {
 			const longConnectionId = 'a'.repeat(1000) // Very long connection ID
-			
+
 			const request = new Request('http://localhost:8787/', {
 				method: 'POST',
 				headers: {
@@ -558,9 +542,7 @@ describe('Authentication Edge Cases', () => {
 			mockMCP_SESSIONS.get.mockResolvedValue(JSON.stringify(sessionData))
 
 			// Mock Last.fm API response
-			globalThis.fetch = vi.fn().mockResolvedValue(
-				new Response(JSON.stringify({ tools: [] }), { status: 200 })
-			)
+			globalThis.fetch = vi.fn().mockResolvedValue(new Response(JSON.stringify({ tools: [] }), { status: 200 }))
 
 			const response = await worker.fetch(request, mockEnv, {} as any)
 			expect(response.status).toBe(200)
@@ -609,7 +591,7 @@ describe('Authentication Edge Cases', () => {
 
 			const response = await worker.fetch(request, mockEnv, {} as any)
 			const responseData = await response.json()
-			
+
 			if (responseData.error) {
 				expect(responseData.error.message).toContain('authentication')
 				expect(responseData.error.message).toContain('login')
@@ -624,7 +606,7 @@ describe('Authentication Edge Cases', () => {
 
 			const response = await worker.fetch(request, mockEnv, {} as any)
 			expect(response.status).toBe(400)
-			
+
 			const text = await response.text()
 			expect(text).toContain('Missing authentication token')
 		})
@@ -642,7 +624,7 @@ describe('Authentication Edge Cases', () => {
 
 			const response = await worker.fetch(request, envWithoutCreds, {} as any)
 			expect(response.status).toBe(500)
-			
+
 			const text = await response.text()
 			expect(text).toContain('Missing credentials')
 		})
@@ -660,7 +642,7 @@ describe('Authentication Edge Cases', () => {
 			for (const payload of invalidPayloads) {
 				const token = await createSessionToken(payload, 'secret')
 				const verified = await verifySessionToken(token, 'secret')
-				
+
 				// Should create token but may have empty/null fields
 				expect(verified).not.toBeNull()
 			}
@@ -675,7 +657,7 @@ describe('Authentication Edge Cases', () => {
 
 			const token = await createSessionToken(longPayload, 'secret')
 			const verified = await verifySessionToken(token, 'secret')
-			
+
 			expect(verified?.userId).toBe(longPayload.userId)
 			expect(verified?.sessionKey).toBe(longPayload.sessionKey)
 			expect(verified?.username).toBe(longPayload.username)
@@ -692,7 +674,7 @@ describe('Authentication Edge Cases', () => {
 			try {
 				const token = await createSessionToken(unicodePayload, 'secret')
 				const verified = await verifySessionToken(token, 'secret')
-				
+
 				expect(verified?.userId).toBe(unicodePayload.userId)
 				expect(verified?.sessionKey).toBe(unicodePayload.sessionKey)
 				expect(verified?.username).toBe(unicodePayload.username)
@@ -710,11 +692,11 @@ describe('Authentication Edge Cases', () => {
 			}
 
 			// Create token that expires in 1 second
-			const token = await createSessionToken(payload, 'secret', 1/3600)
-			
+			const token = await createSessionToken(payload, 'secret', 1 / 3600)
+
 			// Advance time by 2 seconds
 			vi.advanceTimersByTime(2000)
-			
+
 			const verified = await verifySessionToken(token, 'secret')
 			expect(verified).toBeNull() // Should be expired
 		})
@@ -728,14 +710,14 @@ describe('Authentication Edge Cases', () => {
 
 			// Create token with 2 hour expiration
 			const token = await createSessionToken(payload, 'secret', 2)
-			
+
 			// Test that token is valid immediately
 			const verified = await verifySessionToken(token, 'secret')
 			expect(verified).not.toBeNull() // Should be valid
-			
+
 			// Forward in time to expire it (more than 2 hours)
 			vi.advanceTimersByTime(2.5 * 3600000) // 2.5 hours
-			
+
 			const expiredVerified = await verifySessionToken(token, 'secret')
 			expect(expiredVerified).toBeNull() // Should be expired
 		})

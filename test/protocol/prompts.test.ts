@@ -16,8 +16,8 @@ describe('MCP Prompts', () => {
 
 			// The current implementation returns the Last.fm prompts list
 			expect(result.prompts).toHaveLength(6)
-			expect(result.prompts.some(p => p.name === 'listening_insights')).toBe(true)
-			expect(result.prompts.some(p => p.name === 'music_discovery')).toBe(true)
+			expect(result.prompts.some((p) => p.name === 'listening_insights')).toBe(true)
+			expect(result.prompts.some((p) => p.name === 'music_discovery')).toBe(true)
 		})
 
 		it('should handle empty params', () => {
@@ -38,9 +38,9 @@ describe('MCP Prompts', () => {
 	describe('handlePromptsGet', () => {
 		// Tests for Last.fm prompt implementations
 		it('should return listening_insights prompt', () => {
-			const result = handlePromptsGet({ 
+			const result = handlePromptsGet({
 				name: 'listening_insights',
-				arguments: { username: 'testuser' }
+				arguments: { username: 'testuser' },
 			})
 
 			expect(result).toMatchObject({
@@ -78,9 +78,9 @@ describe('MCP Prompts', () => {
 		})
 
 		it('should return track_analysis prompt', () => {
-			const result = handlePromptsGet({ 
+			const result = handlePromptsGet({
 				name: 'track_analysis',
-				arguments: { artist: 'The Beatles', track: 'Come Together' }
+				arguments: { artist: 'The Beatles', track: 'Come Together' },
 			})
 
 			expect(result).toMatchObject({
@@ -98,9 +98,9 @@ describe('MCP Prompts', () => {
 		})
 
 		it('should return album_analysis prompt', () => {
-			const result = handlePromptsGet({ 
+			const result = handlePromptsGet({
 				name: 'album_analysis',
-				arguments: { artist: 'The Beatles', album: 'Abbey Road' }
+				arguments: { artist: 'The Beatles', album: 'Abbey Road' },
 			})
 
 			expect(result).toMatchObject({
@@ -118,9 +118,9 @@ describe('MCP Prompts', () => {
 		})
 
 		it('should return artist_analysis prompt', () => {
-			const result = handlePromptsGet({ 
+			const result = handlePromptsGet({
 				name: 'artist_analysis',
-				arguments: { artist: 'The Beatles' }
+				arguments: { artist: 'The Beatles' },
 			})
 
 			expect(result).toMatchObject({
@@ -138,9 +138,9 @@ describe('MCP Prompts', () => {
 		})
 
 		it('should return listening_habits prompt', () => {
-			const result = handlePromptsGet({ 
+			const result = handlePromptsGet({
 				name: 'listening_habits',
-				arguments: { username: 'testuser', timeframe: 'recent' }
+				arguments: { username: 'testuser', timeframe: 'recent' },
 			})
 
 			expect(result).toMatchObject({

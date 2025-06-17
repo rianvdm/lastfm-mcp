@@ -37,7 +37,7 @@ describe('Rate Limiting and Exponential Backoff Integration', () => {
 	beforeEach(() => {
 		vi.clearAllMocks()
 		vi.useFakeTimers()
-		
+
 		// Reset rate limiting to allow requests by default
 		mockMCP_RL.get.mockResolvedValue(null)
 		mockMCP_RL.put.mockResolvedValue(undefined)
@@ -62,7 +62,7 @@ describe('Rate Limiting and Exponential Backoff Integration', () => {
 			// Mock initial state and track request counts
 			let minuteCount = 0
 			let hourCount = 0
-			
+
 			mockMCP_RL.get.mockImplementation((key) => {
 				if (key.includes(':minute:')) {
 					return Promise.resolve(minuteCount > 0 ? minuteCount.toString() : null)
@@ -138,10 +138,7 @@ describe('Rate Limiting and Exponential Backoff Integration', () => {
 			const userId = 'user123'
 
 			// Fire two requests concurrently
-			const [result1, result2] = await Promise.all([
-				rateLimiter.checkLimit(userId),
-				rateLimiter.checkLimit(userId),
-			])
+			const [result1, result2] = await Promise.all([rateLimiter.checkLimit(userId), rateLimiter.checkLimit(userId)])
 
 			// Both should see the same count initially, but behavior may vary
 			// This test verifies the system doesn't crash under race conditions
@@ -187,7 +184,7 @@ describe('Rate Limiting and Exponential Backoff Integration', () => {
 
 			expect(result.allowed).toBe(false)
 			expect(result.resetTime).toBeDefined()
-			
+
 			// Reset time should be the next minute window
 			const expectedResetTime = Math.floor((mockTime + 60000) / 60000) * 60000
 			expect(result.resetTime).toBe(expectedResetTime)
@@ -202,13 +199,10 @@ describe('Rate Limiting and Exponential Backoff Integration', () => {
 		})
 
 		it('should retry on 429 rate limit errors from Last.fm API', async () => {
-			const mockResponse429 = new Response(
-				JSON.stringify({ error: 29, message: 'Rate limit exceeded' }),
-				{
-					status: 429,
-					headers: { 'Retry-After': '5' },
-				}
-			)
+			const mockResponse429 = new Response(JSON.stringify({ error: 29, message: 'Rate limit exceeded' }), {
+				status: 429,
+				headers: { 'Retry-After': '5' },
+			})
 
 			const mockResponseSuccess = new Response(
 				JSON.stringify({
@@ -217,13 +211,10 @@ describe('Rate Limiting and Exponential Backoff Integration', () => {
 						'@attr': { user: 'testuser', page: '1', perPage: '50', totalPages: '1', total: '0' },
 					},
 				}),
-				{ status: 200 }
+				{ status: 200 },
 			)
 
-			globalThis.fetch = vi
-				.fn()
-				.mockResolvedValueOnce(mockResponse429)
-				.mockResolvedValueOnce(mockResponseSuccess)
+			globalThis.fetch = vi.fn().mockResolvedValueOnce(mockResponse429).mockResolvedValueOnce(mockResponseSuccess)
 
 			const promise = lastfmClient.getRecentTracks('testuser', 10)
 
@@ -248,7 +239,7 @@ describe('Rate Limiting and Exponential Backoff Integration', () => {
 						'@attr': { user: 'testuser', page: '1', perPage: '50', totalPages: '1', total: '0' },
 					},
 				}),
-				{ status: 200 }
+				{ status: 200 },
 			)
 
 			globalThis.fetch = vi
@@ -278,16 +269,13 @@ describe('Rate Limiting and Exponential Backoff Integration', () => {
 		it('should use throttling configuration correctly', async () => {
 			// Just verify that the client has the correct configuration
 			expect(lastfmClient).toBeDefined()
-			
+
 			// Verify that fetch retry is used by checking if it's imported
 			expect(typeof lastfmClient.getRecentTracks).toBe('function')
 		})
 
 		it('should not retry on 4xx client errors', async () => {
-			const mockResponse404 = new Response(
-				JSON.stringify({ error: 6, message: 'User not found' }),
-				{ status: 404 }
-			)
+			const mockResponse404 = new Response(JSON.stringify({ error: 6, message: 'User not found' }), { status: 404 })
 
 			globalThis.fetch = vi.fn().mockResolvedValue(mockResponse404)
 
@@ -306,7 +294,7 @@ describe('Rate Limiting and Exponential Backoff Integration', () => {
 					sessionKey: 'test-session',
 					userId: 'testuser',
 					username: 'testuser',
-				})
+				}),
 			)
 
 			// Mock rate limiting to return near limit
@@ -340,8 +328,8 @@ describe('Rate Limiting and Exponential Backoff Integration', () => {
 							'@attr': { user: 'testuser', page: '1', perPage: '10', totalPages: '1', total: '0' },
 						},
 					}),
-					{ status: 200 }
-				)
+					{ status: 200 },
+				),
 			)
 
 			const response = await worker.fetch(request, mockEnv, {} as any)
@@ -384,7 +372,7 @@ describe('Rate Limiting and Exponential Backoff Integration', () => {
 		it('should handle burst traffic gracefully', async () => {
 			// Mock rate limiting - start fresh and track per-window counts
 			let requestCounts: Record<string, number> = {}
-			
+
 			mockMCP_RL.get.mockImplementation((key) => {
 				const count = requestCounts[key] || 0
 				return Promise.resolve(count > 0 ? count.toString() : null)
@@ -418,7 +406,7 @@ describe('Rate Limiting and Exponential Backoff Integration', () => {
 
 			// All requests should be accounted for
 			expect(successCount + rateLimitedCount).toBe(15)
-			
+
 			// Should have at least some successful requests
 			expect(successCount).toBeGreaterThan(0)
 		})
@@ -427,9 +415,7 @@ describe('Rate Limiting and Exponential Backoff Integration', () => {
 	describe('Error Recovery and Resilience', () => {
 		it('should recover gracefully from KV storage failures', async () => {
 			// Mock KV to fail initially, then succeed
-			mockMCP_RL.get
-				.mockRejectedValueOnce(new Error('KV unavailable'))
-				.mockResolvedValue('5')
+			mockMCP_RL.get.mockRejectedValueOnce(new Error('KV unavailable')).mockResolvedValue('5')
 
 			const rateLimiter = new RateLimiter(mockMCP_RL as any)
 
@@ -452,7 +438,7 @@ describe('Rate Limiting and Exponential Backoff Integration', () => {
 			const rateLimiter = new RateLimiter(mockMCP_RL as any)
 
 			const result = await rateLimiter.checkLimit('user123')
-			
+
 			// Should treat invalid data as 0 and allow request
 			expect(result.allowed).toBe(true)
 		})

@@ -91,26 +91,32 @@ The server exposes the following MCP resources:
    - Includes: track listing, tags, release info, user play count, similar albums
 
 4. **User Recent Tracks Resource** (`lastfm://user/{username}/recent`)
+
    - User's recent listening history
    - Supports pagination and time filtering
 
 5. **User Top Artists Resource** (`lastfm://user/{username}/top-artists`)
+
    - User's most played artists by time period
    - Supports different time periods (7day, 1month, 3month, 6month, 12month, overall)
 
 6. **User Top Albums Resource** (`lastfm://user/{username}/top-albums`)
+
    - User's most played albums by time period
    - Supports different time periods and includes play counts
 
 7. **User Loved Tracks Resource** (`lastfm://user/{username}/loved`)
+
    - User's loved/favorite tracks
    - Includes track metadata and love timestamps
 
 8. **User Profile Resource** (`lastfm://user/{username}/profile`)
+
    - User profile information and statistics
    - Includes: registration date, play count, country, age, gender (if public)
 
 9. **Similar Artists Resource** (`lastfm://artist/{artist}/similar`)
+
    - Artists similar to the specified artist
    - Includes similarity scores and metadata
 
@@ -355,12 +361,14 @@ Clients can list and use available resources and tools via standard MCP methods:
 ## Performance Considerations
 
 ### Caching Strategy
+
 - Cache static data (artist info, album details) for 24 hours
 - Cache user data (recent tracks, top artists) for 5 minutes
 - Implement cache invalidation for real-time updates
 - Use Workers KV for distributed caching
 
 ### Optimization
+
 - Batch API requests where possible
 - Implement request deduplication
 - Use streaming responses for large datasets
@@ -369,6 +377,7 @@ Clients can list and use available resources and tools via standard MCP methods:
 ## Monitoring & Observability
 
 ### Metrics
+
 - Request latency and success rates
 - Last.fm API quota usage
 - User authentication success/failure rates
@@ -376,6 +385,7 @@ Clients can list and use available resources and tools via standard MCP methods:
 - Error rates by endpoint
 
 ### Alerting
+
 - Rate limit approaching thresholds
 - Authentication failure spikes
 - Last.fm API errors
@@ -384,6 +394,7 @@ Clients can list and use available resources and tools via standard MCP methods:
 ## Production Readiness Checklist
 
 ### Core Functionality
+
 - [ ] All MCP protocol methods implemented and tested
 - [ ] Complete Last.fm API integration with all required endpoints
 - [ ] Robust authentication flow with session management
@@ -392,6 +403,7 @@ Clients can list and use available resources and tools via standard MCP methods:
 - [ ] Proper HTTP status codes and responses
 
 ### Performance & Scalability
+
 - [ ] Caching implemented for frequently accessed data
 - [ ] Rate limiting with graceful degradation
 - [ ] Request deduplication and batching
@@ -400,6 +412,7 @@ Clients can list and use available resources and tools via standard MCP methods:
 - [ ] Database connection pooling (if applicable)
 
 ### Security
+
 - [ ] Secure session key storage and management
 - [ ] CORS configuration for web clients
 - [ ] Input validation against injection attacks
@@ -408,6 +421,7 @@ Clients can list and use available resources and tools via standard MCP methods:
 - [ ] API key rotation capability
 
 ### Reliability
+
 - [ ] Comprehensive error handling for all failure modes
 - [ ] Retry logic with exponential backoff
 - [ ] Circuit breaker for upstream dependencies
@@ -416,6 +430,7 @@ Clients can list and use available resources and tools via standard MCP methods:
 - [ ] Proper timeout handling
 
 ### Monitoring & Observability
+
 - [ ] Structured logging with correlation IDs
 - [ ] Metrics collection for key performance indicators
 - [ ] Error tracking and alerting
@@ -424,6 +439,7 @@ Clients can list and use available resources and tools via standard MCP methods:
 - [ ] Distributed tracing (if needed)
 
 ### Testing
+
 - [ ] Unit tests with ≥80% coverage
 - [ ] Integration tests for all workflows
 - [ ] End-to-end tests with real Last.fm API
@@ -432,6 +448,7 @@ Clients can list and use available resources and tools via standard MCP methods:
 - [ ] Chaos engineering for resilience
 
 ### Documentation
+
 - [ ] Complete API documentation
 - [ ] Setup and deployment guides
 - [ ] Troubleshooting documentation
@@ -440,6 +457,7 @@ Clients can list and use available resources and tools via standard MCP methods:
 - [ ] User guides and examples
 
 ### Deployment & Operations
+
 - [ ] CI/CD pipeline with automated testing
 - [ ] Environment-specific configurations
 - [ ] Blue-green or canary deployment strategy
@@ -450,7 +468,7 @@ Clients can list and use available resources and tools via standard MCP methods:
 ## Future Enhancements (Deferred)
 
 - WebSocket transport support
-- Real-time scrobbling notifications  
+- Real-time scrobbling notifications
 - Additional MCP capabilities (sampling)
 - Advanced recommendation algorithms using ML
 - Multi-user comparison tools

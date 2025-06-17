@@ -17,7 +17,7 @@ describe('Mood Mapping', () => {
 			expect(hasMoodContent('The Dark Side of the Moon')).toBe(false)
 			expect(hasMoodContent('dark side of the moon')).toBe(false)
 			expect(hasMoodContent('Pink Floyd Dark Side of the Moon')).toBe(false)
-			
+
 			// Other album title patterns
 			expect(hasMoodContent('The Bright Side of Life')).toBe(false)
 			expect(hasMoodContent('Dark Star')).toBe(false)
@@ -82,9 +82,9 @@ describe('Mood Mapping', () => {
 			// analyzeMoodQuery will detect "dark" regardless
 			expect(result.detectedMoods).toContain('dark')
 			expect(result.confidence).toBeGreaterThan(0)
-			
+
 			// But hasMoodContent should prevent this from being used
 			expect(hasMoodContent('Dark Side of the Moon')).toBe(false)
 		})
 	})
-}) 
+})

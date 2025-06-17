@@ -68,11 +68,13 @@ export interface LastfmArtist {
 
 export interface LastfmAlbum {
 	name: string
-	artist: string | {
-		name: string
-		mbid?: string
-		url?: string
-	}
+	artist:
+		| string
+		| {
+				name: string
+				mbid?: string
+				url?: string
+		  }
 	playcount?: string
 	mbid?: string
 	url: string
@@ -276,9 +278,11 @@ export interface LastfmUserInfoResponse {
 
 export interface LastfmSimilarArtistsResponse {
 	similarartists: {
-		artist: Array<LastfmArtist & {
-			match: string
-		}>
+		artist: Array<
+			LastfmArtist & {
+				match: string
+			}
+		>
 		'@attr': {
 			artist: string
 		}
@@ -287,9 +291,11 @@ export interface LastfmSimilarArtistsResponse {
 
 export interface LastfmSimilarTracksResponse {
 	similartracks: {
-		track: Array<LastfmTrack & {
-			match: string
-		}>
+		track: Array<
+			LastfmTrack & {
+				match: string
+			}
+		>
 		'@attr': {
 			artist: string
 			track: string
@@ -348,7 +354,7 @@ export class LastfmClient {
 		})
 
 		await this.throttleRequest()
-		
+
 		const response = await fetchWithRetry(
 			`${this.baseUrl}?${searchParams.toString()}`,
 			{
@@ -360,7 +366,7 @@ export class LastfmClient {
 			this.lastfmRetryOptions,
 		)
 
-		const data = await response.json() as LastfmApiResponse<T>
+		const data = (await response.json()) as LastfmApiResponse<T>
 
 		if ('error' in data) {
 			throw new Error(`Last.fm API error ${data.error}: ${data.message}`)
@@ -372,13 +378,7 @@ export class LastfmClient {
 	/**
 	 * Get user's recent tracks
 	 */
-	async getRecentTracks(
-		username: string,
-		limit = 50,
-		from?: number,
-		to?: number,
-		page?: number
-	): Promise<LastfmRecentTracksResponse> {
+	async getRecentTracks(username: string, limit = 50, from?: number, to?: number, page?: number): Promise<LastfmRecentTracksResponse> {
 		const params: Record<string, string> = {
 			method: 'user.getRecentTracks',
 			user: username,
@@ -398,7 +398,7 @@ export class LastfmClient {
 	async getTopArtists(
 		username: string,
 		period: '7day' | '1month' | '3month' | '6month' | '12month' | 'overall' = 'overall',
-		limit = 50
+		limit = 50,
 	): Promise<LastfmTopArtistsResponse> {
 		return this.makeRequest<LastfmTopArtistsResponse>({
 			method: 'user.getTopArtists',
@@ -414,7 +414,7 @@ export class LastfmClient {
 	async getTopAlbums(
 		username: string,
 		period: '7day' | '1month' | '3month' | '6month' | '12month' | 'overall' = 'overall',
-		limit = 50
+		limit = 50,
 	): Promise<LastfmTopAlbumsResponse> {
 		return this.makeRequest<LastfmTopAlbumsResponse>({
 			method: 'user.getTopAlbums',

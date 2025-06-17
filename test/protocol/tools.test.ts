@@ -136,7 +136,7 @@ describe('Tools', () => {
 			const responseText = result.content[0].text
 			expect(responseText).toContain('How to authenticate:')
 			expect(responseText).toContain('Visit: https://lastfm-mcp-prod.rian-db8.workers.dev/login')
-			expect(responseText).toContain('What you\'ll be able to do after authentication:')
+			expect(responseText).toContain("What you'll be able to do after authentication:")
 		})
 	})
 
@@ -206,9 +206,9 @@ describe('Tools', () => {
 						artist: { '#text': 'Test Artist' },
 						album: { '#text': 'Test Album' },
 						date: { '#text': '01 Jan 2024, 12:00' },
-						'@attr': { nowplaying: 'true' }
-					}
-				]
+						'@attr': { nowplaying: 'true' },
+					},
+				],
 			}
 
 			mockLastfmClient.getUserInfo.mockResolvedValue(mockUserProfile)

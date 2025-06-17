@@ -10,25 +10,25 @@ export const LASTFM_RESOURCES: Resource[] = [
 	{
 		uri: 'lastfm://user/{username}/recent',
 		name: 'Recent Tracks',
-		description: 'User\'s recently played tracks with timestamps and metadata',
+		description: "User's recently played tracks with timestamps and metadata",
 		mimeType: 'application/json',
 	},
 	{
 		uri: 'lastfm://user/{username}/top-artists',
 		name: 'Top Artists',
-		description: 'User\'s most played artists by time period',
+		description: "User's most played artists by time period",
 		mimeType: 'application/json',
 	},
 	{
 		uri: 'lastfm://user/{username}/top-albums',
 		name: 'Top Albums',
-		description: 'User\'s most played albums by time period',
+		description: "User's most played albums by time period",
 		mimeType: 'application/json',
 	},
 	{
 		uri: 'lastfm://user/{username}/loved',
 		name: 'Loved Tracks',
-		description: 'User\'s loved/favorite tracks',
+		description: "User's loved/favorite tracks",
 		mimeType: 'application/json',
 	},
 	{
@@ -75,13 +75,16 @@ export interface LastfmTool {
 	description: string
 	inputSchema: {
 		type: 'object'
-		properties: Record<string, {
-			type: string
-			description: string
-			enum?: string[]
-			minimum?: number
-			maximum?: number
-		}>
+		properties: Record<
+			string,
+			{
+				type: string
+				description: string
+				enum?: string[]
+				minimum?: number
+				maximum?: number
+			}
+		>
 		required: string[]
 	}
 }
@@ -121,7 +124,7 @@ export const LASTFM_TOOLS: LastfmTool[] = [
 	},
 	{
 		name: 'get_recent_tracks',
-		description: 'Get user\'s recently played tracks with pagination support',
+		description: "Get user's recently played tracks with pagination support",
 		inputSchema: {
 			type: 'object',
 			properties: {
@@ -154,7 +157,7 @@ export const LASTFM_TOOLS: LastfmTool[] = [
 	},
 	{
 		name: 'get_top_artists',
-		description: 'Get user\'s top artists by time period',
+		description: "Get user's top artists by time period",
 		inputSchema: {
 			type: 'object',
 			properties: {
@@ -179,7 +182,7 @@ export const LASTFM_TOOLS: LastfmTool[] = [
 	},
 	{
 		name: 'get_top_albums',
-		description: 'Get user\'s top albums by time period',
+		description: "Get user's top albums by time period",
 		inputSchema: {
 			type: 'object',
 			properties: {
@@ -204,7 +207,7 @@ export const LASTFM_TOOLS: LastfmTool[] = [
 	},
 	{
 		name: 'get_loved_tracks',
-		description: 'Get user\'s loved/favorite tracks',
+		description: "Get user's loved/favorite tracks",
 		inputSchema: {
 			type: 'object',
 			properties: {
@@ -391,7 +394,7 @@ export const LASTFM_TOOLS: LastfmTool[] = [
 export const LASTFM_PROMPTS: Prompt[] = [
 	{
 		name: 'listening_insights',
-		description: 'Get insights about user\'s listening habits and patterns',
+		description: "Get insights about user's listening habits and patterns",
 		arguments: [
 			{
 				name: 'username',
@@ -466,7 +469,7 @@ export const LASTFM_PROMPTS: Prompt[] = [
 	},
 	{
 		name: 'listening_habits',
-		description: 'Analyze and summarize user\'s listening habits',
+		description: "Analyze and summarize user's listening habits",
 		arguments: [
 			{
 				name: 'username',

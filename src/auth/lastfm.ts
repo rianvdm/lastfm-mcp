@@ -22,7 +22,7 @@ async function md5(message: string): Promise<string> {
 	const msgBuffer = new TextEncoder().encode(message)
 	const hashBuffer = await crypto.subtle.digest('MD5', msgBuffer)
 	const hashArray = Array.from(new Uint8Array(hashBuffer))
-	return hashArray.map(b => b.toString(16).padStart(2, '0')).join('')
+	return hashArray.map((b) => b.toString(16).padStart(2, '0')).join('')
 }
 
 export class LastfmAuth {
@@ -69,7 +69,7 @@ export class LastfmAuth {
 	async generateMethodSignature(params: Record<string, string>): Promise<string> {
 		// Sort parameters by key
 		const sortedKeys = Object.keys(params).sort()
-		
+
 		// Create signature string
 		let signatureString = ''
 		for (const key of sortedKeys) {
@@ -89,7 +89,7 @@ export class LastfmAuth {
 		const params = new URLSearchParams({
 			api_key: this.apiKey,
 		})
-		
+
 		if (callbackUrl) {
 			params.set('cb', callbackUrl)
 		}
@@ -134,7 +134,7 @@ export class LastfmAuth {
 				this.lastfmRetryOptions,
 			)
 
-			const data = await response.json() as LastfmSessionResponse | LastfmError
+			const data = (await response.json()) as LastfmSessionResponse | LastfmError
 
 			if ('error' in data) {
 				throw new Error(`Last.fm API error ${data.error}: ${data.message}`)
@@ -163,7 +163,7 @@ export class LastfmAuth {
 	async createSignedParams(
 		method: string,
 		sessionKey: string,
-		additionalParams: Record<string, string> = {}
+		additionalParams: Record<string, string> = {},
 	): Promise<Record<string, string>> {
 		const params = {
 			method,

@@ -8,13 +8,13 @@ This document outlines the conversion of the Discogs MCP Server to a Last.fm MCP
 
 1. **Foundation Updates**  
    1.1 Update project metadata and documentation  
-   1.2 Modify API client from Discogs to Last.fm  
+   1.2 Modify API client from Discogs to Last.fm
 2. **Authentication Changes**  
    2.1 Replace Discogs OAuth with Last.fm API key authentication  
-   2.2 Update session management  
+   2.2 Update session management
 3. **Data Model Updates**  
    3.1 Replace Discogs data types with Last.fm equivalents  
-   3.2 Update resource and tool schemas  
+   3.2 Update resource and tool schemas
 4. **Core Feature Adaptation**  
    4.1 MCP Resources (tracks, albums, artists, user data)  
    4.2 MCP Tools (recent tracks, top artists, loved tracks, etc.)  
@@ -23,10 +23,10 @@ This document outlines the conversion of the Discogs MCP Server to a Last.fm MCP
    4.5 Music recommendations based on listening history
 5. **Configuration Updates**  
    5.1 Update Cloudflare Workers configuration  
-   5.2 Environment variables and secrets  
+   5.2 Environment variables and secrets
 6. **Testing & Validation**  
    6.1 Update tests for Last.fm API integration  
-   6.2 Validate MCP protocol compliance  
+   6.2 Validate MCP protocol compliance
 7. **Documentation**  
    7.1 Update README and usage instructions  
    7.2 Create Last.fm-specific examples

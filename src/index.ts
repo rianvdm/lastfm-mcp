@@ -167,12 +167,16 @@ async function handleLogin(request: Request, env: Env): Promise<Response> {
 
 		// Store connection ID temporarily for callback
 		if (connectionId) {
-			await env.MCP_SESSIONS.put(`auth-connection:${connectionId}`, JSON.stringify({
-				connectionId: connectionId,
-				timestamp: Date.now(),
-			}), {
-				expirationTtl: 600, // 10 minutes - Authentication flow should complete within this time
-			})
+			await env.MCP_SESSIONS.put(
+				`auth-connection:${connectionId}`,
+				JSON.stringify({
+					connectionId: connectionId,
+					timestamp: Date.now(),
+				}),
+				{
+					expirationTtl: 600, // 10 minutes - Authentication flow should complete within this time
+				},
+			)
 		}
 
 		// Redirect to Last.fm authorization page
@@ -228,7 +232,7 @@ async function handleCallback(request: Request, env: Env): Promise<Response> {
 
 		// Determine final connection ID
 		let finalConnectionId = connectionId || 'unknown'
-		
+
 		// Try to retrieve stored connection ID if not provided
 		if (!connectionId) {
 			// Look for any stored connection for this session
@@ -252,7 +256,7 @@ async function handleCallback(request: Request, env: Env): Promise<Response> {
 					expiresAt: Date.now() + 24 * 60 * 60 * 1000, // 24 hours
 					connectionId: finalConnectionId,
 				}
-				
+
 				// Debug log what we're storing
 				console.log('Storing session data for connection:', finalConnectionId, {
 					hasUserId: !!sessionData.userId,
@@ -262,18 +266,18 @@ async function handleCallback(request: Request, env: Env): Promise<Response> {
 					username: sessionData.username,
 					sessionKey: sessionData.sessionKey ? 'present' : 'missing',
 				})
-				
+
 				// Store with connection-specific key
 				await env.MCP_SESSIONS.put(`session:${finalConnectionId}`, JSON.stringify(sessionData), {
 					expirationTtl: 24 * 60 * 60, // 24 hours
 				})
-				
+
 				// Mark the SSE connection as authenticated (only for non-mcp-remote connections)
 				// mcp-remote connections don't have SSE connections, they use HTTP POST
 				if (!finalConnectionId.startsWith('mcp-remote-')) {
 					authenticateConnection(finalConnectionId, username)
 				}
-				
+
 				console.log(`Last.fm session stored for connection ${finalConnectionId}, user: ${username}`)
 			} catch (error) {
 				console.warn('Could not save session to KV:', error)
@@ -289,9 +293,10 @@ async function handleCallback(request: Request, env: Env): Promise<Response> {
 			'Max-Age=86400', // 24 hours in seconds
 		].join('; ')
 
-		const responseMessage = finalConnectionId !== 'unknown' 
-			? `Authentication successful! Your Last.fm account (${username}) is now connected to your MCP session.`
-			: `Authentication successful! You can now use the MCP server to access your Last.fm listening data for ${username}.`
+		const responseMessage =
+			finalConnectionId !== 'unknown'
+				? `Authentication successful! Your Last.fm account (${username}) is now connected to your MCP session.`
+				: `Authentication successful! You can now use the MCP server to access your Last.fm listening data for ${username}.`
 
 		return new Response(responseMessage, {
 			status: 200,
@@ -302,7 +307,9 @@ async function handleCallback(request: Request, env: Env): Promise<Response> {
 		})
 	} catch (error) {
 		console.error('Last.fm authentication callback error:', error)
-		return new Response(`Last.fm authentication callback failed: ${error instanceof Error ? error.message : 'Unknown error'}`, { status: 500 })
+		return new Response(`Last.fm authentication callback failed: ${error instanceof Error ? error.message : 'Unknown error'}`, {
+			status: 500,
+		})
 	}
 }
 
@@ -322,7 +329,7 @@ function handleSSEConnection(): Response {
 async function handleMCPRequestWithSSEContext(request: Request, env?: Env): Promise<Response> {
 	// Check if we already have a connection ID header
 	let connectionId = request.headers.get('X-Connection-ID')
-	
+
 	// If no connection ID, create a consistent one for this client session
 	// This enables mcp-remote to work properly by providing stable connection-specific URLs
 	if (!connectionId) {
@@ -332,29 +339,31 @@ async function handleMCPRequestWithSSEContext(request: Request, env?: Env): Prom
 		const userAgent = request.headers.get('User-Agent') || 'unknown'
 		// Use daily timestamp to ensure connection ID is stable for 24 hours
 		const timestamp = Math.floor(Date.now() / (1000 * 60 * 60 * 24)) // Changes every 24 hours
-		
+
 		// Create a hash-based connection ID that's consistent for the same client/day
 		const encoder = new TextEncoder()
 		const data = encoder.encode(`${clientIP}-${userAgent}-${timestamp}`)
 		const hashBuffer = await crypto.subtle.digest('SHA-256', data)
 		const hashArray = new Uint8Array(hashBuffer)
-		const hashHex = Array.from(hashArray).map(b => b.toString(16).padStart(2, '0')).join('')
-		
+		const hashHex = Array.from(hashArray)
+			.map((b) => b.toString(16).padStart(2, '0'))
+			.join('')
+
 		connectionId = `mcp-remote-${hashHex.substring(0, 16)}`
-		
+
 		// Create a new request with the connection ID header
 		const newHeaders = new Headers(request.headers)
 		newHeaders.set('X-Connection-ID', connectionId)
-		
+
 		const newRequest = new Request(request.url, {
 			method: request.method,
 			headers: newHeaders,
 			body: request.body,
 		})
-		
+
 		return handleMCPRequest(newRequest, env)
 	}
-	
+
 	// If we have a connection ID, use the normal handler
 	return handleMCPRequest(request, env)
 }
@@ -493,9 +502,9 @@ async function handleMCPRequest(request: Request, env?: Env): Promise<Response> 
 
 		// If no response (notification), return 204 No Content
 		if (!response) {
-			return new Response(null, { 
+			return new Response(null, {
 				status: 204,
-				headers: addCorsHeaders()
+				headers: addCorsHeaders(),
 			})
 		}
 
@@ -586,21 +595,21 @@ async function handleMCPAuth(request: Request, env: Env): Promise<Response> {
 		}
 
 		const baseUrl = 'https://lastfm-mcp-prod.rian-db8.workers.dev'
-	
-	// Check for connection ID to provide connection-specific login URL
-	const connectionId = request.headers.get('X-Connection-ID')
-	const loginUrl = connectionId ? `${baseUrl}/login?connection_id=${connectionId}` : `${baseUrl}/login`
-	
-	return new Response(
-		JSON.stringify({
-			error: 'Not authenticated',
-			message: `Please visit ${loginUrl} to authenticate with Last.fm first`,
-		}),
-		{
-			status: 401,
-			headers: { 'Content-Type': 'application/json' },
-		},
-	)
+
+		// Check for connection ID to provide connection-specific login URL
+		const connectionId = request.headers.get('X-Connection-ID')
+		const loginUrl = connectionId ? `${baseUrl}/login?connection_id=${connectionId}` : `${baseUrl}/login`
+
+		return new Response(
+			JSON.stringify({
+				error: 'Not authenticated',
+				message: `Please visit ${loginUrl} to authenticate with Last.fm first`,
+			}),
+			{
+				status: 401,
+				headers: { 'Content-Type': 'application/json' },
+			},
+		)
 	} catch (error) {
 		console.error('MCP auth error:', error)
 		return new Response(

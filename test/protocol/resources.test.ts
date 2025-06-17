@@ -172,7 +172,9 @@ describe('MCP Resources', () => {
 
 		it('should throw error for invalid track URI', async () => {
 			await expect(handleResourcesRead({ uri: 'lastfm://track/' }, mockSession, mockEnv)).rejects.toThrow('Invalid Last.fm URI format')
-			await expect(handleResourcesRead({ uri: 'lastfm://track/artist' }, mockSession, mockEnv)).rejects.toThrow('Invalid Last.fm URI format')
+			await expect(handleResourcesRead({ uri: 'lastfm://track/artist' }, mockSession, mockEnv)).rejects.toThrow(
+				'Invalid Last.fm URI format',
+			)
 		})
 
 		it('should throw error for invalid artist URI', async () => {
@@ -190,7 +192,9 @@ describe('MCP Resources', () => {
 
 			vi.mocked(CachedLastfmClient).mockImplementation(() => mockCachedClient as any)
 
-			await expect(handleResourcesRead({ uri: 'lastfm://user/testuser/recent' }, mockSession, mockEnv)).rejects.toThrow('Failed to read Last.fm resource: API Error')
+			await expect(handleResourcesRead({ uri: 'lastfm://user/testuser/recent' }, mockSession, mockEnv)).rejects.toThrow(
+				'Failed to read Last.fm resource: API Error',
+			)
 		})
 	})
 })

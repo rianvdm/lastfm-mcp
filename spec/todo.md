@@ -129,6 +129,7 @@
 ## Next Version - Future Enhancements
 
 ### Advanced Testing & Monitoring
+
 - [ ] **J8** Add performance and load testing
 - [ ] **J9** Validate test coverage ≥ 80%
 - [ ] **K7** Update troubleshooting guide for Last.fm issues
@@ -145,6 +146,7 @@
 ## Key Last.fm Integration Points
 
 ### API Endpoints to Implement
+
 - `user.getRecentTracks` - Recent listening history (with pagination)
 - `user.getTopArtists` - Top artists by time period
 - `user.getTopAlbums` - Top albums by time period
@@ -158,6 +160,7 @@
 - `auth.getSession` - Convert auth token to session key
 
 ### Authentication Requirements
+
 - Last.fm API key (public identifier)
 - Last.fm shared secret (for signing requests)
 - Session key (obtained after user authorization, permanent by default)
@@ -165,6 +168,7 @@
 - Web authentication flow similar to OAuth but with custom signing
 
 ### Rate Limiting Considerations
+
 - Last.fm API: ~5 requests per second per API key
 - Implement exponential backoff and retry logic
 - Cache frequently accessed data (24h for static, 5min for user data)
@@ -172,6 +176,7 @@
 - Queue requests during high traffic periods
 
 ### Data Mapping Challenges
+
 - Map Last.fm track/artist/album data to MCP resource format
 - Handle missing metadata gracefully with defaults
 - Convert Unix timestamps to ISO 8601 format

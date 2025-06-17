@@ -351,57 +351,59 @@ describe('MCP Client Integration Tests', () => {
 				return Promise.resolve({
 					ok: true,
 					status: 200,
-					json: () => Promise.resolve({
-						artist: {
-							name: 'The Beatles',
-							mbid: '12345-abcd-6789',
-							url: 'https://www.last.fm/music/The+Beatles',
-							listeners: '2547891',
-							playcount: '28234567',
-							stats: {
-								userplaycount: '42',
+					json: () =>
+						Promise.resolve({
+							artist: {
+								name: 'The Beatles',
+								mbid: '12345-abcd-6789',
+								url: 'https://www.last.fm/music/The+Beatles',
 								listeners: '2547891',
 								playcount: '28234567',
+								stats: {
+									userplaycount: '42',
+									listeners: '2547891',
+									playcount: '28234567',
+								},
+								bio: {
+									summary: 'The Beatles were an English rock band formed in Liverpool in 1960.',
+									content: 'The Beatles were an English rock band formed in Liverpool in 1960.',
+								},
+								tags: {
+									tag: [
+										{ name: 'rock', count: 100 },
+										{ name: 'classic rock', count: 87 },
+										{ name: 'pop', count: 65 },
+									],
+								},
+								similar: {
+									artist: [
+										{ name: 'The Rolling Stones', match: '1.0' },
+										{ name: 'The Kinks', match: '0.85' },
+									],
+								},
 							},
-							bio: {
-								summary: 'The Beatles were an English rock band formed in Liverpool in 1960.',
-								content: 'The Beatles were an English rock band formed in Liverpool in 1960.',
-							},
-							tags: {
-								tag: [
-									{ name: 'rock', count: 100 },
-									{ name: 'classic rock', count: 87 },
-									{ name: 'pop', count: 65 },
-								],
-							},
-							similar: {
-								artist: [
-									{ name: 'The Rolling Stones', match: '1.0' },
-									{ name: 'The Kinks', match: '0.85' },
-								],
-							},
-						},
-					}),
+						}),
 				})
 			}
 			if (url.includes('artist.getSimilar')) {
 				return Promise.resolve({
 					ok: true,
 					status: 200,
-					json: () => Promise.resolve({
-						similarartists: {
-							artist: [
-								{ name: 'The Rolling Stones', match: '1.0' },
-								{ name: 'The Kinks', match: '0.85' },
-								{ name: 'The Who', match: '0.78' },
-								{ name: 'Led Zeppelin', match: '0.72' },
-								{ name: 'Pink Floyd', match: '0.68' },
-							],
-							'@attr': {
-								artist: 'The Beatles',
+					json: () =>
+						Promise.resolve({
+							similarartists: {
+								artist: [
+									{ name: 'The Rolling Stones', match: '1.0' },
+									{ name: 'The Kinks', match: '0.85' },
+									{ name: 'The Who', match: '0.78' },
+									{ name: 'Led Zeppelin', match: '0.72' },
+									{ name: 'Pink Floyd', match: '0.68' },
+								],
+								'@attr': {
+									artist: 'The Beatles',
+								},
 							},
-						},
-					}),
+						}),
 				})
 			}
 			if (url.includes('user.getInfo')) {
@@ -617,13 +619,13 @@ describe('MCP Client Integration Tests', () => {
 			} else {
 				expect(result1.error.code).toBe(-32008) // Last.fm API error when API not available
 			}
-			
+
 			if (result2.result) {
 				expect(result2.result).toBeDefined()
 			} else {
 				expect(result2.error.code).toBe(-32603) // Internal error when API not available
 			}
-			
+
 			if (result3.result) {
 				expect(result3.result).toBeDefined()
 			} else {

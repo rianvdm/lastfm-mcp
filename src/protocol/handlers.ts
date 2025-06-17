@@ -42,7 +42,7 @@ function getCachedLastfmClient(env?: Env): CachedLastfmClient | null {
 		console.warn('No Last.fm API key available', { hasEnv: !!env, hasApiKey: !!env?.LASTFM_API_KEY })
 		return null
 	}
-	
+
 	const client = new LastfmClient(env.LASTFM_API_KEY)
 	return new CachedLastfmClient(client, env?.MCP_SESSIONS)
 }
@@ -117,7 +117,7 @@ async function getConnectionSession(request: Request, jwtSecret: string, env?: E
 		}
 
 		const sessionData = JSON.parse(sessionDataStr)
-		
+
 		// Debug log the session data structure
 		console.log('Retrieved session data for connection:', connectionId, {
 			hasUserId: !!sessionData.userId,
@@ -126,7 +126,7 @@ async function getConnectionSession(request: Request, jwtSecret: string, env?: E
 			userId: sessionData.userId,
 			username: sessionData.username,
 		})
-		
+
 		// Verify the stored session is still valid
 		if (!sessionData.expiresAt || new Date(sessionData.expiresAt) <= new Date()) {
 			console.log('Connection session has expired')
@@ -138,7 +138,7 @@ async function getConnectionSession(request: Request, jwtSecret: string, env?: E
 			console.log('Session data incomplete, missing username or sessionKey')
 			return null // This will trigger re-authentication
 		}
-		
+
 		// Return session payload
 		return {
 			userId: sessionData.userId,
@@ -159,7 +159,7 @@ async function getConnectionSession(request: Request, jwtSecret: string, env?: E
 function generateAuthInstructions(request: Request): string {
 	const connectionId = request.headers.get('X-Connection-ID')
 	const baseUrl = 'https://lastfm-mcp-prod.rian-db8.workers.dev'
-	
+
 	if (connectionId) {
 		// Connection-specific auth instructions
 		return `visit ${baseUrl}/login?connection_id=${connectionId} to authenticate with your Last.fm account`
@@ -355,10 +355,10 @@ export function handlePromptsGet(params: unknown): PromptsGetResult {
 			if (!username) {
 				throw new Error('listening_insights prompt requires a username argument')
 			}
-			
+
 			const periodText = period ? ` over the ${period} period` : ''
 			return {
-				description: 'Get insights about user\'s listening habits and patterns',
+				description: "Get insights about user's listening habits and patterns",
 				messages: [
 					{
 						role: 'user',
@@ -377,7 +377,7 @@ export function handlePromptsGet(params: unknown): PromptsGetResult {
 			if (!username) {
 				throw new Error('music_discovery prompt requires a username argument')
 			}
-			
+
 			const genreText = genre ? ` focusing on ${genre} music` : ''
 			return {
 				description: 'Discover new music based on listening history',
@@ -399,7 +399,7 @@ export function handlePromptsGet(params: unknown): PromptsGetResult {
 			if (!artist || !track) {
 				throw new Error('track_analysis prompt requires both artist and track arguments')
 			}
-			
+
 			return {
 				description: 'Get detailed analysis of a specific track',
 				messages: [
@@ -420,7 +420,7 @@ export function handlePromptsGet(params: unknown): PromptsGetResult {
 			if (!artist || !album) {
 				throw new Error('album_analysis prompt requires both artist and album arguments')
 			}
-			
+
 			return {
 				description: 'Get detailed analysis of a specific album',
 				messages: [
@@ -440,7 +440,7 @@ export function handlePromptsGet(params: unknown): PromptsGetResult {
 			if (!artist) {
 				throw new Error('artist_analysis prompt requires an artist argument')
 			}
-			
+
 			return {
 				description: 'Get detailed analysis of a specific artist',
 				messages: [
@@ -461,10 +461,10 @@ export function handlePromptsGet(params: unknown): PromptsGetResult {
 			if (!username) {
 				throw new Error('listening_habits prompt requires a username argument')
 			}
-			
+
 			const timeframeText = timeframe ? ` with a focus on ${timeframe} listening` : ''
 			return {
-				description: 'Analyze and summarize user\'s listening habits',
+				description: "Analyze and summarize user's listening habits",
 				messages: [
 					{
 						role: 'user',
@@ -558,7 +558,7 @@ async function handleToolsCall(params: unknown, httpRequest?: Request, env?: Env
 			const connectionId = httpRequest?.headers.get('X-Connection-ID')
 			const baseUrl = 'https://lastfm-mcp-prod.rian-db8.workers.dev'
 			const authUrl = connectionId ? `${baseUrl}/login?connection_id=${connectionId}` : `${baseUrl}/login`
-			
+
 			return {
 				content: [
 					{
@@ -574,7 +574,7 @@ async function handleToolsCall(params: unknown, httpRequest?: Request, env?: Env
 			const connectionInfo = connectionId ? `\n🔗 **Connection ID:** ${connectionId}` : ''
 			const baseUrl = 'https://lastfm-mcp-prod.rian-db8.workers.dev'
 			const loginUrl = connectionId ? `${baseUrl}/login?connection_id=${connectionId}` : `${baseUrl}/login`
-			
+
 			return {
 				content: [
 					{
@@ -629,8 +629,12 @@ Your authentication will be secure and connection-specific - only you will have 
 			}
 
 			const data = await client.getTrackInfo(artist, track)
-			
-			const tags = data.track.toptags?.tag.slice(0, 5).map(tag => tag.name).join(', ') || 'None'
+
+			const tags =
+				data.track.toptags?.tag
+					.slice(0, 5)
+					.map((tag) => tag.name)
+					.join(', ') || 'None'
 
 			return {
 				content: [
@@ -670,9 +674,17 @@ ${data.track.wiki?.summary ? `**Description:** ${data.track.wiki.summary.replace
 			}
 
 			const data = await client.getArtistInfo(artist)
-			
-			const tags = data.artist.tags?.tag.slice(0, 5).map(tag => tag.name).join(', ') || 'None'
-			const similar = data.artist.similar?.artist.slice(0, 5).map(a => a.name).join(', ') || 'None'
+
+			const tags =
+				data.artist.tags?.tag
+					.slice(0, 5)
+					.map((tag) => tag.name)
+					.join(', ') || 'None'
+			const similar =
+				data.artist.similar?.artist
+					.slice(0, 5)
+					.map((a) => a.name)
+					.join(', ') || 'None'
 
 			return {
 				content: [
@@ -712,9 +724,17 @@ ${data.artist.bio?.summary ? `**Bio:** ${data.artist.bio.summary.replace(/<[^>]*
 			}
 
 			const data = await client.getAlbumInfo(artist, album)
-			
-			const tags = data.album.tags?.tag.slice(0, 5).map(tag => tag.name).join(', ') || 'None'
-			const tracks = data.album.tracks?.track.slice(0, 10).map((track, i) => `${i + 1}. ${track.name}`).join('\n') || 'Track listing not available'
+
+			const tags =
+				data.album.tags?.tag
+					.slice(0, 5)
+					.map((tag) => tag.name)
+					.join(', ') || 'None'
+			const tracks =
+				data.album.tracks?.track
+					.slice(0, 10)
+					.map((track, i) => `${i + 1}. ${track.name}`)
+					.join('\n') || 'Track listing not available'
 
 			return {
 				content: [
@@ -757,9 +777,9 @@ ${data.album.wiki?.summary ? `**Description:** ${data.album.wiki.summary.replace
 			}
 
 			const data = await client.getSimilarArtists(artist, limit)
-			
+
 			const artists = data.similarartists.artist.slice(0, limit)
-			const artistList = artists.map(a => `• ${a.name} (${Math.round(parseFloat(a.match) * 100)}% match)`).join('\n')
+			const artistList = artists.map((a) => `• ${a.name} (${Math.round(parseFloat(a.match) * 100)}% match)`).join('\n')
 
 			return {
 				content: [
@@ -789,9 +809,14 @@ ${artistList}`,
 			}
 
 			const data = await client.getSimilarTracks(artist, track, limit)
-			
+
 			const tracks = data.similartracks.track.slice(0, limit)
-			const trackList = tracks.map(t => `• ${t.artist.name} - ${t.name} (${Math.round(parseFloat(t.match) * 100)}% match)`).join('\n')
+			const trackList = tracks
+				.map((t) => {
+					const album = t.album?.['#text'] ? ` [${t.album['#text']}]` : ''
+					return `• ${t.artist.name} - ${t.name}${album} (${Math.round(parseFloat(t.match) * 100)}% match)`
+				})
+				.join('\n')
 
 			return {
 				content: [
@@ -813,7 +838,12 @@ ${trackList}`,
 /**
  * Handle authenticated tools
  */
-async function handleAuthenticatedToolsCall(params: unknown, session: SessionPayload, env?: Env, httpRequest?: Request): Promise<ToolCallResult> {
+async function handleAuthenticatedToolsCall(
+	params: unknown,
+	session: SessionPayload,
+	env?: Env,
+	httpRequest?: Request,
+): Promise<ToolCallResult> {
 	// Validate params
 	if (!isToolsCallParams(params)) {
 		throw new Error('Invalid tools/call params - name and arguments are required')
@@ -847,7 +877,7 @@ async function handleAuthenticatedToolsCall(params: unknown, session: SessionPay
 			// Get connection information if available
 			const connectionId = httpRequest?.headers.get('X-Connection-ID')
 			const connectionInfo = connectionId ? `\n🔗 **Connection ID:** ${connectionId}` : ''
-			
+
 			return {
 				content: [
 					{
@@ -886,20 +916,23 @@ Your authentication is secure and tied to your specific session.`,
 		}
 
 		case 'get_recent_tracks': {
-			const username = args?.username as string || session.username
+			const username = (args?.username as string) || session.username
 			const limit = Math.min(Math.max((args?.limit as number) || 50, 1), 1000)
 			const page = Math.max((args?.page as number) || 1, 1)
 			const from = args?.from as number
 			const to = args?.to as number
 
 			const data = await client.getRecentTracks(username, limit, from, to, page)
-			
+
 			const tracks = data.recenttracks.track.slice(0, limit)
-			const trackList = tracks.map(track => {
-				const nowPlaying = track.nowplaying ? ' 🎵 Now Playing' : ''
-				const date = track.date ? new Date(parseInt(track.date.uts) * 1000).toLocaleDateString() : ''
-				return `• ${track.artist['#text']} - ${track.name}${nowPlaying}${date ? ` (${date})` : ''}`
-			}).join('\n')
+			const trackList = tracks
+				.map((track) => {
+					const nowPlaying = track.nowplaying ? ' 🎵 Now Playing' : ''
+					const date = track.date ? new Date(parseInt(track.date.uts) * 1000).toLocaleDateString() : ''
+					const album = track.album?.['#text'] ? ` [${track.album['#text']}]` : ''
+					return `• ${track.artist['#text']} - ${track.name}${album}${nowPlaying}${date ? ` (${date})` : ''}`
+				})
+				.join('\n')
 
 			const currentPage = parseInt(data.recenttracks['@attr'].page)
 			const totalPages = parseInt(data.recenttracks['@attr'].totalPages)
@@ -926,16 +959,18 @@ ${currentPage > 1 ? `\n⬅️ **Previous page:** Use \`page: ${currentPage - 1}\
 		}
 
 		case 'get_top_artists': {
-			const username = args?.username as string || session.username
-			const period = args?.period as string || 'overall'
+			const username = (args?.username as string) || session.username
+			const period = (args?.period as string) || 'overall'
 			const limit = Math.min(Math.max((args?.limit as number) || 50, 1), 1000)
 
 			const data = await client.getTopArtists(username, period as '7day' | '1month' | '3month' | '6month' | '12month' | 'overall', limit)
-			
+
 			const artists = data.topartists.artist.slice(0, limit)
-			const artistList = artists.map((artist, index) => {
-				return `${index + 1}. ${artist.name} (${artist.playcount} plays)`
-			}).join('\n')
+			const artistList = artists
+				.map((artist, index) => {
+					return `${index + 1}. ${artist.name} (${artist.playcount} plays)`
+				})
+				.join('\n')
 
 			return {
 				content: [
@@ -952,17 +987,19 @@ Total artists: ${data.topartists['@attr'].total}`,
 		}
 
 		case 'get_top_albums': {
-			const username = args?.username as string || session.username
-			const period = args?.period as string || 'overall'
+			const username = (args?.username as string) || session.username
+			const period = (args?.period as string) || 'overall'
 			const limit = Math.min(Math.max((args?.limit as number) || 50, 1), 1000)
 
 			const data = await client.getTopAlbums(username, period as '7day' | '1month' | '3month' | '6month' | '12month' | 'overall', limit)
-			
+
 			const albums = data.topalbums.album.slice(0, limit)
-			const albumList = albums.map((album, index) => {
-				const artist = typeof album.artist === 'string' ? album.artist : album.artist.name
-				return `${index + 1}. ${artist} - ${album.name} (${album.playcount} plays)`
-			}).join('\n')
+			const albumList = albums
+				.map((album, index) => {
+					const artist = typeof album.artist === 'string' ? album.artist : album.artist.name
+					return `${index + 1}. ${artist} - ${album.name} (${album.playcount} plays)`
+				})
+				.join('\n')
 
 			return {
 				content: [
@@ -979,15 +1016,18 @@ Total albums: ${data.topalbums['@attr'].total}`,
 		}
 
 		case 'get_loved_tracks': {
-			const username = args?.username as string || session.username
+			const username = (args?.username as string) || session.username
 			const limit = Math.min(Math.max((args?.limit as number) || 50, 1), 1000)
 
 			const data = await client.getLovedTracks(username, limit)
-			
+
 			const tracks = data.lovedtracks.track.slice(0, limit)
-			const trackList = tracks.map(track => {
-				return `• ${track.artist.name} - ${track.name}`
-			}).join('\n')
+			const trackList = tracks
+				.map((track) => {
+					const album = track.album?.['#text'] ? ` [${track.album['#text']}]` : ''
+					return `• ${track.artist.name} - ${track.name}${album}`
+				})
+				.join('\n')
 
 			return {
 				content: [
@@ -1006,15 +1046,19 @@ Total loved tracks: ${data.lovedtracks['@attr'].total}`,
 		case 'get_track_info': {
 			const artist = args?.artist as string
 			const track = args?.track as string
-			const username = args?.username as string || session.username
+			const username = (args?.username as string) || session.username
 
 			if (!artist || !track) {
 				throw new Error('get_track_info requires artist and track parameters')
 			}
 
 			const data = await client.getTrackInfo(artist, track, username)
-			
-			const tags = data.track.toptags?.tag.slice(0, 5).map(tag => tag.name).join(', ') || 'None'
+
+			const tags =
+				data.track.toptags?.tag
+					.slice(0, 5)
+					.map((tag) => tag.name)
+					.join(', ') || 'None'
 			const userPlaycount = data.track.userplaycount || '0'
 			const loved = data.track.userloved === '1' ? ' ❤️' : ''
 
@@ -1043,17 +1087,25 @@ ${data.track.wiki?.summary ? `**Description:** ${data.track.wiki.summary.replace
 
 		case 'get_artist_info': {
 			const artist = args?.artist as string
-			const username = args?.username as string || session.username
+			const username = (args?.username as string) || session.username
 
 			if (!artist) {
 				throw new Error('get_artist_info requires artist parameter')
 			}
 
 			const data = await client.getArtistInfo(artist, username)
-			
-			const tags = data.artist.tags?.tag.slice(0, 5).map(tag => tag.name).join(', ') || 'None'
+
+			const tags =
+				data.artist.tags?.tag
+					.slice(0, 5)
+					.map((tag) => tag.name)
+					.join(', ') || 'None'
 			const userPlaycount = data.artist.stats.userplaycount || '0'
-			const similar = data.artist.similar?.artist.slice(0, 5).map(a => a.name).join(', ') || 'None'
+			const similar =
+				data.artist.similar?.artist
+					.slice(0, 5)
+					.map((a) => a.name)
+					.join(', ') || 'None'
 
 			return {
 				content: [
@@ -1080,17 +1132,25 @@ ${data.artist.bio?.summary ? `**Bio:** ${data.artist.bio.summary.replace(/<[^>]*
 		case 'get_album_info': {
 			const artist = args?.artist as string
 			const album = args?.album as string
-			const username = args?.username as string || session.username
+			const username = (args?.username as string) || session.username
 
 			if (!artist || !album) {
 				throw new Error('get_album_info requires artist and album parameters')
 			}
 
 			const data = await client.getAlbumInfo(artist, album, username)
-			
-			const tags = data.album.tags?.tag.slice(0, 5).map(tag => tag.name).join(', ') || 'None'
+
+			const tags =
+				data.album.tags?.tag
+					.slice(0, 5)
+					.map((tag) => tag.name)
+					.join(', ') || 'None'
 			const userPlaycount = data.album.userplaycount || '0'
-			const tracks = data.album.tracks?.track.slice(0, 10).map((track, i) => `${i + 1}. ${track.name}`).join('\n') || 'Track listing not available'
+			const tracks =
+				data.album.tracks?.track
+					.slice(0, 10)
+					.map((track, i) => `${i + 1}. ${track.name}`)
+					.join('\n') || 'Track listing not available'
 
 			return {
 				content: [
@@ -1118,11 +1178,11 @@ ${data.album.wiki?.summary ? `**Description:** ${data.album.wiki.summary.replace
 		}
 
 		case 'get_user_info': {
-			const username = args?.username as string || session.username
+			const username = (args?.username as string) || session.username
 
 			const data = await client.getUserInfo(username)
 			const user = data.user
-			
+
 			const registrationDate = new Date(parseInt(user.registered.unixtime) * 1000).toLocaleDateString()
 
 			return {
@@ -1155,9 +1215,9 @@ ${data.album.wiki?.summary ? `**Description:** ${data.album.wiki.summary.replace
 			}
 
 			const data = await client.getSimilarArtists(artist, limit)
-			
+
 			const artists = data.similarartists.artist.slice(0, limit)
-			const artistList = artists.map(a => `• ${a.name} (${Math.round(parseFloat(a.match) * 100)}% match)`).join('\n')
+			const artistList = artists.map((a) => `• ${a.name} (${Math.round(parseFloat(a.match) * 100)}% match)`).join('\n')
 
 			return {
 				content: [
@@ -1181,9 +1241,14 @@ ${artistList}`,
 			}
 
 			const data = await client.getSimilarTracks(artist, track, limit)
-			
+
 			const tracks = data.similartracks.track.slice(0, limit)
-			const trackList = tracks.map(t => `• ${t.artist.name} - ${t.name} (${Math.round(parseFloat(t.match) * 100)}% match)`).join('\n')
+			const trackList = tracks
+				.map((t) => {
+					const album = t.album?.['#text'] ? ` [${t.album['#text']}]` : ''
+					return `• ${t.artist.name} - ${t.name}${album} (${Math.round(parseFloat(t.match) * 100)}% match)`
+				})
+				.join('\n')
 
 			return {
 				content: [
@@ -1198,8 +1263,8 @@ ${trackList}`,
 		}
 
 		case 'get_listening_stats': {
-			const username = args?.username as string || session.username
-			const period = args?.period as string || 'overall'
+			const username = (args?.username as string) || session.username
+			const period = (args?.period as string) || 'overall'
 
 			const stats = await client.getListeningStats(username, period as '7day' | '1month' | '3month' | '6month' | '12month' | 'overall')
 
@@ -1223,14 +1288,14 @@ ${trackList}`,
 		}
 
 		case 'get_music_recommendations': {
-			const username = args?.username as string || session.username
+			const username = (args?.username as string) || session.username
 			const limit = Math.min(Math.max((args?.limit as number) || 20, 1), 50)
 			const genre = args?.genre as string
 
 			const recommendations = await client.getMusicRecommendations(username, limit, genre)
-			
+
 			const artistRecs = recommendations.recommendedArtists.slice(0, 8)
-			const artistList = artistRecs.map(rec => `• ${rec.name} (${rec.reason})`).join('\n')
+			const artistList = artistRecs.map((rec) => `• ${rec.name} (${rec.reason})`).join('\n')
 
 			return {
 				content: [
@@ -1249,7 +1314,7 @@ ${artistList}
 		}
 
 		default:
-			throw new Error(`Unknown tool: ${name}. Available tools: ${LASTFM_TOOLS.map(t => t.name).join(', ')}`)
+			throw new Error(`Unknown tool: ${name}. Available tools: ${LASTFM_TOOLS.map((t) => t.name).join(', ')}`)
 	}
 }
 
@@ -1330,17 +1395,16 @@ export async function handleMethod(request: JSONRPCRequest, httpRequest?: Reques
 			return hasId(request) ? createResponse(id!, { tools: LASTFM_TOOLS }) : null
 		}
 
-
 		case 'tools/call': {
 			// For tools that exist in both authenticated and non-authenticated handlers (like lastfm_auth_status),
 			// check authentication first to determine which handler to use
 			const toolName = (params as ToolsCallParams)?.name
 			const dualHandlerTools = ['lastfm_auth_status', 'get_artist_info', 'get_track_info', 'get_album_info'] // Tools that exist in both handlers
-			
+
 			if (dualHandlerTools.includes(toolName) && httpRequest && jwtSecret) {
 				// Check if user is authenticated first
 				const session = await getConnectionSession(httpRequest, jwtSecret, env)
-				
+
 				if (session) {
 					// User is authenticated, use authenticated handler
 					try {

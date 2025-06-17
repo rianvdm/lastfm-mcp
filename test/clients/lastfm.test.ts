@@ -123,10 +123,10 @@ describe('LastfmClient', () => {
 
 			// Make first request
 			const promise1 = client.getRecentTracks('testuser')
-			
+
 			// Advance time by 100ms (less than 250ms throttle)
 			vi.advanceTimersByTime(100)
-			
+
 			// Make second request immediately
 			const promise2 = client.getRecentTracks('testuser')
 
@@ -147,10 +147,10 @@ describe('LastfmClient', () => {
 
 			// Make first request
 			await client.getRecentTracks('testuser')
-			
+
 			// Advance time by more than throttle delay
 			vi.advanceTimersByTime(300)
-			
+
 			// Make second request
 			await client.getRecentTracks('testuser')
 
@@ -254,9 +254,7 @@ describe('LastfmClient', () => {
 			}
 			mockFetchWithRetry.mockResolvedValue(mockResponse)
 
-			await expect(client.getRecentTracks('nonexistentuser')).rejects.toThrow(
-				'Last.fm API error 6: User not found',
-			)
+			await expect(client.getRecentTracks('nonexistentuser')).rejects.toThrow('Last.fm API error 6: User not found')
 		})
 
 		it('should handle network errors gracefully', async () => {
@@ -441,10 +439,10 @@ describe('LastfmClient', () => {
 			mockFetchWithRetry.mockResolvedValue(mockResponse)
 
 			const startTime = Date.now()
-			
+
 			// Make multiple requests
 			const promises = Array.from({ length: 3 }, () => client.getRecentTracks('testuser'))
-			
+
 			// Should complete all requests with proper throttling
 			vi.advanceTimersByTime(1000) // Advance enough time for all throttling
 			await Promise.all(promises)

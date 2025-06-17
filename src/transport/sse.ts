@@ -36,7 +36,7 @@ export function createSSEResponse(): { response: Response; connectionId: string 
 		encoder,
 		lastActivity: Date.now(),
 		isAuthenticated: false,
-		createdAt: Date.now()
+		createdAt: Date.now(),
 	}
 	connections.set(connectionId, connection)
 
@@ -45,7 +45,7 @@ export function createSSEResponse(): { response: Response; connectionId: string 
 		endpoint: '/', // Main JSON-RPC endpoint
 		connectionId,
 		requiresAuth: true,
-		authUrl: `/login?connection_id=${connectionId}`
+		authUrl: `/login?connection_id=${connectionId}`,
 	})
 
 	// Set up keepalive
@@ -83,7 +83,7 @@ export function createSSEResponse(): { response: Response; connectionId: string 
 			'Cache-Control': 'no-cache',
 			Connection: 'keep-alive',
 			'Access-Control-Allow-Origin': '*',
-			'X-Connection-ID': connectionId // Include connection ID in headers
+			'X-Connection-ID': connectionId, // Include connection ID in headers
 		},
 	})
 
@@ -141,7 +141,7 @@ export function authenticateConnection(connectionId: string, userId: string): bo
 	sendSSEMessage(connection, 'authenticated', {
 		connectionId,
 		userId,
-		message: 'Authentication successful'
+		message: 'Authentication successful',
 	})
 
 	return true
@@ -189,11 +189,11 @@ export function getActiveConnectionCount(): number {
  * Get all active connections (for debugging/monitoring)
  */
 export function getActiveConnections(): Array<{ id: string; isAuthenticated: boolean; userId?: string; lastActivity: number }> {
-	return Array.from(connections.values()).map(conn => ({
+	return Array.from(connections.values()).map((conn) => ({
 		id: conn.id,
 		isAuthenticated: conn.isAuthenticated,
 		userId: conn.userId,
-		lastActivity: conn.lastActivity
+		lastActivity: conn.lastActivity,
 	}))
 }
 
@@ -206,8 +206,8 @@ export function cleanupConnections(): void {
 	const MAX_AGE = 24 * 60 * 60 * 1000 // 24 hours
 
 	for (const [connectionId, connection] of connections) {
-		const inactive = (now - connection.lastActivity) > INACTIVE_TIMEOUT
-		const expired = (now - connection.createdAt) > MAX_AGE
+		const inactive = now - connection.lastActivity > INACTIVE_TIMEOUT
+		const expired = now - connection.createdAt > MAX_AGE
 
 		if (inactive || expired) {
 			console.log(`Cleaning up connection ${connectionId} - inactive: ${inactive}, expired: ${expired}`)

@@ -21,12 +21,12 @@ Add this configuration to your Claude Desktop settings (Settings / Developer / E
 
 ```json
 {
-  "mcpServers": {
-    "lastfm": {
-      "command": "npx",
-      "args": ["mcp-remote", "https://lastfm-mcp-prod.rian-db8.workers.dev/sse"]
-    }
-  }
+	"mcpServers": {
+		"lastfm": {
+			"command": "npx",
+			"args": ["mcp-remote", "https://lastfm-mcp-prod.rian-db8.workers.dev/sse"]
+		}
+	}
 }
 ```
 
@@ -38,27 +38,30 @@ Add this configuration to your Claude Desktop settings (Settings / Developer / E
 <summary>If you get "spawn npx NOENT" error</summary>
 
 **For NixOS users:**
+
 ```json
 {
-  "mcpServers": {
-    "lastfm": {
-      "command": "/run/current-system/sw/bin/npx",
-      "args": ["mcp-remote", "https://lastfm-mcp-prod.rian-db8.workers.dev/sse"],
-      "env": {
-        "PATH": "/run/current-system/sw/bin:$PATH"
-      }
-    }
-  }
+	"mcpServers": {
+		"lastfm": {
+			"command": "/run/current-system/sw/bin/npx",
+			"args": ["mcp-remote", "https://lastfm-mcp-prod.rian-db8.workers.dev/sse"],
+			"env": {
+				"PATH": "/run/current-system/sw/bin:$PATH"
+			}
+		}
+	}
 }
 ```
 
 **For other systems:**
+
 1. Find your npx path: `which npx`
 2. Use the full path in your config:
+
 ```json
 {
-  "command": "/usr/local/bin/npx",  // Use your actual path
-  "args": ["mcp-remote", "https://lastfm-mcp-prod.rian-db8.workers.dev/sse"]
+	"command": "/usr/local/bin/npx", // Use your actual path
+	"args": ["mcp-remote", "https://lastfm-mcp-prod.rian-db8.workers.dev/sse"]
 }
 ```
 
@@ -75,27 +78,29 @@ Add this configuration to your Claude Desktop settings (Settings / Developer / E
 ## 🛠️ Available Tools
 
 ### 🔓 **Public Tools** (No Authentication Required)
-| Tool | Description |
-|------|-------------|
-| `get_track_info` | Get detailed information about any track |
-| `get_artist_info` | Get detailed artist information and bio |
-| `get_album_info` | Get album details and track listings |
-| `get_similar_artists` | Find artists similar to a given artist |
-| `get_similar_tracks` | Find tracks similar to a given track |
-| `ping` | Test server connectivity |
-| `server_info` | Get server status and capabilities |
-| `auth_status` | Check your authentication status |
+
+| Tool                  | Description                              |
+| --------------------- | ---------------------------------------- |
+| `get_track_info`      | Get detailed information about any track |
+| `get_artist_info`     | Get detailed artist information and bio  |
+| `get_album_info`      | Get album details and track listings     |
+| `get_similar_artists` | Find artists similar to a given artist   |
+| `get_similar_tracks`  | Find tracks similar to a given track     |
+| `ping`                | Test server connectivity                 |
+| `server_info`         | Get server status and capabilities       |
+| `auth_status`         | Check your authentication status         |
 
 ### 🔐 **Personal Tools** (Authentication Required)
-| Tool | Description |
-|------|-------------|
-| `get_recent_tracks` | Your recent listening history (supports pagination) |
-| `get_top_artists` | Your top artists by time period |
-| `get_top_albums` | Your top albums by time period |
-| `get_loved_tracks` | Your loved/favorite tracks |
-| `get_user_info` | Your Last.fm profile information |
-| `get_listening_stats` | Comprehensive listening statistics |
-| `get_music_recommendations` | Personalized music recommendations |
+
+| Tool                        | Description                                         |
+| --------------------------- | --------------------------------------------------- |
+| `get_recent_tracks`         | Your recent listening history (supports pagination) |
+| `get_top_artists`           | Your top artists by time period                     |
+| `get_top_albums`            | Your top albums by time period                      |
+| `get_loved_tracks`          | Your loved/favorite tracks                          |
+| `get_user_info`             | Your Last.fm profile information                    |
+| `get_listening_stats`       | Comprehensive listening statistics                  |
+| `get_music_recommendations` | Personalized music recommendations                  |
 
 ## 📚 MCP Resources
 
@@ -103,7 +108,7 @@ Access Last.fm data via standardized MCP resource URIs:
 
 ```
 lastfm://user/{username}/recent          # Recent tracks
-lastfm://user/{username}/top-artists     # Top artists  
+lastfm://user/{username}/top-artists     # Top artists
 lastfm://user/{username}/top-albums      # Top albums
 lastfm://user/{username}/loved           # Loved tracks
 lastfm://user/{username}/profile         # User profile
@@ -118,27 +123,29 @@ lastfm://track/{artist}/{track}/similar  # Similar tracks
 
 Rich AI prompts for music analysis and discovery:
 
-| Prompt | Description | Arguments |
-|--------|-------------|-----------|
-| `listening_insights` | Analyze user's listening habits and patterns | `username`, `period?` |
-| `music_discovery` | Discover new music based on listening history | `username`, `genre?` |
-| `track_analysis` | Get detailed analysis of a specific track | `artist`, `track` |
-| `album_analysis` | Get detailed analysis of a specific album | `artist`, `album` |
-| `artist_analysis` | Get detailed analysis of a specific artist | `artist` |
-| `listening_habits` | Analyze and summarize user's listening habits | `username`, `timeframe?` |
+| Prompt               | Description                                   | Arguments                |
+| -------------------- | --------------------------------------------- | ------------------------ |
+| `listening_insights` | Analyze user's listening habits and patterns  | `username`, `period?`    |
+| `music_discovery`    | Discover new music based on listening history | `username`, `genre?`     |
+| `track_analysis`     | Get detailed analysis of a specific track     | `artist`, `track`        |
+| `album_analysis`     | Get detailed analysis of a specific album     | `artist`, `album`        |
+| `artist_analysis`    | Get detailed analysis of a specific artist    | `artist`                 |
+| `listening_habits`   | Analyze and summarize user's listening habits | `username`, `timeframe?` |
 
 These prompts generate contextual messages that guide AI assistants to provide meaningful music insights using the available Last.fm tools and data.
 
 ## 🏗️ Development
 
 ### Prerequisites
+
 - Node.js 18+
-- Cloudflare Workers account  
+- Cloudflare Workers account
 - Last.fm API credentials ([Get them here](https://www.last.fm/api/account/create))
 
 ### Local Setup
 
 1. **Clone and install**:
+
    ```bash
    git clone https://github.com/rianvdm/lastfm-mcp.git
    cd lastfm-mcp
@@ -146,13 +153,15 @@ These prompts generate contextual messages that guide AI assistants to provide m
    ```
 
 2. **Configure environment** (`.dev.vars`):
+
    ```env
    LASTFM_API_KEY=your_api_key_here
-   LASTFM_SHARED_SECRET=your_shared_secret_here  
+   LASTFM_SHARED_SECRET=your_shared_secret_here
    JWT_SECRET=your_secure_jwt_secret
    ```
 
 3. **Start development server**:
+
    ```bash
    npm run dev
    ```
@@ -167,13 +176,15 @@ These prompts generate contextual messages that guide AI assistants to provide m
 ### 🚀 Deployment
 
 1. **Set production secrets**:
+
    ```bash
    echo "your_api_key" | wrangler secret put LASTFM_API_KEY --env production
-   echo "your_shared_secret" | wrangler secret put LASTFM_SHARED_SECRET --env production  
+   echo "your_shared_secret" | wrangler secret put LASTFM_SHARED_SECRET --env production
    echo "your_jwt_secret" | wrangler secret put JWT_SECRET --env production
    ```
 
 2. **Deploy**:
+
    ```bash
    wrangler deploy --env production
    ```
@@ -186,6 +197,7 @@ These prompts generate contextual messages that guide AI assistants to provide m
 ## 📋 Example Usage
 
 **Get track information:**
+
 ```bash
 curl -X POST https://lastfm-mcp-prod.rian-db8.workers.dev \
   -H "Content-Type: application/json" \
@@ -196,7 +208,7 @@ curl -X POST https://lastfm-mcp-prod.rian-db8.workers.dev \
     "params": {
       "name": "get_track_info",
       "arguments": {
-        "artist": "Radiohead", 
+        "artist": "Radiohead",
         "track": "Paranoid Android"
       }
     }
@@ -204,13 +216,14 @@ curl -X POST https://lastfm-mcp-prod.rian-db8.workers.dev \
 ```
 
 **Find similar artists:**
+
 ```bash
 curl -X POST https://lastfm-mcp-prod.rian-db8.workers.dev \
   -H "Content-Type: application/json" \
   -d '{
     "jsonrpc": "2.0",
     "id": 1,
-    "method": "tools/call", 
+    "method": "tools/call",
     "params": {
       "name": "get_similar_artists",
       "arguments": {
@@ -222,6 +235,7 @@ curl -X POST https://lastfm-mcp-prod.rian-db8.workers.dev \
 ```
 
 **Get recent tracks with pagination:**
+
 ```bash
 curl -X POST https://lastfm-mcp-prod.rian-db8.workers.dev \
   -H "Content-Type: application/json" \
@@ -256,7 +270,7 @@ curl -X POST https://lastfm-mcp-prod.rian-db8.workers.dev \
 # Run tests
 npm test
 
-# Type checking  
+# Type checking
 npm run typecheck
 
 # Linting
