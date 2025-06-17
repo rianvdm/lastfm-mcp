@@ -1,6 +1,6 @@
 # 🎵 Last.fm MCP Server
 
-A **Model Context Protocol (MCP) server** that provides seamless access to Last.fm listening data and music information for AI assistants like Claude.
+A **Model Context Protocol (MCP) server** that provides seamless access to Last.fm listening data and music information via AI assistants like Claude.
 
 ## ✨ Features
 
