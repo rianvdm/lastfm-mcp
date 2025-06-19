@@ -1080,34 +1080,17 @@ async function handleOAuthToken(request: Request, env: Env): Promise<Response> {
 		console.error('OAuth token error:', error)
 
 		// Handle OAuth-specific errors
-		if (error instanceof Error && error.message.includes('OAuth')) {
-			const errorMessage = error.message.toLowerCase()
-
-			if (errorMessage.includes('client not found') || errorMessage.includes('invalid client')) {
-				return new Response(
-					JSON.stringify({
-						error: 'invalid_client',
-						error_description: 'Invalid client credentials',
-					}),
-					{
-						status: 401,
-						headers: { 'Content-Type': 'application/json' },
-					},
-				)
-			}
-
-			if (errorMessage.includes('authorization code') || errorMessage.includes('invalid grant')) {
-				return new Response(
-					JSON.stringify({
-						error: 'invalid_grant',
-						error_description: 'Invalid authorization code',
-					}),
-					{
-						status: 400,
-						headers: { 'Content-Type': 'application/json' },
-					},
-				)
-			}
+		if (error instanceof OAuthError) {
+			return new Response(
+				JSON.stringify({
+					error: error.error,
+					error_description: error.description || error.message,
+				}),
+				{
+					status: error.statusCode,
+					headers: { 'Content-Type': 'application/json' },
+				},
+			)
 		}
 
 		// Generic server error

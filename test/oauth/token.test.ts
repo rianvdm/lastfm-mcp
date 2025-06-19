@@ -83,7 +83,7 @@ describe('OAuth Token Endpoint', () => {
 			expect(response.status).toBe(400)
 			const data = await response.json()
 			expect(data.error).toBe('invalid_request')
-			expect(data.error_description).toContain('authorization code')
+			expect(data.error_description.toLowerCase()).toContain('authorization code')
 		})
 
 		it('should require client credentials', async () => {
@@ -207,7 +207,7 @@ describe('OAuth Token Endpoint', () => {
 			expect(response.status).toBe(400)
 			const data = await response.json()
 			expect(data.error).toBe('invalid_grant')
-			expect(data.error_description).toContain('authorization code')
+			expect(data.error_description.toLowerCase()).toContain('authorization code')
 		})
 
 		it('should reject expired authorization code', async () => {
