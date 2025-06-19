@@ -99,16 +99,20 @@ export default {
 							},
 							{
 								name: 'read:recommendations',
-								description: 'Generate music recommendations based on your taste',
+								description: 'Access Last.fm music recommendations and similar artists',
 							},
 							{
-								name: 'read:social',
-								description: 'Access your Last.fm friends and social features',
+								name: 'read:profile',
+								description: 'Access your Last.fm profile information',
+							},
+							{
+								name: 'read:library',
+								description: 'Access your Last.fm music library and loved tracks',
 							},
 						],
 					},
 					mcp: {
-						endpoint: `${baseUrl}/`,
+						endpoint: `${baseUrl}/sse`,
 						sse_endpoint: `${baseUrl}/sse`,
 					},
 				}
@@ -158,6 +162,12 @@ export default {
 			case '/':
 				// Main MCP endpoint - accepts JSON-RPC messages for POST, info for GET
 				if (request.method === 'POST') {
+					console.log('🔵 Main MCP Endpoint POST:', {
+						timestamp: new Date().toISOString(),
+						hasAuthHeader: !!request.headers.get('Authorization'),
+						authHeaderPrefix: request.headers.get('Authorization')?.substring(0, 20) + '...',
+						contentType: request.headers.get('Content-Type')
+					})
 					return handleMCPRequest(request, env)
 				} else if (request.method === 'GET') {
 					return new Response(
@@ -193,11 +203,72 @@ export default {
 			case '/sse':
 				// SSE endpoint for bidirectional communication
 				if (request.method === 'GET') {
+					console.log('🔵 SSE Connection Request:', {
+						timestamp: new Date().toISOString(),
+						headers: Object.fromEntries(request.headers.entries()),
+						hasAuthHeader: !!request.headers.get('Authorization'),
+						authHeaderPrefix: request.headers.get('Authorization')?.substring(0, 20) + '...',
+						accept: request.headers.get('Accept')
+					})
+					
+					// Check if this is requesting the manifest
+					const accept = request.headers.get('Accept')
+					if (accept && accept.includes('application/json') && !accept.includes('text/event-stream')) {
+						console.log('🔵 SSE Manifest Request detected')
+						// Return integration manifest
+						const baseUrl = `${url.protocol}//${url.host}`
+						const manifest = {
+							name: 'Last.fm Music Data',
+							description: 'Access your Last.fm listening history and music recommendations',
+							version: '1.0.0',
+							homepage_url: 'https://github.com/your-username/lastfm-mcp',
+							icon_url: 'https://www.last.fm/static/images/lastfm_avatar_twitter.png',
+							oauth: {
+								authorization_url: `${baseUrl}/oauth/authorize`,
+								token_url: `${baseUrl}/oauth/token`,
+								client_registration_url: `${baseUrl}/oauth/register`,
+								scopes: [
+									{
+										name: 'read:listening_history',
+										description: 'Access your Last.fm listening history and statistics',
+									},
+									{
+										name: 'read:recommendations',
+										description: 'Access Last.fm music recommendations and similar artists',
+									},
+									{
+										name: 'read:profile',
+										description: 'Access your Last.fm profile information',
+									},
+									{
+										name: 'read:library',
+										description: 'Access your Last.fm music library and loved tracks',
+									},
+								],
+							},
+							mcp: {
+								endpoint: `${baseUrl}/sse`,
+								sse_endpoint: `${baseUrl}/sse`,
+							},
+						}
+						
+						return new Response(JSON.stringify(manifest, null, 2), {
+							headers: addCorsHeaders({ 'Content-Type': 'application/json' }, request),
+						})
+					}
+					
 					return handleSSEConnection(request)
 				} else if (request.method === 'POST') {
+					console.log('🔵 SSE POST Request:', {
+						timestamp: new Date().toISOString(),
+						headers: Object.fromEntries(request.headers.entries()),
+						hasAuthHeader: !!request.headers.get('Authorization')
+					})
+					
 					// Check for Bearer token authentication on POST requests too
 					const authHeader = request.headers.get('Authorization')
 					if (!authHeader || !authHeader.startsWith('Bearer ')) {
+						console.log('🔴 SSE POST: Missing Bearer token')
 						return new Response(
 							JSON.stringify({
 								error: 'unauthorized',
@@ -559,6 +630,20 @@ async function handleMCPRequest(request: Request, env?: Env): Promise<Response> 
 		: null
 
 	try {
+		// Parse request body
+		const body = await request.text()
+
+		console.log('🔵 MCP Request Received:', {
+			timestamp: new Date().toISOString(),
+			url: request.url,
+			method: request.method,
+			headers: Object.fromEntries(request.headers.entries()),
+			hasBody: body ? 'yes' : 'no',
+			bodyLength: body ? body.length : 0,
+			userAgent: request.headers.get('User-Agent'),
+			origin: request.headers.get('Origin')
+		})
+
 		// Check for connection ID header (for SSE-connected clients)
 		const connectionId = request.headers.get('X-Connection-ID')
 		if (connectionId) {
@@ -567,9 +652,6 @@ async function handleMCPRequest(request: Request, env?: Env): Promise<Response> 
 				console.warn(`Invalid connection ID: ${connectionId}`)
 			}
 		}
-
-		// Parse request body
-		const body = await request.text()
 
 		// Handle empty body
 		if (!body) {
@@ -597,6 +679,13 @@ async function handleMCPRequest(request: Request, env?: Env): Promise<Response> 
 			jsonrpcRequest = parseMessage(body)
 			method = jsonrpcRequest.method
 			params = jsonrpcRequest.params
+			
+			console.log('🔵 MCP Method Parsed:', {
+				timestamp: new Date().toISOString(),
+				method: method,
+				hasParams: !!params,
+				requestId: jsonrpcRequest.id
+			})
 		} catch (error) {
 			// Parse error or invalid request
 			const jsonrpcError = error as JSONRPCError
@@ -623,6 +712,20 @@ async function handleMCPRequest(request: Request, env?: Env): Promise<Response> 
 			const session = await verifyAuthentication(request, env.JWT_SECRET, env)
 			if (session) {
 				userId = session.userId
+				console.log('🟢 MCP User Authenticated:', {
+					timestamp: new Date().toISOString(),
+					method: method,
+					userId: session.userId,
+					username: session.username,
+					sessionKey: session.sessionKey
+				})
+			} else {
+				console.log('🔴 MCP User Not Authenticated:', {
+					timestamp: new Date().toISOString(),
+					method: method,
+					hasAuthHeader: !!request.headers.get('Authorization'),
+					hasCookie: !!request.headers.get('Cookie')
+				})
 			}
 		}
 
@@ -662,7 +765,21 @@ async function handleMCPRequest(request: Request, env?: Env): Promise<Response> 
 		}
 
 		// Handle the method
+		console.log('🔵 MCP Handling Method:', {
+			timestamp: new Date().toISOString(),
+			method: method,
+			userId: userId,
+			hasAuth: userId !== 'anonymous'
+		})
+		
 		const response = await handleMethod(jsonrpcRequest, request, env?.JWT_SECRET, env)
+		
+		console.log('🟢 MCP Method Response:', {
+			timestamp: new Date().toISOString(),
+			method: method,
+			hasResponse: !!response,
+			responseType: response ? (response.result ? 'success' : 'error') : 'notification'
+		})
 
 		// Calculate latency
 		const latency = Date.now() - startTime
@@ -813,6 +930,21 @@ async function handleOAuthAuthorize(request: Request, env: Env): Promise<Respons
 		const state = url.searchParams.get('state')
 		const consent = url.searchParams.get('consent')
 
+		console.log('🔵 OAuth Authorization Request:', {
+			timestamp: new Date().toISOString(),
+			url: request.url,
+			method: request.method,
+			headers: Object.fromEntries(request.headers.entries()),
+			params: {
+				clientId,
+				redirectUri,
+				responseType,
+				scope,
+				state,
+				consent
+			}
+		})
+
 		// Validate required parameters
 		if (!clientId) {
 			throw new OAuthError(OAUTH_ERRORS.INVALID_REQUEST, 'Missing client_id parameter')
@@ -826,12 +958,62 @@ async function handleOAuthAuthorize(request: Request, env: Env): Promise<Respons
 
 		// Validate OAuth client
 		const client = await validateOAuthClient(env, clientId)
+		console.log('🔵 OAuth Client Validated:', {
+			clientId: client.id,
+			clientName: client.name,
+			allowedScopes: client.allowedScopes,
+			redirectUris: client.redirectUris,
+			createdAt: new Date(client.createdAt).toISOString()
+		})
+		
 		validateRedirectUri(client, redirectUri)
-		const validScopes = validateScopes(client, scope || '')
+		const validScopes = validateScopes(client, scope || undefined)
+		console.log('🔵 OAuth Scopes Validated:', validScopes)
 
 		// Handle user consent flow
 		if (consent === 'true') {
-			// User consented, redirect to Last.fm for authentication
+			console.log('🟢 OAuth User Consented:', {
+				timestamp: new Date().toISOString(),
+				clientId,
+				clientName: client.name,
+				redirectUri,
+				scope,
+				state,
+				validScopes
+			})
+
+			// Demo mode: Skip Last.fm authentication for testing
+			if (client.name.toLowerCase().includes('test') || client.name.toLowerCase().includes('demo') || client.name.toLowerCase().includes('debug')) {
+				console.log('🟡 OAuth Demo Mode: Skipping Last.fm authentication')
+				
+				// Generate authorization code directly
+				const authCode = generateAuthorizationCode()
+				await storeAuthorizationCode(
+					env,
+					authCode,
+					clientId,
+					'demo_user', // Demo user ID
+					'demo_user', // Demo username
+					validScopes.join(' '),
+					redirectUri,
+				)
+
+				// Redirect back to client with authorization code
+				const callbackUrl = new URL(redirectUri)
+				callbackUrl.searchParams.set('code', authCode)
+				if (state) {
+					callbackUrl.searchParams.set('state', state)
+				}
+				
+				console.log('🟡 OAuth Demo Mode Redirect:', {
+					authCode,
+					callbackUrl: callbackUrl.toString(),
+					timestamp: new Date().toISOString()
+				})
+				return Response.redirect(callbackUrl.toString())
+			}
+
+			// Normal mode: Redirect to Last.fm for authentication
 			const oauthParams = new URLSearchParams({
 				client_id: clientId,
 				redirect_uri: redirectUri,
@@ -843,19 +1025,45 @@ async function handleOAuthAuthorize(request: Request, env: Env): Promise<Respons
 			const auth = new LastfmAuth(env.LASTFM_API_KEY, env.LASTFM_SHARED_SECRET)
 			const callbackUrl = `${new URL(request.url).origin}/oauth/callback?${oauthParams}`
 			const lastfmAuthUrl = auth.getAuthUrl(callbackUrl)
+			
+			console.log('OAuth Authorization - Redirecting to Last.fm:', {
+				clientId,
+				redirectUri,
+				scope,
+				state,
+				callbackUrl,
+				lastfmAuthUrl
+			})
+			
 			return Response.redirect(lastfmAuthUrl)
 		}
 
 		// Check if user already has a valid Last.fm session
 		const sessionCookie = request.headers.get('Cookie')
 		let existingSession = null
+		console.log('🔵 OAuth Session Check:', {
+			timestamp: new Date().toISOString(),
+			hasCookie: !!sessionCookie,
+			cookieValue: sessionCookie ? sessionCookie.substring(0, 100) + '...' : 'none'
+		})
+		
 		if (sessionCookie) {
 			// Try to extract and validate existing JWT session
 			const sessionMatch = sessionCookie.match(/session=([^;]+)/)
+			console.log('🔵 OAuth Session Match:', {
+				hasMatch: !!sessionMatch,
+				sessionToken: sessionMatch ? sessionMatch[1].substring(0, 20) + '...' : 'none'
+			})
+			
 			if (sessionMatch) {
 				try {
 					existingSession = await verifyAuthentication(request, env.JWT_SECRET, env)
-				} catch {
+					console.log('🟢 OAuth Existing Session Found:', {
+						userId: existingSession?.userId,
+						username: existingSession?.username
+					})
+				} catch (error) {
+					console.log('🔴 OAuth Session Validation Failed:', error)
 					// Invalid session, continue with auth flow
 				}
 			}
@@ -863,6 +1071,15 @@ async function handleOAuthAuthorize(request: Request, env: Env): Promise<Respons
 
 		if (existingSession) {
 			// User already authenticated, generate authorization code
+			console.log('🟢 OAuth Using Existing Session:', {
+				timestamp: new Date().toISOString(),
+				userId: existingSession.userId,
+				username: existingSession.username,
+				clientId,
+				redirectUri,
+				scopes: validScopes
+			})
+			
 			const authCode = generateAuthorizationCode()
 			await storeAuthorizationCode(
 				env,
@@ -880,9 +1097,25 @@ async function handleOAuthAuthorize(request: Request, env: Env): Promise<Respons
 			if (state) {
 				callbackUrl.searchParams.set('state', state)
 			}
+			
+			console.log('🟢 OAuth Authorization Code Generated:', {
+				timestamp: new Date().toISOString(),
+				authCode: authCode.substring(0, 8) + '...',
+				redirectUrl: callbackUrl.toString()
+			})
+			
 			return Response.redirect(callbackUrl.toString())
 		} else {
 			// Show OAuth consent page
+			console.log('🔵 OAuth Showing Consent Page:', {
+				timestamp: new Date().toISOString(),
+				clientId,
+				clientName: client.name,
+				redirectUri,
+				scopes: validScopes,
+				reason: 'No existing session found'
+			})
+			
 			const consentPageHtml = generateOAuthConsentPage({
 				clientId,
 				redirectUri,
@@ -942,11 +1175,32 @@ async function handleOAuthCallback(request: Request, env: Env): Promise<Response
 	const scope = url.searchParams.get('scope')
 	const state = url.searchParams.get('state')
 
+	// Log all parameters for debugging
+	console.log('OAuth Callback received:', {
+		url: request.url,
+		token: token ? 'present' : 'missing',
+		clientId: clientId ? 'present' : 'missing',
+		redirectUri: redirectUri ? 'present' : 'missing',
+		scope,
+		state,
+		allParams: Object.fromEntries(url.searchParams.entries())
+	})
+
 	if (!token) {
-		return new Response('Missing authentication token', { status: 400 })
+		console.error('OAuth Callback: Missing authentication token from Last.fm')
+		// Instead of generic error, redirect back to client with error
+		if (redirectUri) {
+			const errorUrl = new URL(redirectUri)
+			errorUrl.searchParams.set('error', 'server_error')
+			errorUrl.searchParams.set('error_description', 'Missing authentication token from Last.fm')
+			if (state) errorUrl.searchParams.set('state', state)
+			return Response.redirect(errorUrl.toString())
+		}
+		return new Response('Missing authentication token from Last.fm', { status: 400 })
 	}
 
 	if (!clientId || !redirectUri) {
+		console.error('OAuth Callback: Missing OAuth parameters', { clientId, redirectUri })
 		return new Response('Missing OAuth parameters', { status: 400 })
 	}
 
@@ -1002,14 +1256,29 @@ async function handleOAuthCallback(request: Request, env: Env): Promise<Response
  */
 async function handleOAuthToken(request: Request, env: Env): Promise<Response> {
 	try {
+		console.log('🔵 OAuth Token Exchange Request:', {
+			timestamp: new Date().toISOString(),
+			url: request.url,
+			method: request.method,
+			headers: Object.fromEntries(request.headers.entries())
+		})
+
 		// Parse form data
 		const formData = await request.formData()
 		const grantType = formData.get('grant_type') as string
 		const code = formData.get('code') as string
-		console.log('OAuth Token request:', Object.fromEntries(formData.entries()))
 		const clientId = formData.get('client_id') as string
 		const clientSecret = formData.get('client_secret') as string
 		const redirectUri = formData.get('redirect_uri') as string
+
+		console.log('🔵 OAuth Token Parameters:', {
+			grantType,
+			code: code ? `${code.substring(0, 8)}...` : 'missing',
+			clientId: clientId ? `${clientId.substring(0, 8)}...` : 'missing',
+			clientSecret: clientSecret ? 'present' : 'missing',
+			redirectUri,
+			allParams: Object.fromEntries(formData.entries())
+		})
 
 		// Validate grant type
 		if (grantType !== 'authorization_code') {
@@ -1039,11 +1308,11 @@ async function handleOAuthToken(request: Request, env: Env): Promise<Response> {
 			)
 		}
 
-		if (!clientId || !clientSecret) {
+		if (!clientId) {
 			return new Response(
 				JSON.stringify({
 					error: 'invalid_client',
-					error_description: 'Missing client credentials',
+					error_description: 'Missing client ID',
 				}),
 				{
 					status: 401,
@@ -1093,6 +1362,16 @@ async function handleOAuthToken(request: Request, env: Env): Promise<Response> {
 			authCode.scope,
 			7 * 24 * 60 * 60, // 7 days
 		)
+
+		console.log('🟢 OAuth Token Exchange Successful:', {
+			timestamp: new Date().toISOString(),
+			clientId: clientId ? `${clientId.substring(0, 8)}...` : 'missing',
+			userId: authCode.userId,
+			username: authCode.username,
+			scope: authCode.scope,
+			accessTokenPrefix: accessToken ? `${accessToken.substring(0, 16)}...` : 'missing',
+			expiresIn: 7 * 24 * 60 * 60
+		})
 
 		// Return OAuth token response
 		return new Response(
@@ -1165,6 +1444,12 @@ async function handleDynamicClientRegistration(request: Request, env: Env): Prom
 			)
 		}
 
+		console.log('🔵 OAuth Client Registration Request:', {
+			timestamp: new Date().toISOString(),
+			body: body,
+			headers: Object.fromEntries(request.headers.entries())
+		})
+
 		// Extract client metadata
 		const clientName = body.client_name || 'Claude Desktop'
 		const redirectUris = body.redirect_uris || ['https://claude.ai/oauth/callback', 'https://app.claude.ai/oauth/callback']
@@ -1177,14 +1462,21 @@ async function handleDynamicClientRegistration(request: Request, env: Env): Prom
 			scopes = ['read:listening_history', 'read:profile']
 		}
 
-		// Special handling for Claude's 'claudeai' scope - map it to ALL our scopes
+		console.log('🔵 OAuth Client Registration Processing:', {
+			clientName,
+			redirectUris,
+			requestedScopes: scopes,
+			bodyScope: body.scope
+		})
+
+		// Special handling for Claude's 'claudeai' scope - map it to our supported scopes
 		if (scopes.length === 1 && scopes[0] === 'claudeai') {
-			console.log('Mapping claudeai scope to all available scopes')
-			scopes = ['read:listening_history', 'read:recommendations', 'read:profile', 'read:library']
+			console.log('Mapping claudeai scope to supported scopes')
+			scopes = ['read:listening_history', 'read:profile']
 		}
 
 		// Validate that all requested scopes are supported
-		const supportedScopes = ['read:listening_history', 'read:recommendations', 'read:profile', 'read:library']
+		const supportedScopes = ['read:listening_history', 'read:profile']
 		const invalidScopes = scopes.filter((scope) => !supportedScopes.includes(scope))
 		if (invalidScopes.length > 0) {
 			return new Response(

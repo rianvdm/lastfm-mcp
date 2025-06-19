@@ -57,9 +57,23 @@ export async function verifyAuthentication(request: Request, jwtSecret: string, 
 		const authHeader = request.headers.get('Authorization')
 		if (authHeader && authHeader.startsWith('Bearer ')) {
 			const bearerToken = authHeader.substring(7) // Remove 'Bearer ' prefix
+			console.log('🔵 MCP Bearer Token Authentication Attempt:', {
+				timestamp: new Date().toISOString(),
+				tokenPrefix: bearerToken ? `${bearerToken.substring(0, 16)}...` : 'missing',
+				url: request.url
+			})
+			
 			if (env) {
 				try {
 					const oauthToken = await validateAccessToken(env, bearerToken)
+					console.log('🟢 MCP Bearer Token Valid:', {
+						timestamp: new Date().toISOString(),
+						userId: oauthToken.userId,
+						username: oauthToken.username,
+						clientId: oauthToken.clientId,
+						scope: oauthToken.scope
+					})
+					
 					// Convert OAuth token to session payload format
 					return {
 						userId: oauthToken.userId,
@@ -69,7 +83,11 @@ export async function verifyAuthentication(request: Request, jwtSecret: string, 
 						exp: Math.floor(oauthToken.expiresAt / 1000),
 					}
 				} catch (oauthError) {
-					console.log('Bearer token validation failed:', oauthError)
+					console.log('🔴 MCP Bearer Token Validation Failed:', {
+						timestamp: new Date().toISOString(),
+						error: oauthError,
+						tokenPrefix: bearerToken ? `${bearerToken.substring(0, 16)}...` : 'missing'
+					})
 					// Fall through to cookie authentication
 				}
 			}
@@ -214,6 +232,13 @@ export function handleInitialize(params: unknown): InitializeResult {
 		capabilities: DEFAULT_CAPABILITIES,
 		serverInfo: SERVER_INFO,
 	}
+	
+	console.log('🟢 MCP Initialize Response:', {
+		timestamp: new Date().toISOString(),
+		protocolVersion: result.protocolVersion,
+		capabilities: result.capabilities,
+		serverInfo: result.serverInfo
+	})
 
 	// Validate our own response
 	try {

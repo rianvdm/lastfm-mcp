@@ -133,7 +133,7 @@ export function validateScopes(client: OAuthClient, requestedScopes?: string): s
 	const validScopes: string[] = []
 
 	for (const scope of scopes) {
-		if (!client.allowedScopes.includes(scope as OAuthScope)) {
+		if (!client.allowedScopes.includes(scope)) {
 			throw new OAuthError(OAUTH_ERRORS.INVALID_SCOPE, `Scope '${scope}' not allowed for this client`, 400)
 		}
 		validScopes.push(scope)
