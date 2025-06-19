@@ -145,6 +145,38 @@ During transition, support both:
   - Bearer token authentication in MCP protocol handlers
   - Backward compatibility with existing cookie authentication
   - Scope validation and client permission enforcement
-- Ready for Claude integration testing
+
+### ❌ Critical Issue Discovered: Architecture Incompatible with Claude Desktop (2025-06-19)
+
+**PROBLEM**: Realistic testing with Claude Desktop flow revealed fundamental architecture issues:
+
+1. **Wrong OAuth Flow**: Current implementation redirects users to Last.fm auth instead of showing OAuth consent page
+   - Current: Claude → Our Server → Last.fm → Our Server → Claude 
+   - Expected: Claude → Our Server (consent page) → Claude
+   - Authorization endpoint returns `302 Redirect` to `https://www.last.fm/api/auth/`
+
+2. **Missing OAuth Consent Page**: No proper OAuth 2.0 authorization server behavior
+   - Users should see consent page asking to authorize Claude access to their Last.fm data
+   - Backend should handle Last.fm authentication transparently
+   - Current implementation just wraps Last.fm auth in OAuth endpoints
+
+3. **Integration Manifest Fixed**: Was missing OAuth configuration entirely, now corrected
+
+**STATUS**: OAuth infrastructure (client registration, token exchange, error handling) is solid, but authorization flow is architecturally wrong for Claude Desktop integration.
+
+**NEXT STEPS**: Need to implement proper OAuth consent page and redesign authorization flow.
+
+---
+
+## 🔴 URGENT: OAuth Authorization Flow Redesign Required
+
+### Core Issue
+The current OAuth implementation is just a wrapper around Last.fm authentication, not a proper OAuth 2.0 authorization server that Claude Desktop expects.
+
+### Required Fix
+- [ ] **OAuth Consent Page** - Implement proper consent UI instead of Last.fm redirect
+- [ ] **Backend Last.fm Auth** - Handle Last.fm authentication server-side during consent
+- [ ] **Proper OAuth Flow** - Make authorization endpoint show consent, not redirect externally
+- [ ] **Claude Desktop Testing** - Validate with realistic Claude Desktop connection flow
 
 Mark tasks complete with ✅ as they're finished. Update this document to track progress and any implementation notes or issues discovered.

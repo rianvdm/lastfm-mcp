@@ -84,18 +84,33 @@ export default {
 				const baseUrl = `${url.protocol}//${url.host}`
 				const manifest = {
 					name: 'Last.fm Music Data',
-					description: 'Access your Last.fm listening history through the Model Context Protocol',
+					description: 'Access your Last.fm listening history and music recommendations',
 					version: '1.0.0',
 					homepage_url: 'https://github.com/your-username/lastfm-mcp',
 					icon_url: 'https://www.last.fm/static/images/lastfm_avatar_twitter.png',
-					// Simple MCP configuration without OAuth for now
-					servers: [
-						{
-							type: 'remote',
-							transport: 'sse',
-							url: `${baseUrl}/sse`,
-						},
-					],
+					oauth: {
+						authorization_url: `${baseUrl}/oauth/authorize`,
+						token_url: `${baseUrl}/oauth/token`,
+						client_registration_url: `${baseUrl}/oauth/register`,
+						scopes: [
+							{
+								name: 'read:listening_history',
+								description: 'Access your Last.fm listening history and statistics',
+							},
+							{
+								name: 'read:recommendations',
+								description: 'Generate music recommendations based on your taste',
+							},
+							{
+								name: 'read:social',
+								description: 'Access your Last.fm friends and social features',
+							},
+						],
+					},
+					mcp: {
+						endpoint: `${baseUrl}/`,
+						sse_endpoint: `${baseUrl}/sse`,
+					},
 				}
 
 				return new Response(JSON.stringify(manifest, null, 2), {
@@ -796,6 +811,7 @@ async function handleOAuthAuthorize(request: Request, env: Env): Promise<Respons
 		const responseType = url.searchParams.get('response_type')
 		const scope = url.searchParams.get('scope')
 		const state = url.searchParams.get('state')
+		const consent = url.searchParams.get('consent')
 
 		// Validate required parameters
 		if (!clientId) {
@@ -812,6 +828,23 @@ async function handleOAuthAuthorize(request: Request, env: Env): Promise<Respons
 		const client = await validateOAuthClient(env, clientId)
 		validateRedirectUri(client, redirectUri)
 		const validScopes = validateScopes(client, scope || '')
+
+		// Handle user consent flow
+		if (consent === 'true') {
+			// User consented, redirect to Last.fm for authentication
+			const oauthParams = new URLSearchParams({
+				client_id: clientId,
+				redirect_uri: redirectUri,
+				response_type: responseType,
+				...(scope && { scope }),
+				...(state && { state }),
+			})
+
+			const auth = new LastfmAuth(env.LASTFM_API_KEY, env.LASTFM_SHARED_SECRET)
+			const callbackUrl = `${new URL(request.url).origin}/oauth/callback?${oauthParams}`
+			const lastfmAuthUrl = auth.getAuthUrl(callbackUrl)
+			return Response.redirect(lastfmAuthUrl)
+		}
 
 		// Check if user already has a valid Last.fm session
 		const sessionCookie = request.headers.get('Cookie')
@@ -849,21 +882,23 @@ async function handleOAuthAuthorize(request: Request, env: Env): Promise<Respons
 			}
 			return Response.redirect(callbackUrl.toString())
 		} else {
-			// User needs to authenticate with Last.fm first
-			// Store OAuth parameters for after Last.fm auth completes
-			const oauthParams = new URLSearchParams({
-				client_id: clientId,
-				redirect_uri: redirectUri,
-				response_type: responseType,
-				...(scope && { scope }),
-				...(state && { state }),
+			// Show OAuth consent page
+			const consentPageHtml = generateOAuthConsentPage({
+				clientId,
+				redirectUri,
+				responseType,
+				scope: scope || '',
+				state: state || '',
+				clientName: client.name,
+				scopes: validScopes,
 			})
-
-			// Redirect to Last.fm auth with OAuth parameters preserved
-			const auth = new LastfmAuth(env.LASTFM_API_KEY, env.LASTFM_SHARED_SECRET)
-			const callbackUrl = `${new URL(request.url).origin}/oauth/callback?${oauthParams}`
-			const lastfmAuthUrl = auth.getAuthUrl(callbackUrl)
-			return Response.redirect(lastfmAuthUrl)
+			
+			return new Response(consentPageHtml, {
+				headers: {
+					'Content-Type': 'text/html',
+					...addCorsHeaders({}, request),
+				},
+			})
 		}
 	} catch (error) {
 		console.error('OAuth authorization error:', error)
@@ -1219,4 +1254,170 @@ async function handleDynamicClientRegistration(request: Request, env: Env): Prom
 			},
 		)
 	}
+}
+
+/**
+ * Generate OAuth consent page HTML
+ */
+function generateOAuthConsentPage(params: {
+	clientId: string
+	redirectUri: string
+	responseType: string
+	scope: string
+	state: string
+	clientName: string
+	scopes: string[]
+}): string {
+	const { clientId, redirectUri, responseType, scope, state, clientName, scopes } = params
+	
+	return `<!DOCTYPE html>
+<html lang="en">
+<head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<title>Authorize ${clientName} - Last.fm MCP</title>
+	<style>
+		body {
+			font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+			background: linear-gradient(135deg, #d2001c, #8b0000);
+			min-height: 100vh;
+			margin: 0;
+			display: flex;
+			align-items: center;
+			justify-content: center;
+			color: #333;
+		}
+		.container {
+			background: white;
+			border-radius: 12px;
+			box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+			padding: 40px;
+			max-width: 500px;
+			width: 90%;
+			text-align: center;
+		}
+		.logo {
+			width: 80px;
+			height: 80px;
+			background: #d2001c;
+			border-radius: 50%;
+			margin: 0 auto 20px;
+			display: flex;
+			align-items: center;
+			justify-content: center;
+			color: white;
+			font-size: 24px;
+			font-weight: bold;
+		}
+		h1 {
+			margin: 0 0 10px;
+			font-size: 24px;
+			color: #333;
+		}
+		.client-name {
+			color: #d2001c;
+			font-weight: bold;
+		}
+		.permissions {
+			text-align: left;
+			margin: 20px 0;
+			padding: 20px;
+			background: #f8f9fa;
+			border-radius: 8px;
+		}
+		.permissions h3 {
+			margin: 0 0 15px;
+			font-size: 16px;
+			color: #333;
+		}
+		.permission {
+			margin: 8px 0;
+			padding: 8px 12px;
+			background: white;
+			border-radius: 6px;
+			border-left: 3px solid #d2001c;
+			font-size: 14px;
+		}
+		.buttons {
+			display: flex;
+			gap: 15px;
+			margin-top: 30px;
+		}
+		.btn {
+			flex: 1;
+			padding: 12px 20px;
+			border: none;
+			border-radius: 6px;
+			font-size: 16px;
+			font-weight: 600;
+			cursor: pointer;
+			transition: all 0.2s;
+		}
+		.btn-primary {
+			background: #d2001c;
+			color: white;
+		}
+		.btn-primary:hover {
+			background: #b5001a;
+		}
+		.btn-secondary {
+			background: #6c757d;
+			color: white;
+		}
+		.btn-secondary:hover {
+			background: #545b62;
+		}
+		.footer {
+			margin-top: 30px;
+			font-size: 12px;
+			color: #666;
+		}
+	</style>
+</head>
+<body>
+	<div class="container">
+		<div class="logo">♪</div>
+		<h1>Authorize <span class="client-name">${clientName}</span></h1>
+		<p>This application wants to access your Last.fm music data through the MCP protocol.</p>
+		
+		<div class="permissions">
+			<h3>Requested Permissions:</h3>
+			${scopes.map(scopeName => {
+				const descriptions: Record<string, string> = {
+					'read:listening_history': 'View your listening history and play counts',
+					'read:recommendations': 'Generate personalized music recommendations',
+					'read:social': 'Access your Last.fm friends and social features'
+				}
+				return `<div class="permission">${descriptions[scopeName] || scopeName}</div>`
+			}).join('')}
+		</div>
+		
+		<div class="buttons">
+			<button class="btn btn-secondary" onclick="denyAccess()">Cancel</button>
+			<button class="btn btn-primary" onclick="authorizeAccess()">Authorize</button>
+		</div>
+		
+		<div class="footer">
+			You'll be redirected to Last.fm to sign in, then back to ${clientName}
+		</div>
+	</div>
+	
+	<script>
+		function denyAccess() {
+			const errorUrl = new URL('${redirectUri}')
+			errorUrl.searchParams.set('error', 'access_denied')
+			errorUrl.searchParams.set('error_description', 'User denied authorization')
+			${state ? `errorUrl.searchParams.set('state', '${state}')` : ''}
+			window.location.href = errorUrl.toString()
+		}
+		
+		function authorizeAccess() {
+			// Redirect to our OAuth authorization handler with consent=true
+			const authUrl = new URL(window.location)
+			authUrl.searchParams.set('consent', 'true')
+			window.location.href = authUrl.toString()
+		}
+	</script>
+</body>
+</html>`
 }

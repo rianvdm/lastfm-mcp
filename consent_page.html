@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<title>Authorize undefined - Last.fm MCP</title>
+	<style>
+		body {
+			font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+			background: linear-gradient(135deg, #d2001c, #8b0000);
+			min-height: 100vh;
+			margin: 0;
+			display: flex;
+			align-items: center;
+			justify-content: center;
+			color: #333;
+		}
+		.container {
+			background: white;
+			border-radius: 12px;
+			box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+			padding: 40px;
+			max-width: 500px;
+			width: 90%;
+			text-align: center;
+		}
+		.logo {
+			width: 80px;
+			height: 80px;
+			background: #d2001c;
+			border-radius: 50%;
+			margin: 0 auto 20px;
+			display: flex;
+			align-items: center;
+			justify-content: center;
+			color: white;
+			font-size: 24px;
+			font-weight: bold;
+		}
+		h1 {
+			margin: 0 0 10px;
+			font-size: 24px;
+			color: #333;
+		}
+		.client-name {
+			color: #d2001c;
+			font-weight: bold;
+		}
+		.permissions {
+			text-align: left;
+			margin: 20px 0;
+			padding: 20px;
+			background: #f8f9fa;
+			border-radius: 8px;
+		}
+		.permissions h3 {
+			margin: 0 0 15px;
+			font-size: 16px;
+			color: #333;
+		}
+		.permission {
+			margin: 8px 0;
+			padding: 8px 12px;
+			background: white;
+			border-radius: 6px;
+			border-left: 3px solid #d2001c;
+			font-size: 14px;
+		}
+		.buttons {
+			display: flex;
+			gap: 15px;
+			margin-top: 30px;
+		}
+		.btn {
+			flex: 1;
+			padding: 12px 20px;
+			border: none;
+			border-radius: 6px;
+			font-size: 16px;
+			font-weight: 600;
+			cursor: pointer;
+			transition: all 0.2s;
+		}
+		.btn-primary {
+			background: #d2001c;
+			color: white;
+		}
+		.btn-primary:hover {
+			background: #b5001a;
+		}
+		.btn-secondary {
+			background: #6c757d;
+			color: white;
+		}
+		.btn-secondary:hover {
+			background: #545b62;
+		}
+		.footer {
+			margin-top: 30px;
+			font-size: 12px;
+			color: #666;
+		}
+	</style>
+</head>
+<body>
+	<div class="container">
+		<div class="logo">♪</div>
+		<h1>Authorize <span class="client-name">undefined</span></h1>
+		<p>This application wants to access your Last.fm music data through the MCP protocol.</p>
+		
+		<div class="permissions">
+			<h3>Requested Permissions:</h3>
+			<div class="permission">View your listening history and play counts</div>
+		</div>
+		
+		<div class="buttons">
+			<button class="btn btn-secondary" onclick="denyAccess()">Cancel</button>
+			<button class="btn btn-primary" onclick="authorizeAccess()">Authorize</button>
+		</div>
+		
+		<div class="footer">
+			You'll be redirected to Last.fm to sign in, then back to undefined
+		</div>
+	</div>
+	
+	<script>
+		function denyAccess() {
+			const errorUrl = new URL('https://claude.ai/oauth/callback')
+			errorUrl.searchParams.set('error', 'access_denied')
+			errorUrl.searchParams.set('error_description', 'User denied authorization')
+			errorUrl.searchParams.set('state', 'test123')
+			window.location.href = errorUrl.toString()
+		}
+		
+		function authorizeAccess() {
+			// Redirect to our OAuth authorization handler with consent=true
+			const authUrl = new URL(window.location)
+			authUrl.searchParams.set('consent', 'true')
+			window.location.href = authUrl.toString()
+		}
+	</script>
+</body>
+</html>
