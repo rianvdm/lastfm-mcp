@@ -21,6 +21,7 @@ import {
 	storeAuthorizationCode,
 	validateAuthorizationCode,
 	storeAccessToken,
+	registerOAuthClient,
 } from './auth/oauth'
 import { OAuthError, OAUTH_ERRORS } from './types/oauth'
 
@@ -32,9 +33,28 @@ import { OAuthError, OAUTH_ERRORS } from './types/oauth'
 /**
  * Helper function to add CORS headers to responses
  */
-function addCorsHeaders(headers: HeadersInit = {}): Headers {
+function addCorsHeaders(headers: HeadersInit = {}, request?: Request): Headers {
 	const corsHeaders = new Headers(headers)
-	corsHeaders.set('Access-Control-Allow-Origin', '*')
+
+	// Allow Claude domains and localhost for development
+	const allowedOrigins = [
+		'https://claude.ai',
+		'https://app.claude.ai',
+		'https://console.anthropic.com',
+		'http://localhost:3000',
+		'http://localhost:8080',
+		'http://127.0.0.1:3000',
+	]
+
+	const origin = request?.headers.get('Origin')
+	if (origin && allowedOrigins.includes(origin)) {
+		corsHeaders.set('Access-Control-Allow-Origin', origin)
+		corsHeaders.set('Access-Control-Allow-Credentials', 'true')
+	} else {
+		// Fallback for testing and other legitimate clients
+		corsHeaders.set('Access-Control-Allow-Origin', '*')
+	}
+
 	corsHeaders.set('Access-Control-Allow-Methods', 'GET, POST, OPTIONS')
 	corsHeaders.set('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Connection-ID, Cookie')
 	return corsHeaders
@@ -48,17 +68,78 @@ export default {
 		if (request.method === 'OPTIONS') {
 			return new Response(null, {
 				status: 200,
-				headers: {
-					'Access-Control-Allow-Origin': '*',
-					'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
-					'Access-Control-Allow-Headers': 'Content-Type, Authorization, X-Connection-ID, Cookie',
-					'Access-Control-Max-Age': '86400',
-				},
+				headers: addCorsHeaders({ 'Access-Control-Max-Age': '86400' }, request),
 			})
 		}
 
 		// Handle different endpoints
 		switch (url.pathname) {
+			case '/.well-known/integration-manifest':
+			case '/manifest.json': {
+				// Claude Integration Manifest (as per claude-native.md)
+				if (request.method !== 'GET') {
+					return new Response('Method not allowed', { status: 405 })
+				}
+
+				const baseUrl = `${url.protocol}//${url.host}`
+				const manifest = {
+					name: 'Last.fm Music Data',
+					description: 'Access your Last.fm listening history through the Model Context Protocol',
+					version: '1.0.0',
+					homepage_url: 'https://github.com/your-username/lastfm-mcp',
+					icon_url: 'https://www.last.fm/static/images/lastfm_avatar_twitter.png',
+					// Simple MCP configuration without OAuth for now
+					servers: [
+						{
+							type: 'remote',
+							transport: 'sse',
+							url: `${baseUrl}/sse`,
+						},
+					],
+				}
+
+				return new Response(JSON.stringify(manifest, null, 2), {
+					headers: addCorsHeaders({ 'Content-Type': 'application/json' }, request),
+				})
+			}
+
+			case '/.well-known/oauth-authorization-server': {
+				// OAuth 2.1 Authorization Server Metadata (RFC 8414)
+				if (request.method !== 'GET') {
+					return new Response('Method not allowed', { status: 405 })
+				}
+
+				const baseUrl = `${url.protocol}//${url.host}`
+				const metadata = {
+					issuer: baseUrl,
+					authorization_endpoint: `${baseUrl}/oauth/authorize`,
+					token_endpoint: `${baseUrl}/oauth/token`,
+					registration_endpoint: `${baseUrl}/oauth/register`, // Dynamic Client Registration
+					scopes_supported: ['read:listening_history', 'read:recommendations', 'read:profile', 'read:library'],
+					response_types_supported: ['code'],
+					grant_types_supported: ['authorization_code'],
+					code_challenge_methods_supported: ['S256'], // PKCE
+					token_endpoint_auth_methods_supported: ['none', 'client_secret_post'], // Support public clients (none first for Claude)
+					revocation_endpoint_auth_methods_supported: ['client_secret_post', 'none'],
+					// Additional metadata that Claude might require
+					subject_types_supported: ['public'],
+					id_token_signing_alg_values_supported: ['RS256'],
+					userinfo_endpoint: `${baseUrl}/userinfo`,
+					jwks_uri: `${baseUrl}/.well-known/jwks.json`,
+				}
+
+				return new Response(JSON.stringify(metadata, null, 2), {
+					headers: addCorsHeaders({ 'Content-Type': 'application/json' }, request),
+				})
+			}
+
+			case '/oauth/register':
+				// Dynamic Client Registration (RFC 7591)
+				if (request.method !== 'POST') {
+					return new Response('Method not allowed', { status: 405 })
+				}
+				return handleDynamicClientRegistration(request, env)
+
 			case '/':
 				// Main MCP endpoint - accepts JSON-RPC messages for POST, info for GET
 				if (request.method === 'POST') {
@@ -76,6 +157,10 @@ export default {
 								'/callback': 'GET - Last.fm authentication callback',
 								'/mcp-auth': 'GET - MCP authentication',
 								'/health': 'GET - Health check',
+								'/.well-known/oauth-authorization-server': 'GET - OAuth 2.1 Authorization Server Metadata',
+								'/oauth/authorize': 'GET - OAuth authorization endpoint',
+								'/oauth/token': 'POST - OAuth token endpoint',
+								'/oauth/register': 'POST - Dynamic Client Registration (RFC 7591)',
 							},
 						}),
 						{
@@ -93,8 +178,27 @@ export default {
 			case '/sse':
 				// SSE endpoint for bidirectional communication
 				if (request.method === 'GET') {
-					return handleSSEConnection()
+					return handleSSEConnection(request)
 				} else if (request.method === 'POST') {
+					// Check for Bearer token authentication on POST requests too
+					const authHeader = request.headers.get('Authorization')
+					if (!authHeader || !authHeader.startsWith('Bearer ')) {
+						return new Response(
+							JSON.stringify({
+								error: 'unauthorized',
+								message: 'Authentication required',
+							}),
+							{
+								status: 401,
+								headers: {
+									'Content-Type': 'application/json',
+									'WWW-Authenticate': 'Bearer realm="OAuth", error="invalid_token", error_description="Missing or invalid access token"',
+									'Access-Control-Allow-Origin': '*',
+									'Access-Control-Allow-Headers': 'Authorization, Content-Type',
+								},
+							},
+						)
+					}
 					// Handle JSON-RPC requests on SSE endpoint for mcp-remote compatibility
 					// For mcp-remote, we need to infer the connection ID from the request context
 					// since it doesn't always include the X-Connection-ID header properly
@@ -347,7 +451,29 @@ async function handleCallback(request: Request, env: Env): Promise<Response> {
 /**
  * Handle SSE connection request
  */
-function handleSSEConnection(): Response {
+function handleSSEConnection(request?: Request): Response {
+	// Check for Bearer token authentication
+	const authHeader = request?.headers.get('Authorization')
+	if (!authHeader || !authHeader.startsWith('Bearer ')) {
+		// Return 401 with OAuth challenge like other MCP integrations
+		return new Response(
+			JSON.stringify({
+				error: 'unauthorized',
+				message: 'Authentication required',
+			}),
+			{
+				status: 401,
+				headers: {
+					'Content-Type': 'application/json',
+					'WWW-Authenticate': 'Bearer realm="OAuth", error="invalid_token", error_description="Missing or invalid access token"',
+					'Access-Control-Allow-Origin': '*',
+					'Access-Control-Allow-Headers': 'Authorization, Content-Type',
+				},
+			},
+		)
+	}
+
+	// If authenticated, create SSE connection
 	const { response, connectionId } = createSSEResponse()
 	console.log(`New SSE connection established: ${connectionId}`)
 	return response as unknown as Response
@@ -446,7 +572,7 @@ async function handleMCPRequest(request: Request, env?: Env): Promise<Response> 
 			}
 
 			return new Response(serializeResponse(errorResponse), {
-				headers: addCorsHeaders({ 'Content-Type': 'application/json' }),
+				headers: addCorsHeaders({ 'Content-Type': 'application/json' }, request),
 			})
 		}
 
@@ -473,7 +599,7 @@ async function handleMCPRequest(request: Request, env?: Env): Promise<Response> 
 			}
 
 			return new Response(serializeResponse(errorResponse), {
-				headers: addCorsHeaders({ 'Content-Type': 'application/json' }),
+				headers: addCorsHeaders({ 'Content-Type': 'application/json' }, request),
 			})
 		}
 
@@ -509,10 +635,13 @@ async function handleMCPRequest(request: Request, env?: Env): Promise<Response> 
 
 				return new Response(serializeResponse(errorResponse), {
 					status: 429,
-					headers: addCorsHeaders({
-						'Content-Type': 'application/json',
-						'Retry-After': rateLimitResult.resetTime ? Math.ceil((rateLimitResult.resetTime - Date.now()) / 1000).toString() : '60',
-					}),
+					headers: addCorsHeaders(
+						{
+							'Content-Type': 'application/json',
+							'Retry-After': rateLimitResult.resetTime ? Math.ceil((rateLimitResult.resetTime - Date.now()) / 1000).toString() : '60',
+						},
+						request,
+					),
 				})
 			}
 		}
@@ -535,13 +664,13 @@ async function handleMCPRequest(request: Request, env?: Env): Promise<Response> 
 		if (!response) {
 			return new Response(null, {
 				status: 204,
-				headers: addCorsHeaders(),
+				headers: addCorsHeaders({}, request),
 			})
 		}
 
 		// Return JSON-RPC response
 		return new Response(serializeResponse(response), {
-			headers: addCorsHeaders({ 'Content-Type': 'application/json' }),
+			headers: addCorsHeaders({ 'Content-Type': 'application/json' }, request),
 		})
 	} catch (error) {
 		// Internal server error
@@ -561,7 +690,7 @@ async function handleMCPRequest(request: Request, env?: Env): Promise<Response> 
 
 		return new Response(serializeResponse(errorResponse), {
 			status: 500,
-			headers: addCorsHeaders({ 'Content-Type': 'application/json' }),
+			headers: addCorsHeaders({ 'Content-Type': 'application/json' }, request),
 		})
 	}
 }
@@ -586,7 +715,7 @@ async function handleMCPAuth(request: Request, env: Env): Promise<Response> {
 						expires_at: new Date(sessionData.expiresAt).toISOString(),
 					}),
 					{
-						headers: addCorsHeaders({ 'Content-Type': 'application/json' }),
+						headers: addCorsHeaders({ 'Content-Type': 'application/json' }, request),
 					},
 				)
 			}
@@ -618,14 +747,15 @@ async function handleMCPAuth(request: Request, env: Env): Promise<Response> {
 							message: 'Use this token in the Cookie header as: session=' + sessionToken,
 						}),
 						{
-							headers: addCorsHeaders({ 'Content-Type': 'application/json' }),
+							headers: addCorsHeaders({ 'Content-Type': 'application/json' }, request),
 						},
 					)
 				}
 			}
 		}
 
-		const baseUrl = 'https://lastfm-mcp-prod.rian-db8.workers.dev'
+		const url = new URL(request.url)
+		const baseUrl = `${url.protocol}//${url.host}`
 
 		// Check for connection ID to provide connection-specific login URL
 		const connectionId = request.headers.get('X-Connection-ID')
@@ -649,7 +779,7 @@ async function handleMCPAuth(request: Request, env: Env): Promise<Response> {
 			}),
 			{
 				status: 500,
-				headers: addCorsHeaders({ 'Content-Type': 'application/json' }),
+				headers: addCorsHeaders({ 'Content-Type': 'application/json' }, request),
 			},
 		)
 	}
@@ -708,7 +838,7 @@ async function handleOAuthAuthorize(request: Request, env: Env): Promise<Respons
 				existingSession.userId,
 				existingSession.username,
 				validScopes.join(' '),
-				redirectUri
+				redirectUri,
 			)
 
 			// Redirect back to client with authorization code
@@ -737,7 +867,9 @@ async function handleOAuthAuthorize(request: Request, env: Env): Promise<Respons
 		}
 	} catch (error) {
 		console.error('OAuth authorization error:', error)
-		
+		console.error('Request URL:', request.url)
+		console.error('Request headers:', Object.fromEntries(request.headers.entries()))
+
 		if (error instanceof OAuthError) {
 			// If we have a redirect URI, redirect with error
 			const redirectUri = request.url ? new URL(request.url).searchParams.get('redirect_uri') : null
@@ -759,7 +891,7 @@ async function handleOAuthAuthorize(request: Request, env: Env): Promise<Respons
 			}
 			return new Response(error.message, { status: error.statusCode })
 		}
-		
+
 		return new Response('Internal server error', { status: 500 })
 	}
 }
@@ -802,7 +934,7 @@ async function handleOAuthCallback(request: Request, env: Env): Promise<Response
 			sessionData.name, // Last.fm username as user ID
 			sessionData.name,
 			validScopes.join(' '),
-			redirectUri
+			redirectUri,
 		)
 
 		// Redirect back to client with authorization code
@@ -814,7 +946,7 @@ async function handleOAuthCallback(request: Request, env: Env): Promise<Response
 		return Response.redirect(callbackUrl.toString())
 	} catch (error) {
 		console.error('OAuth callback error:', error)
-		
+
 		// Redirect with error
 		try {
 			const errorUrl = new URL(redirectUri)
@@ -839,54 +971,68 @@ async function handleOAuthToken(request: Request, env: Env): Promise<Response> {
 		const formData = await request.formData()
 		const grantType = formData.get('grant_type') as string
 		const code = formData.get('code') as string
+		console.log('OAuth Token request:', Object.fromEntries(formData.entries()))
 		const clientId = formData.get('client_id') as string
 		const clientSecret = formData.get('client_secret') as string
 		const redirectUri = formData.get('redirect_uri') as string
 
 		// Validate grant type
 		if (grantType !== 'authorization_code') {
-			return new Response(JSON.stringify({
-				error: 'unsupported_grant_type',
-				error_description: 'Only authorization_code grant type is supported'
-			}), {
-				status: 400,
-				headers: { 'Content-Type': 'application/json' }
-			})
+			return new Response(
+				JSON.stringify({
+					error: 'unsupported_grant_type',
+					error_description: 'Only authorization_code grant type is supported',
+				}),
+				{
+					status: 400,
+					headers: { 'Content-Type': 'application/json' },
+				},
+			)
 		}
 
 		// Validate required parameters
 		if (!code) {
-			return new Response(JSON.stringify({
-				error: 'invalid_request',
-				error_description: 'Missing authorization code'
-			}), {
-				status: 400,
-				headers: { 'Content-Type': 'application/json' }
-			})
+			return new Response(
+				JSON.stringify({
+					error: 'invalid_request',
+					error_description: 'Missing authorization code',
+				}),
+				{
+					status: 400,
+					headers: { 'Content-Type': 'application/json' },
+				},
+			)
 		}
 
 		if (!clientId || !clientSecret) {
-			return new Response(JSON.stringify({
-				error: 'invalid_client',
-				error_description: 'Missing client credentials'
-			}), {
-				status: 401,
-				headers: { 'Content-Type': 'application/json' }
-			})
+			return new Response(
+				JSON.stringify({
+					error: 'invalid_client',
+					error_description: 'Missing client credentials',
+				}),
+				{
+					status: 401,
+					headers: { 'Content-Type': 'application/json' },
+				},
+			)
 		}
 
 		if (!redirectUri) {
-			return new Response(JSON.stringify({
-				error: 'invalid_request',
-				error_description: 'Missing redirect_uri'
-			}), {
-				status: 400,
-				headers: { 'Content-Type': 'application/json' }
-			})
+			return new Response(
+				JSON.stringify({
+					error: 'invalid_request',
+					error_description: 'Missing redirect_uri',
+				}),
+				{
+					status: 400,
+					headers: { 'Content-Type': 'application/json' },
+				},
+			)
 		}
 
 		// Validate client credentials
-		await validateOAuthClient(env, clientId, clientSecret)
+		// For public clients (Claude), client_secret might be missing
+		await validateOAuthClient(env, clientId, clientSecret || undefined)
 
 		// Validate and consume authorization code
 		const authCode = await validateAuthorizationCode(env, code, clientId, redirectUri)
@@ -899,7 +1045,7 @@ async function handleOAuthToken(request: Request, env: Env): Promise<Response> {
 				username: authCode.username,
 			},
 			env.JWT_SECRET,
-			168 // 7 days (same as existing JWT tokens)
+			168, // 7 days (same as existing JWT tokens)
 		)
 
 		// Store access token mapping
@@ -910,59 +1056,184 @@ async function handleOAuthToken(request: Request, env: Env): Promise<Response> {
 			authCode.userId,
 			authCode.username,
 			authCode.scope,
-			7 * 24 * 60 * 60 // 7 days
+			7 * 24 * 60 * 60, // 7 days
 		)
 
 		// Return OAuth token response
-		return new Response(JSON.stringify({
-			access_token: accessToken,
-			token_type: 'Bearer',
-			expires_in: 7 * 24 * 60 * 60, // 7 days in seconds
-			scope: authCode.scope
-		}), {
-			status: 200,
-			headers: { 
-				'Content-Type': 'application/json',
-				'Cache-Control': 'no-store',
-				'Pragma': 'no-cache'
-			}
-		})
-
+		return new Response(
+			JSON.stringify({
+				access_token: accessToken,
+				token_type: 'Bearer',
+				expires_in: 7 * 24 * 60 * 60, // 7 days in seconds
+				scope: authCode.scope,
+			}),
+			{
+				status: 200,
+				headers: {
+					'Content-Type': 'application/json',
+					'Cache-Control': 'no-store',
+					Pragma: 'no-cache',
+				},
+			},
+		)
 	} catch (error) {
 		console.error('OAuth token error:', error)
 
 		// Handle OAuth-specific errors
 		if (error instanceof Error && error.message.includes('OAuth')) {
 			const errorMessage = error.message.toLowerCase()
-			
+
 			if (errorMessage.includes('client not found') || errorMessage.includes('invalid client')) {
-				return new Response(JSON.stringify({
-					error: 'invalid_client',
-					error_description: 'Invalid client credentials'
-				}), {
-					status: 401,
-					headers: { 'Content-Type': 'application/json' }
-				})
+				return new Response(
+					JSON.stringify({
+						error: 'invalid_client',
+						error_description: 'Invalid client credentials',
+					}),
+					{
+						status: 401,
+						headers: { 'Content-Type': 'application/json' },
+					},
+				)
 			}
-			
+
 			if (errorMessage.includes('authorization code') || errorMessage.includes('invalid grant')) {
-				return new Response(JSON.stringify({
-					error: 'invalid_grant',
-					error_description: 'Invalid authorization code'
-				}), {
-					status: 400,
-					headers: { 'Content-Type': 'application/json' }
-				})
+				return new Response(
+					JSON.stringify({
+						error: 'invalid_grant',
+						error_description: 'Invalid authorization code',
+					}),
+					{
+						status: 400,
+						headers: { 'Content-Type': 'application/json' },
+					},
+				)
 			}
 		}
 
 		// Generic server error
-		return new Response(JSON.stringify({
-			error: 'server_error',
-			error_description: 'Internal server error'
-		}), {
-			status: 500,
-			headers: { 'Content-Type': 'application/json' }
+		return new Response(
+			JSON.stringify({
+				error: 'server_error',
+				error_description: 'Internal server error',
+			}),
+			{
+				status: 500,
+				headers: { 'Content-Type': 'application/json' },
+			},
+		)
+	}
+}
+
+/**
+ * Handle Dynamic Client Registration (RFC 7591)
+ * Allows Claude Desktop to automatically register as an OAuth client
+ */
+async function handleDynamicClientRegistration(request: Request, env: Env): Promise<Response> {
+	try {
+		const body = (await request.json()) as Record<string, unknown>
+		console.log('Dynamic Client Registration request:', body)
+
+		// Validate registration request
+		if (!body || typeof body !== 'object') {
+			return new Response(
+				JSON.stringify({
+					error: 'invalid_client_metadata',
+					error_description: 'Invalid registration request',
+				}),
+				{
+					status: 400,
+					headers: addCorsHeaders({ 'Content-Type': 'application/json' }, request),
+				},
+			)
+		}
+
+		// Extract client metadata
+		const clientName = body.client_name || 'Claude Desktop'
+		const redirectUris = body.redirect_uris || ['https://claude.ai/oauth/callback', 'https://app.claude.ai/oauth/callback']
+
+		// Handle scopes - convert from string to array format expected by registerOAuthClient
+		let scopes: string[]
+		if (typeof body.scope === 'string') {
+			scopes = body.scope.split(' ').filter((s) => s.length > 0)
+		} else {
+			scopes = ['read:listening_history', 'read:profile']
+		}
+
+		// Special handling for Claude's 'claudeai' scope - map it to ALL our scopes
+		if (scopes.length === 1 && scopes[0] === 'claudeai') {
+			console.log('Mapping claudeai scope to all available scopes')
+			scopes = ['read:listening_history', 'read:recommendations', 'read:profile', 'read:library']
+		}
+
+		// Validate that all requested scopes are supported
+		const supportedScopes = ['read:listening_history', 'read:recommendations', 'read:profile', 'read:library']
+		const invalidScopes = scopes.filter((scope) => !supportedScopes.includes(scope))
+		if (invalidScopes.length > 0) {
+			return new Response(
+				JSON.stringify({
+					error: 'invalid_scope',
+					error_description: `Unsupported scopes: ${invalidScopes.join(', ')}`,
+				}),
+				{
+					status: 400,
+					headers: addCorsHeaders({ 'Content-Type': 'application/json' }, request),
+				},
+			)
+		}
+
+		// Validate redirect URIs
+		if (!Array.isArray(redirectUris) || redirectUris.length === 0) {
+			return new Response(
+				JSON.stringify({
+					error: 'invalid_redirect_uri',
+					error_description: 'At least one redirect URI is required',
+				}),
+				{
+					status: 400,
+					headers: addCorsHeaders({ 'Content-Type': 'application/json' }, request),
+				},
+			)
+		}
+
+		// Register the client using our existing OAuth utilities
+		const client = await registerOAuthClient(env, clientName, redirectUris, scopes)
+		console.log('Successfully registered OAuth client:', client.id)
+
+		// Prepare Dynamic Client Registration response
+		// For Claude (token_endpoint_auth_method: 'none'), don't return client_secret
+		const isPublicClient = body.token_endpoint_auth_method === 'none'
+		const response: any = {
+			client_id: client.id,
+			client_name: client.name,
+			redirect_uris: client.redirectUris,
+			scope: client.allowedScopes.join(' '),
+			grant_types: ['authorization_code'],
+			response_types: ['code'],
+			token_endpoint_auth_method: isPublicClient ? 'none' : 'client_secret_post',
+			client_id_issued_at: Math.floor(client.createdAt / 1000),
+		}
+
+		// Only include client_secret for confidential clients
+		if (!isPublicClient) {
+			response.client_secret = client.secret
+		}
+
+		return new Response(JSON.stringify(response), {
+			status: 201, // Created
+			headers: addCorsHeaders({ 'Content-Type': 'application/json' }, request),
 		})
+	} catch (error) {
+		console.error('Dynamic client registration error:', error)
+		const errorMessage = error instanceof Error ? error.message : 'Unknown error'
+		return new Response(
+			JSON.stringify({
+				error: 'server_error',
+				error_description: `Failed to register client: ${errorMessage}`,
+			}),
+			{
+				status: 500,
+				headers: addCorsHeaders({ 'Content-Type': 'application/json' }, request),
+			},
+		)
 	}
 }

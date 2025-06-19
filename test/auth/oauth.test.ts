@@ -24,7 +24,7 @@ describe('OAuth 2.0 Core Functions', () => {
 		it('should generate unique client IDs', () => {
 			const id1 = generateClientId()
 			const id2 = generateClientId()
-			
+
 			expect(id1).toHaveLength(32) // 16 bytes = 32 hex chars
 			expect(id2).toHaveLength(32)
 			expect(id1).not.toBe(id2)
@@ -34,7 +34,7 @@ describe('OAuth 2.0 Core Functions', () => {
 		it('should generate unique client secrets', () => {
 			const secret1 = generateClientSecret()
 			const secret2 = generateClientSecret()
-			
+
 			expect(secret1).toHaveLength(64) // 32 bytes = 64 hex chars
 			expect(secret2).toHaveLength(64)
 			expect(secret1).not.toBe(secret2)
@@ -44,7 +44,7 @@ describe('OAuth 2.0 Core Functions', () => {
 		it('should generate unique authorization codes', () => {
 			const code1 = generateAuthorizationCode()
 			const code2 = generateAuthorizationCode()
-			
+
 			expect(code1).toHaveLength(48) // 24 bytes = 48 hex chars
 			expect(code2).toHaveLength(48)
 			expect(code1).not.toBe(code2)
@@ -58,7 +58,7 @@ describe('OAuth 2.0 Core Functions', () => {
 				env,
 				'Test Application',
 				['https://app.example.com/callback', 'https://test.example.com/callback'],
-				[OAUTH_SCOPES.READ_LISTENING_HISTORY, OAUTH_SCOPES.READ_PROFILE]
+				[OAUTH_SCOPES.READ_LISTENING_HISTORY, OAUTH_SCOPES.READ_PROFILE],
 			)
 
 			expect(client.id).toHaveLength(32)
@@ -71,11 +71,7 @@ describe('OAuth 2.0 Core Functions', () => {
 		})
 
 		it('should store and retrieve OAuth client', async () => {
-			const originalClient = await registerOAuthClient(
-				env,
-				'Retrieval Test Client',
-				['https://example.com/callback']
-			)
+			const originalClient = await registerOAuthClient(env, 'Retrieval Test Client', ['https://example.com/callback'])
 
 			const retrievedClient = await getOAuthClient(env, originalClient.id)
 			expect(retrievedClient).toEqual(originalClient)
@@ -88,7 +84,7 @@ describe('OAuth 2.0 Core Functions', () => {
 
 		it('should validate existing client without secret', async () => {
 			const client = await registerOAuthClient(env, 'Validation Test', ['https://example.com/callback'])
-			
+
 			// Validation without secret should work
 			const validatedClient = await validateOAuthClient(env, client.id)
 			expect(validatedClient).toEqual(client)
@@ -96,14 +92,14 @@ describe('OAuth 2.0 Core Functions', () => {
 
 		it('should validate client with correct secret', async () => {
 			const client = await registerOAuthClient(env, 'Secret Test', ['https://example.com/callback'])
-			
+
 			const validatedClient = await validateOAuthClient(env, client.id, client.secret)
 			expect(validatedClient).toEqual(client)
 		})
 
 		it('should reject client with wrong secret', async () => {
 			const client = await registerOAuthClient(env, 'Wrong Secret Test', ['https://example.com/callback'])
-			
+
 			await expect(validateOAuthClient(env, client.id, 'wrong-secret')).rejects.toThrow(OAuthError)
 		})
 
@@ -113,10 +109,10 @@ describe('OAuth 2.0 Core Functions', () => {
 
 		it('should reject inactive client', async () => {
 			const client = await registerOAuthClient(env, 'Inactive Test', ['https://example.com/callback'])
-			
+
 			// Manually set client as inactive
 			await env.OAUTH_CLIENTS.put(client.id, JSON.stringify({ ...client, active: false }))
-			
+
 			await expect(validateOAuthClient(env, client.id)).rejects.toThrow(OAuthError)
 		})
 	})
@@ -198,13 +194,13 @@ describe('OAuth 2.0 Core Functions', () => {
 			const clientId = 'test-client'
 			const userId = 'testuser'
 			const username = 'testuser'
-			const scope = 'read:listening-history'
+			const scope = 'read:listening_history'
 			const redirectUri = 'https://example.com/callback'
 
 			await storeAuthorizationCode(env, code, clientId, userId, username, scope, redirectUri)
 
 			const retrievedCode = await validateAuthorizationCode(env, code, clientId, redirectUri)
-			
+
 			expect(retrievedCode.code).toBe(code)
 			expect(retrievedCode.clientId).toBe(clientId)
 			expect(retrievedCode.userId).toBe(userId)
@@ -245,7 +241,7 @@ describe('OAuth 2.0 Core Functions', () => {
 
 		it('should reject expired authorization code', async () => {
 			const code = generateAuthorizationCode()
-			
+
 			// Manually store expired code
 			const expiredCodeData = {
 				code,
@@ -269,12 +265,12 @@ describe('OAuth 2.0 Core Functions', () => {
 			const clientId = 'test-client'
 			const userId = 'testuser'
 			const username = 'testuser'
-			const scope = 'read:listening-history read:profile'
+			const scope = 'read:listening_history read:profile'
 
 			await storeAccessToken(env, token, clientId, userId, username, scope)
 
 			const retrievedToken = await validateAccessToken(env, token)
-			
+
 			expect(retrievedToken.token).toBe(token)
 			expect(retrievedToken.clientId).toBe(clientId)
 			expect(retrievedToken.userId).toBe(userId)
@@ -289,7 +285,7 @@ describe('OAuth 2.0 Core Functions', () => {
 
 		it('should reject expired access token', async () => {
 			const token = 'expired-token-123'
-			
+
 			// Manually store expired token
 			const expiredTokenData = {
 				token,
@@ -307,7 +303,7 @@ describe('OAuth 2.0 Core Functions', () => {
 
 		it('should clean up expired tokens during validation', async () => {
 			const token = 'cleanup-test-token'
-			
+
 			// Store expired token
 			const expiredTokenData = {
 				token,
@@ -332,7 +328,7 @@ describe('OAuth 2.0 Core Functions', () => {
 	describe('Error handling', () => {
 		it('should throw OAuthError with correct properties', () => {
 			const error = new OAuthError('invalid_client', 'Client not found', 401)
-			
+
 			expect(error).toBeInstanceOf(Error)
 			expect(error).toBeInstanceOf(OAuthError)
 			expect(error.error).toBe('invalid_client')
@@ -343,7 +339,7 @@ describe('OAuth 2.0 Core Functions', () => {
 
 		it('should create OAuthError without status code', () => {
 			const error = new OAuthError('invalid_request', 'Bad request')
-			
+
 			expect(error.error).toBe('invalid_request')
 			expect(error.description).toBe('Bad request')
 			expect(error.statusCode).toBe(400) // Default

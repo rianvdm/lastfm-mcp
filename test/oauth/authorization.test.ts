@@ -6,7 +6,6 @@ import { env, SELF } from 'cloudflare:test'
 import { registerOAuthClient } from '../../src/auth/oauth'
 
 describe('OAuth Authorization Endpoint', () => {
-
 	describe('Parameter validation', () => {
 		it('should reject missing client_id parameter', async () => {
 			const response = await SELF.fetch('http://localhost/oauth/authorize?redirect_uri=https://example.com&response_type=code', {
@@ -36,9 +35,12 @@ describe('OAuth Authorization Endpoint', () => {
 		})
 
 		it('should reject invalid response_type', async () => {
-			const response = await SELF.fetch('http://localhost/oauth/authorize?client_id=test123&redirect_uri=https://example.com&response_type=token', {
-				method: 'GET',
-			})
+			const response = await SELF.fetch(
+				'http://localhost/oauth/authorize?client_id=test123&redirect_uri=https://example.com&response_type=token',
+				{
+					method: 'GET',
+				},
+			)
 
 			expect(response.status).toBe(400)
 			const text = await response.text()
@@ -58,9 +60,12 @@ describe('OAuth Authorization Endpoint', () => {
 
 	describe('Client validation', () => {
 		it('should reject unregistered client', async () => {
-			const response = await SELF.fetch('http://localhost/oauth/authorize?client_id=nonexistent&redirect_uri=https://example.com&response_type=code', {
-				method: 'GET',
-			})
+			const response = await SELF.fetch(
+				'http://localhost/oauth/authorize?client_id=nonexistent&redirect_uri=https://example.com&response_type=code',
+				{
+					method: 'GET',
+				},
+			)
 
 			expect(response.status).toBe(401)
 			const text = await response.text()
@@ -72,9 +77,12 @@ describe('OAuth Authorization Endpoint', () => {
 			const client = await registerOAuthClient(env, 'Test Client', ['https://example.com'])
 			await env.OAUTH_CLIENTS.put(client.id, JSON.stringify({ ...client, active: false }))
 
-			const response = await SELF.fetch(`http://localhost/oauth/authorize?client_id=${client.id}&redirect_uri=https://example.com&response_type=code`, {
-				method: 'GET',
-			})
+			const response = await SELF.fetch(
+				`http://localhost/oauth/authorize?client_id=${client.id}&redirect_uri=https://example.com&response_type=code`,
+				{
+					method: 'GET',
+				},
+			)
 
 			expect(response.status).toBe(401)
 			const text = await response.text()
@@ -84,9 +92,12 @@ describe('OAuth Authorization Endpoint', () => {
 		it('should reject unregistered redirect_uri', async () => {
 			const client = await registerOAuthClient(env, 'Test Client', ['https://allowed.com'])
 
-			const response = await SELF.fetch(`http://localhost/oauth/authorize?client_id=${client.id}&redirect_uri=https://notallowed.com&response_type=code`, {
-				method: 'GET',
-			})
+			const response = await SELF.fetch(
+				`http://localhost/oauth/authorize?client_id=${client.id}&redirect_uri=https://notallowed.com&response_type=code`,
+				{
+					method: 'GET',
+				},
+			)
 
 			expect(response.status).toBe(400)
 			const text = await response.text()
@@ -96,9 +107,12 @@ describe('OAuth Authorization Endpoint', () => {
 		it('should accept valid client and redirect_uri', async () => {
 			const client = await registerOAuthClient(env, 'Test Client', ['https://example.com'])
 
-			const response = await SELF.fetch(`http://localhost/oauth/authorize?client_id=${client.id}&redirect_uri=https://example.com&response_type=code`, {
-				method: 'GET',
-			})
+			const response = await SELF.fetch(
+				`http://localhost/oauth/authorize?client_id=${client.id}&redirect_uri=https://example.com&response_type=code`,
+				{
+					method: 'GET',
+				},
+			)
 
 			// Should redirect to Last.fm for authentication
 			expect(response.status).toBe(302)
@@ -109,11 +123,14 @@ describe('OAuth Authorization Endpoint', () => {
 
 	describe('Scope validation', () => {
 		it('should accept valid scopes', async () => {
-			const client = await registerOAuthClient(env, 'Test Client', ['https://example.com'], ['read:listening-history', 'read:profile'])
+			const client = await registerOAuthClient(env, 'Test Client', ['https://example.com'], ['read:listening_history', 'read:profile'])
 
-			const response = await SELF.fetch(`http://localhost/oauth/authorize?client_id=${client.id}&redirect_uri=https://example.com&response_type=code&scope=read:listening-history`, {
-				method: 'GET',
-			})
+			const response = await SELF.fetch(
+				`http://localhost/oauth/authorize?client_id=${client.id}&redirect_uri=https://example.com&response_type=code&scope=read:listening_history`,
+				{
+					method: 'GET',
+				},
+			)
 
 			expect(response.status).toBe(302)
 			const location = response.headers.get('Location')
@@ -121,11 +138,14 @@ describe('OAuth Authorization Endpoint', () => {
 		})
 
 		it('should reject invalid scopes', async () => {
-			const client = await registerOAuthClient(env, 'Test Client', ['https://example.com'], ['read:listening-history'])
+			const client = await registerOAuthClient(env, 'Test Client', ['https://example.com'], ['read:listening_history'])
 
-			const response = await SELF.fetch(`http://localhost/oauth/authorize?client_id=${client.id}&redirect_uri=https://example.com&response_type=code&scope=write:data`, {
-				method: 'GET',
-			})
+			const response = await SELF.fetch(
+				`http://localhost/oauth/authorize?client_id=${client.id}&redirect_uri=https://example.com&response_type=code&scope=write:data`,
+				{
+					method: 'GET',
+				},
+			)
 
 			expect(response.status).toBe(400)
 			const text = await response.text()
@@ -135,9 +155,12 @@ describe('OAuth Authorization Endpoint', () => {
 		it('should use default scopes when none provided', async () => {
 			const client = await registerOAuthClient(env, 'Test Client', ['https://example.com'])
 
-			const response = await SELF.fetch(`http://localhost/oauth/authorize?client_id=${client.id}&redirect_uri=https://example.com&response_type=code`, {
-				method: 'GET',
-			})
+			const response = await SELF.fetch(
+				`http://localhost/oauth/authorize?client_id=${client.id}&redirect_uri=https://example.com&response_type=code`,
+				{
+					method: 'GET',
+				},
+			)
 
 			expect(response.status).toBe(302)
 			// Should still work with default scopes
@@ -148,14 +171,17 @@ describe('OAuth Authorization Endpoint', () => {
 		it('should redirect to Last.fm when user not authenticated', async () => {
 			const client = await registerOAuthClient(env, 'Test Client', ['https://example.com'])
 
-			const response = await SELF.fetch(`http://localhost/oauth/authorize?client_id=${client.id}&redirect_uri=https://example.com&response_type=code`, {
-				method: 'GET',
-			})
+			const response = await SELF.fetch(
+				`http://localhost/oauth/authorize?client_id=${client.id}&redirect_uri=https://example.com&response_type=code`,
+				{
+					method: 'GET',
+				},
+			)
 
 			expect(response.status).toBe(302)
 			const location = response.headers.get('Location')
 			expect(location).toContain('last.fm/api/auth')
-			
+
 			// Should preserve OAuth parameters in callback URL
 			expect(location).toContain('client_id=' + client.id)
 			expect(location).toContain('redirect_uri=https://example.com')
@@ -165,9 +191,12 @@ describe('OAuth Authorization Endpoint', () => {
 			const client = await registerOAuthClient(env, 'Test Client', ['https://example.com'])
 			const state = 'random-state-123'
 
-			const response = await SELF.fetch(`http://localhost/oauth/authorize?client_id=${client.id}&redirect_uri=https://example.com&response_type=code&state=${state}`, {
-				method: 'GET',
-			})
+			const response = await SELF.fetch(
+				`http://localhost/oauth/authorize?client_id=${client.id}&redirect_uri=https://example.com&response_type=code&state=${state}`,
+				{
+					method: 'GET',
+				},
+			)
 
 			expect(response.status).toBe(302)
 			const location = response.headers.get('Location')
@@ -183,9 +212,12 @@ describe('OAuth Authorization Endpoint', () => {
 			const client = await registerOAuthClient(env, 'Test Client', ['https://example.com'])
 
 			// Test with invalid scope but valid redirect_uri
-			const response = await SELF.fetch(`http://localhost/oauth/authorize?client_id=${client.id}&redirect_uri=https://example.com&response_type=code&scope=invalid:scope`, {
-				method: 'GET',
-			})
+			const response = await SELF.fetch(
+				`http://localhost/oauth/authorize?client_id=${client.id}&redirect_uri=https://example.com&response_type=code&scope=invalid:scope`,
+				{
+					method: 'GET',
+				},
+			)
 
 			// Should redirect with error instead of returning error response
 			expect(response.status).toBe(302)
@@ -209,9 +241,12 @@ describe('OAuth Authorization Endpoint', () => {
 			const client = await registerOAuthClient(env, 'Test Client', ['https://example.com'])
 			const state = 'error-state-456'
 
-			const response = await SELF.fetch(`http://localhost/oauth/authorize?client_id=${client.id}&redirect_uri=https://example.com&response_type=code&scope=invalid:scope&state=${state}`, {
-				method: 'GET',
-			})
+			const response = await SELF.fetch(
+				`http://localhost/oauth/authorize?client_id=${client.id}&redirect_uri=https://example.com&response_type=code&scope=invalid:scope&state=${state}`,
+				{
+					method: 'GET',
+				},
+			)
 
 			expect(response.status).toBe(302)
 			const location = response.headers.get('Location')
@@ -239,9 +274,12 @@ describe('OAuth Authorization Endpoint', () => {
 		})
 
 		it('should only accept GET requests', async () => {
-			const response = await SELF.fetch('http://localhost/oauth/authorize?client_id=test&redirect_uri=https://example.com&response_type=code', {
-				method: 'GET',
-			})
+			const response = await SELF.fetch(
+				'http://localhost/oauth/authorize?client_id=test&redirect_uri=https://example.com&response_type=code',
+				{
+					method: 'GET',
+				},
+			)
 
 			// Should not be a 405 error (though will be other error due to invalid client)
 			expect(response.status).not.toBe(405)

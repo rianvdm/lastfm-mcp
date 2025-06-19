@@ -18,11 +18,13 @@ Claude Integrations are a feature that allows Claude (on web and desktop) to con
 ### Current Architecture vs Native Integration
 
 **Current Flow (with mcp-remote):**
+
 ```
 Claude → mcp-remote (local) → Internet → Your MCP Server
 ```
 
 **Native Integration Flow:**
+
 ```
 Claude → Internet → Your MCP Server (with OAuth)
 ```
@@ -55,7 +57,7 @@ GET /oauth/authorize
 // Token endpoint
 POST /oauth/token
   Content-Type: application/x-www-form-urlencoded
-  
+
   grant_type=authorization_code
   &code={authorization_code}
   &redirect_uri={redirect_uri}
@@ -65,7 +67,7 @@ POST /oauth/token
 // Token refresh endpoint (optional but recommended)
 POST /oauth/token
   Content-Type: application/x-www-form-urlencoded
-  
+
   grant_type=refresh_token
   &refresh_token={refresh_token}
   &client_id={client_id}
@@ -93,7 +95,7 @@ Authorization: Bearer {access_token}
 function validateRequest(request: Request): AuthContext {
   const token = request.headers.get('Authorization')?.replace('Bearer ', '');
   if (!token) throw new Error('Unauthorized');
-  
+
   // Validate JWT and extract user session
   const session = await validateJWT(token);
   return { userId: session.userId, username: session.username };
@@ -118,29 +120,29 @@ Claude Integrations require a manifest file that describes the integration:
 
 ```json
 {
-  "name": "Last.fm Music Data",
-  "description": "Access your Last.fm listening history and music recommendations",
-  "icon_url": "https://your-server.com/icon.png",
-  "homepage_url": "https://github.com/your-repo",
-  "oauth": {
-    "client_id": "your-client-id",
-    "authorization_url": "https://your-server.com/oauth/authorize",
-    "token_url": "https://your-server.com/oauth/token",
-    "scopes": [
-      {
-        "name": "read:listening_history",
-        "description": "Read your Last.fm listening history"
-      },
-      {
-        "name": "read:recommendations",
-        "description": "Get music recommendations"
-      }
-    ]
-  },
-  "mcp": {
-    "endpoint": "https://your-server.com/",
-    "sse_endpoint": "https://your-server.com/sse"
-  }
+	"name": "Last.fm Music Data",
+	"description": "Access your Last.fm listening history and music recommendations",
+	"icon_url": "https://your-server.com/icon.png",
+	"homepage_url": "https://github.com/your-repo",
+	"oauth": {
+		"client_id": "your-client-id",
+		"authorization_url": "https://your-server.com/oauth/authorize",
+		"token_url": "https://your-server.com/oauth/token",
+		"scopes": [
+			{
+				"name": "read:listening_history",
+				"description": "Read your Last.fm listening history"
+			},
+			{
+				"name": "read:recommendations",
+				"description": "Get music recommendations"
+			}
+		]
+	},
+	"mcp": {
+		"endpoint": "https://your-server.com/",
+		"sse_endpoint": "https://your-server.com/sse"
+	}
 }
 ```
 
@@ -149,6 +151,7 @@ Claude Integrations require a manifest file that describes the integration:
 ### Phase 1: OAuth 2.0 Infrastructure
 
 1. **Create OAuth Database Schema**
+
    ```typescript
    // Cloudflare KV namespaces needed:
    - OAUTH_CLIENTS: Store registered OAuth clients
@@ -157,6 +160,7 @@ Claude Integrations require a manifest file that describes the integration:
    ```
 
 2. **Implement OAuth Endpoints**
+
    - Build `/oauth/authorize` endpoint
    - Build `/oauth/token` endpoint
    - Add token validation middleware
@@ -169,17 +173,19 @@ Claude Integrations require a manifest file that describes the integration:
 ### Phase 2: Protocol Adaptations
 
 1. **Update Request Handling**
+
    ```typescript
    // Before (with mcp-remote)
-   const connectionId = request.headers.get('x-connection-id');
-   const session = await getSessionByConnectionId(connectionId);
+   const connectionId = request.headers.get('x-connection-id')
+   const session = await getSessionByConnectionId(connectionId)
 
    // After (native)
-   const token = request.headers.get('Authorization')?.replace('Bearer ', '');
-   const session = await getSessionByOAuthToken(token);
+   const token = request.headers.get('Authorization')?.replace('Bearer ', '')
+   const session = await getSessionByOAuthToken(token)
    ```
 
 2. **Modify SSE Connection Management**
+
    - Use OAuth tokens instead of connection IDs
    - Update connection tracking logic
 
@@ -187,20 +193,22 @@ Claude Integrations require a manifest file that describes the integration:
    ```typescript
    // Ensure proper CORS headers for Claude domains
    const ALLOWED_ORIGINS = [
-     'https://claude.ai',
-     'https://app.claude.ai',
-     // Add other Claude domains as needed
-   ];
+   	'https://claude.ai',
+   	'https://app.claude.ai',
+   	// Add other Claude domains as needed
+   ]
    ```
 
 ### Phase 3: Testing & Validation
 
 1. **OAuth Flow Testing**
+
    - Test authorization code generation
    - Verify token exchange
    - Validate token refresh (if implemented)
 
 2. **Integration Testing**
+
    - Test with Claude's integration validator (if available)
    - Verify tool discovery works
    - Ensure all MCP commands function properly
@@ -213,6 +221,7 @@ Claude Integrations require a manifest file that describes the integration:
 ### Phase 4: Registration & Deployment
 
 1. **Prepare for Claude Integration Directory**
+
    - Create integration manifest
    - Prepare documentation
    - Set up support channels
@@ -229,44 +238,48 @@ Claude Integrations require a manifest file that describes the integration:
 ```typescript
 // src/auth/oauth.ts
 export async function handleOAuthAuthorize(request: Request, env: Env): Promise<Response> {
-  const url = new URL(request.url);
-  const clientId = url.searchParams.get('client_id');
-  const redirectUri = url.searchParams.get('redirect_uri');
-  const state = url.searchParams.get('state');
-  const scope = url.searchParams.get('scope');
+	const url = new URL(request.url)
+	const clientId = url.searchParams.get('client_id')
+	const redirectUri = url.searchParams.get('redirect_uri')
+	const state = url.searchParams.get('state')
+	const scope = url.searchParams.get('scope')
 
-  // Validate OAuth client
-  const client = await env.OAUTH_CLIENTS.get(clientId);
-  if (!client) {
-    return new Response('Invalid client_id', { status: 400 });
-  }
+	// Validate OAuth client
+	const client = await env.OAUTH_CLIENTS.get(clientId)
+	if (!client) {
+		return new Response('Invalid client_id', { status: 400 })
+	}
 
-  // Check if user already has Last.fm session
-  const session = await getExistingSession(request, env);
-  if (!session) {
-    // Redirect to Last.fm auth, then back to OAuth flow
-    const lastfmAuthUrl = buildLastfmAuthUrl({
-      callbackUrl: `/oauth/callback?${url.searchParams}`,
-    });
-    return Response.redirect(lastfmAuthUrl);
-  }
+	// Check if user already has Last.fm session
+	const session = await getExistingSession(request, env)
+	if (!session) {
+		// Redirect to Last.fm auth, then back to OAuth flow
+		const lastfmAuthUrl = buildLastfmAuthUrl({
+			callbackUrl: `/oauth/callback?${url.searchParams}`,
+		})
+		return Response.redirect(lastfmAuthUrl)
+	}
 
-  // Generate authorization code
-  const code = generateAuthorizationCode();
-  await env.OAUTH_CODES.put(code, JSON.stringify({
-    clientId,
-    userId: session.userId,
-    username: session.username,
-    scope,
-    redirectUri,
-  }), { expirationTtl: 600 }); // 10 minute expiry
+	// Generate authorization code
+	const code = generateAuthorizationCode()
+	await env.OAUTH_CODES.put(
+		code,
+		JSON.stringify({
+			clientId,
+			userId: session.userId,
+			username: session.username,
+			scope,
+			redirectUri,
+		}),
+		{ expirationTtl: 600 },
+	) // 10 minute expiry
 
-  // Redirect back to Claude with code
-  const callbackUrl = new URL(redirectUri);
-  callbackUrl.searchParams.set('code', code);
-  callbackUrl.searchParams.set('state', state);
-  
-  return Response.redirect(callbackUrl.toString());
+	// Redirect back to Claude with code
+	const callbackUrl = new URL(redirectUri)
+	callbackUrl.searchParams.set('code', code)
+	callbackUrl.searchParams.set('state', state)
+
+	return Response.redirect(callbackUrl.toString())
 }
 ```
 
@@ -275,57 +288,67 @@ export async function handleOAuthAuthorize(request: Request, env: Env): Promise<
 ```typescript
 // src/auth/oauth.ts
 export async function handleOAuthToken(request: Request, env: Env): Promise<Response> {
-  const formData = await request.formData();
-  const grantType = formData.get('grant_type');
+	const formData = await request.formData()
+	const grantType = formData.get('grant_type')
 
-  if (grantType === 'authorization_code') {
-    const code = formData.get('code');
-    const clientId = formData.get('client_id');
-    const clientSecret = formData.get('client_secret');
+	if (grantType === 'authorization_code') {
+		const code = formData.get('code')
+		const clientId = formData.get('client_id')
+		const clientSecret = formData.get('client_secret')
 
-    // Validate client credentials
-    const client = await env.OAUTH_CLIENTS.get(clientId);
-    if (!client || JSON.parse(client).secret !== clientSecret) {
-      return new Response('Invalid client credentials', { status: 401 });
-    }
+		// Validate client credentials
+		const client = await env.OAUTH_CLIENTS.get(clientId)
+		if (!client || JSON.parse(client).secret !== clientSecret) {
+			return new Response('Invalid client credentials', { status: 401 })
+		}
 
-    // Validate authorization code
-    const codeData = await env.OAUTH_CODES.get(code as string);
-    if (!codeData) {
-      return new Response('Invalid authorization code', { status: 400 });
-    }
+		// Validate authorization code
+		const codeData = await env.OAUTH_CODES.get(code as string)
+		if (!codeData) {
+			return new Response('Invalid authorization code', { status: 400 })
+		}
 
-    const { userId, username, scope } = JSON.parse(codeData);
+		const { userId, username, scope } = JSON.parse(codeData)
 
-    // Generate access token (JWT)
-    const accessToken = await generateJWT({
-      userId,
-      username,
-      scope,
-      clientId,
-    }, env.JWT_SECRET);
+		// Generate access token (JWT)
+		const accessToken = await generateJWT(
+			{
+				userId,
+				username,
+				scope,
+				clientId,
+			},
+			env.JWT_SECRET,
+		)
 
-    // Store token mapping for easy lookup
-    await env.OAUTH_TOKENS.put(accessToken, JSON.stringify({
-      userId,
-      username,
-      scope,
-    }), { expirationTtl: 7 * 24 * 60 * 60 }); // 7 days
+		// Store token mapping for easy lookup
+		await env.OAUTH_TOKENS.put(
+			accessToken,
+			JSON.stringify({
+				userId,
+				username,
+				scope,
+			}),
+			{ expirationTtl: 7 * 24 * 60 * 60 },
+		) // 7 days
 
-    // Clean up used authorization code
-    await env.OAUTH_CODES.delete(code as string);
+		// Clean up used authorization code
+		await env.OAUTH_CODES.delete(code as string)
 
-    return new Response(JSON.stringify({
-      access_token: accessToken,
-      token_type: 'Bearer',
-      expires_in: 604800, // 7 days
-      scope,
-    }), {
-      headers: { 'Content-Type': 'application/json' },
-    });
-  }
+		return new Response(
+			JSON.stringify({
+				access_token: accessToken,
+				token_type: 'Bearer',
+				expires_in: 604800, // 7 days
+				scope,
+			}),
+			{
+				headers: { 'Content-Type': 'application/json' },
+			},
+		)
+	}
 
-  return new Response('Unsupported grant type', { status: 400 });
+	return new Response('Unsupported grant type', { status: 400 })
 }
 ```
 
@@ -334,36 +357,36 @@ export async function handleOAuthToken(request: Request, env: Env): Promise<Resp
 ```typescript
 // src/protocol/handlers.ts
 export async function handleMCPRequest(request: Request, env: Env): Promise<Response> {
-  // Extract bearer token
-  const authHeader = request.headers.get('Authorization');
-  if (!authHeader?.startsWith('Bearer ')) {
-    return new Response('Unauthorized', { status: 401 });
-  }
+	// Extract bearer token
+	const authHeader = request.headers.get('Authorization')
+	if (!authHeader?.startsWith('Bearer ')) {
+		return new Response('Unauthorized', { status: 401 })
+	}
 
-  const token = authHeader.replace('Bearer ', '');
-  
-  // Validate token and get session
-  const session = await env.OAUTH_TOKENS.get(token);
-  if (!session) {
-    return new Response('Invalid token', { status: 401 });
-  }
+	const token = authHeader.replace('Bearer ', '')
 
-  const { userId, username } = JSON.parse(session);
+	// Validate token and get session
+	const session = await env.OAUTH_TOKENS.get(token)
+	if (!session) {
+		return new Response('Invalid token', { status: 401 })
+	}
 
-  // Process MCP request with authenticated context
-  const mcpRequest = await request.json();
-  const response = await processMCPRequest(mcpRequest, {
-    userId,
-    username,
-    isAuthenticated: true,
-  });
+	const { userId, username } = JSON.parse(session)
 
-  return new Response(JSON.stringify(response), {
-    headers: {
-      'Content-Type': 'application/json',
-      'Access-Control-Allow-Origin': getAllowedOrigin(request),
-    },
-  });
+	// Process MCP request with authenticated context
+	const mcpRequest = await request.json()
+	const response = await processMCPRequest(mcpRequest, {
+		userId,
+		username,
+		isAuthenticated: true,
+	})
+
+	return new Response(JSON.stringify(response), {
+		headers: {
+			'Content-Type': 'application/json',
+			'Access-Control-Allow-Origin': getAllowedOrigin(request),
+		},
+	})
 }
 ```
 
@@ -375,23 +398,23 @@ During the transition period, support both authentication methods:
 
 ```typescript
 async function getAuthContext(request: Request, env: Env): Promise<AuthContext | null> {
-  // First, try OAuth token
-  const authHeader = request.headers.get('Authorization');
-  if (authHeader?.startsWith('Bearer ')) {
-    const token = authHeader.replace('Bearer ', '');
-    const session = await env.OAUTH_TOKENS.get(token);
-    if (session) {
-      return JSON.parse(session);
-    }
-  }
+	// First, try OAuth token
+	const authHeader = request.headers.get('Authorization')
+	if (authHeader?.startsWith('Bearer ')) {
+		const token = authHeader.replace('Bearer ', '')
+		const session = await env.OAUTH_TOKENS.get(token)
+		if (session) {
+			return JSON.parse(session)
+		}
+	}
 
-  // Fall back to existing JWT/connection ID system
-  const connectionId = request.headers.get('x-connection-id');
-  if (connectionId) {
-    return await getSessionByConnectionId(connectionId, env);
-  }
+	// Fall back to existing JWT/connection ID system
+	const connectionId = request.headers.get('x-connection-id')
+	if (connectionId) {
+		return await getSessionByConnectionId(connectionId, env)
+	}
 
-  return null;
+	return null
 }
 ```
 
@@ -417,31 +440,35 @@ async function getAuthContext(request: Request, env: Env): Promise<AuthContext |
 
 ```typescript
 const SECURITY_HEADERS = {
-  'Strict-Transport-Security': 'max-age=31536000; includeSubDomains',
-  'X-Content-Type-Options': 'nosniff',
-  'X-Frame-Options': 'DENY',
-  'X-XSS-Protection': '1; mode=block',
-  'Referrer-Policy': 'strict-origin-when-cross-origin',
-};
+	'Strict-Transport-Security': 'max-age=31536000; includeSubDomains',
+	'X-Content-Type-Options': 'nosniff',
+	'X-Frame-Options': 'DENY',
+	'X-XSS-Protection': '1; mode=block',
+	'Referrer-Policy': 'strict-origin-when-cross-origin',
+}
 ```
 
 ## Resources and References
 
 ### Official Documentation
+
 - [Model Context Protocol Specification](https://modelcontextprotocol.io/)
 - [Building Custom Integrations via Remote MCP Servers](https://support.anthropic.com/en/articles/11503834-building-custom-integrations-via-remote-mcp-servers)
 - [OAuth 2.0 Specification (RFC 6749)](https://datatracker.ietf.org/doc/html/rfc6749)
 - [OAuth 2.0 Security Best Practices (RFC 8252)](https://datatracker.ietf.org/doc/html/rfc8252)
 
 ### Example Implementations
+
 - [Cloudflare MCP Server Example](https://blog.cloudflare.com/remote-model-context-protocol-servers-mcp/)
 - [MCP Server with Azure API Management](https://devblogs.microsoft.com/blog/claude-ready-secure-mcp-apim)
 
 ### Tools and Libraries
+
 - [`use-mcp`](https://github.com/modelcontextprotocol/use-mcp) - React hook for MCP clients (for reference)
 - [`@modelcontextprotocol/sdk`](https://www.npmjs.com/package/@modelcontextprotocol/sdk) - Official MCP SDK
 
 ### Testing Tools
+
 - [OAuth 2.0 Playground](https://www.oauth.com/playground/) - Test OAuth flows
 - [JWT.io](https://jwt.io/) - Debug JWT tokens
 - Postman/Insomnia - Test API endpoints

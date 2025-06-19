@@ -181,7 +181,8 @@ async function getConnectionSession(request: Request, jwtSecret: string, env?: E
  */
 function generateAuthInstructions(request: Request): string {
 	const connectionId = request.headers.get('X-Connection-ID')
-	const baseUrl = 'https://lastfm-mcp-prod.rian-db8.workers.dev'
+	const url = new URL(request.url)
+	const baseUrl = `${url.protocol}//${url.host}`
 
 	if (connectionId) {
 		// Connection-specific auth instructions
@@ -579,7 +580,8 @@ async function handleToolsCall(params: unknown, httpRequest?: Request, env?: Env
 		case 'server_info': {
 			// Provide connection-specific authentication URL if available
 			const connectionId = httpRequest?.headers.get('X-Connection-ID')
-			const baseUrl = 'https://lastfm-mcp-prod.rian-db8.workers.dev'
+			const url = httpRequest ? new URL(httpRequest.url) : null
+			const baseUrl = url ? `${url.protocol}//${url.host}` : 'https://lastfm-mcp.rian-db8.workers.dev'
 			const authUrl = connectionId ? `${baseUrl}/login?connection_id=${connectionId}` : `${baseUrl}/login`
 
 			return {
@@ -595,7 +597,8 @@ async function handleToolsCall(params: unknown, httpRequest?: Request, env?: Env
 			// Provide unauthenticated status with connection-specific instructions
 			const connectionId = httpRequest?.headers.get('X-Connection-ID')
 			const connectionInfo = connectionId ? `\n🔗 **Connection ID:** ${connectionId}` : ''
-			const baseUrl = 'https://lastfm-mcp-prod.rian-db8.workers.dev'
+			const url = httpRequest ? new URL(httpRequest.url) : null
+			const baseUrl = url ? `${url.protocol}//${url.host}` : 'https://lastfm-mcp.rian-db8.workers.dev'
 			const loginUrl = connectionId ? `${baseUrl}/login?connection_id=${connectionId}` : `${baseUrl}/login`
 
 			return {

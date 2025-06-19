@@ -51,11 +51,11 @@ export async function registerOAuthClient(
 		OAUTH_SCOPES.READ_RECOMMENDATIONS,
 		OAUTH_SCOPES.READ_PROFILE,
 		OAUTH_SCOPES.READ_LIBRARY,
-	]
+	],
 ): Promise<OAuthClient> {
 	const clientId = generateClientId()
 	const clientSecret = generateClientSecret()
-	
+
 	const client: OAuthClient = {
 		id: clientId,
 		secret: clientSecret,
@@ -92,13 +92,9 @@ export async function getOAuthClient(env: Env, clientId: string): Promise<OAuthC
 /**
  * Validate OAuth client credentials
  */
-export async function validateOAuthClient(
-	env: Env,
-	clientId: string,
-	clientSecret?: string
-): Promise<OAuthClient> {
+export async function validateOAuthClient(env: Env, clientId: string, clientSecret?: string): Promise<OAuthClient> {
 	const client = await getOAuthClient(env, clientId)
-	
+
 	if (!client) {
 		throw new OAuthError(OAUTH_ERRORS.INVALID_CLIENT, 'Client not found', 401)
 	}
@@ -120,11 +116,7 @@ export async function validateOAuthClient(
  */
 export function validateRedirectUri(client: OAuthClient, redirectUri: string): void {
 	if (!client.redirectUris.includes(redirectUri)) {
-		throw new OAuthError(
-			OAUTH_ERRORS.INVALID_REQUEST,
-			'Redirect URI not registered for this client',
-			400
-		)
+		throw new OAuthError(OAUTH_ERRORS.INVALID_REQUEST, 'Redirect URI not registered for this client', 400)
 	}
 }
 
@@ -142,11 +134,7 @@ export function validateScopes(client: OAuthClient, requestedScopes?: string): s
 
 	for (const scope of scopes) {
 		if (!client.allowedScopes.includes(scope as OAuthScope)) {
-			throw new OAuthError(
-				OAUTH_ERRORS.INVALID_SCOPE,
-				`Scope '${scope}' not allowed for this client`,
-				400
-			)
+			throw new OAuthError(OAUTH_ERRORS.INVALID_SCOPE, `Scope '${scope}' not allowed for this client`, 400)
 		}
 		validScopes.push(scope)
 	}
@@ -168,7 +156,7 @@ export async function storeAuthorizationCode(
 	userId: string,
 	username: string,
 	scope: string,
-	redirectUri: string
+	redirectUri: string,
 ): Promise<void> {
 	const now = Date.now()
 	const authCode: OAuthAuthorizationCode = {
@@ -195,10 +183,10 @@ export async function validateAuthorizationCode(
 	env: Env,
 	code: string,
 	clientId: string,
-	redirectUri: string
+	redirectUri: string,
 ): Promise<OAuthAuthorizationCode> {
 	const codeData = await env.OAUTH_CODES.get(code)
-	
+
 	if (!codeData) {
 		throw new OAuthError(OAUTH_ERRORS.INVALID_GRANT, 'Authorization code not found or expired', 400)
 	}
@@ -242,7 +230,7 @@ export async function storeAccessToken(
 	userId: string,
 	username: string,
 	scope: string,
-	expiresInSeconds: number = 7 * 24 * 60 * 60 // 7 days
+	expiresInSeconds: number = 7 * 24 * 60 * 60, // 7 days
 ): Promise<void> {
 	const now = Date.now()
 	const accessToken: OAuthAccessToken = {
@@ -266,7 +254,7 @@ export async function storeAccessToken(
  */
 export async function validateAccessToken(env: Env, token: string): Promise<OAuthAccessToken> {
 	const tokenData = await env.OAUTH_TOKENS.get(token)
-	
+
 	if (!tokenData) {
 		throw new OAuthError(OAUTH_ERRORS.INVALID_GRANT, 'Access token not found or expired', 401)
 	}
@@ -310,10 +298,10 @@ export async function listOAuthClients(_env: Env): Promise<Omit<OAuthClient, 'se
 export async function updateOAuthClient(
 	env: Env,
 	clientId: string,
-	updates: Partial<Pick<OAuthClient, 'name' | 'redirectUris' | 'allowedScopes' | 'active'>>
+	updates: Partial<Pick<OAuthClient, 'name' | 'redirectUris' | 'allowedScopes' | 'active'>>,
 ): Promise<OAuthClient> {
 	const client = await getOAuthClient(env, clientId)
-	
+
 	if (!client) {
 		throw new OAuthError(OAUTH_ERRORS.INVALID_CLIENT, 'Client not found', 404)
 	}
@@ -324,7 +312,7 @@ export async function updateOAuthClient(
 	}
 
 	await env.OAUTH_CLIENTS.put(clientId, JSON.stringify(updatedClient))
-	
+
 	return updatedClient
 }
 
@@ -340,11 +328,6 @@ export async function createClaudeClient(env: Env): Promise<OAuthClient> {
 			'https://app.claude.ai/oauth/callback',
 			'http://localhost:3000/oauth/callback', // For development
 		],
-		[
-			OAUTH_SCOPES.READ_LISTENING_HISTORY,
-			OAUTH_SCOPES.READ_RECOMMENDATIONS,
-			OAUTH_SCOPES.READ_PROFILE,
-			OAUTH_SCOPES.READ_LIBRARY,
-		]
+		[OAUTH_SCOPES.READ_LISTENING_HISTORY, OAUTH_SCOPES.READ_RECOMMENDATIONS, OAUTH_SCOPES.READ_PROFILE, OAUTH_SCOPES.READ_LIBRARY],
 	)
 }

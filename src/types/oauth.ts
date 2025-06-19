@@ -81,7 +81,7 @@ export const OAUTH_SCOPES = {
 	READ_LIBRARY: 'read:library',
 } as const
 
-export type OAuthScope = typeof OAUTH_SCOPES[keyof typeof OAUTH_SCOPES]
+export type OAuthScope = (typeof OAUTH_SCOPES)[keyof typeof OAUTH_SCOPES]
 
 /**
  * OAuth authorization request parameters
@@ -168,7 +168,7 @@ export class OAuthError extends Error {
 	constructor(
 		public readonly error: string,
 		public readonly description?: string,
-		public readonly statusCode: number = 400
+		public readonly statusCode: number = 400,
 	) {
 		super(description || error)
 		this.name = 'OAuthError'
@@ -189,4 +189,4 @@ export const OAUTH_ERRORS = {
 	SERVER_ERROR: 'server_error',
 } as const
 
-export type OAuthErrorCode = typeof OAUTH_ERRORS[keyof typeof OAUTH_ERRORS]
+export type OAuthErrorCode = (typeof OAUTH_ERRORS)[keyof typeof OAUTH_ERRORS]

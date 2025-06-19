@@ -6,19 +6,18 @@ import { env, SELF } from 'cloudflare:test'
 import { registerOAuthClient } from '../../src/auth/oauth'
 
 describe('OAuth Integration Flow', () => {
-
 	describe('Complete authorization code flow', () => {
 		it('should complete full OAuth flow without Last.fm authentication', async () => {
 			// Step 1: Register OAuth client
 			const client = await registerOAuthClient(env, 'Test Integration Client', [
 				'https://claude.ai/oauth/callback',
-				'https://test.example.com/callback'
+				'https://test.example.com/callback',
 			])
 
 			// Step 2: Initiate authorization (redirect to Last.fm)
 			const authResponse = await SELF.fetch(
-				`http://localhost/oauth/authorize?client_id=${client.id}&redirect_uri=https://test.example.com/callback&response_type=code&scope=read:listening-history&state=test-state-123`,
-				{ method: 'GET' }
+				`http://localhost/oauth/authorize?client_id=${client.id}&redirect_uri=https://test.example.com/callback&response_type=code&scope=read:listening_history&state=test-state-123`,
+				{ method: 'GET' },
 			)
 
 			expect(authResponse.status).toBe(302)
@@ -32,14 +31,14 @@ describe('OAuth Integration Flow', () => {
 			// For testing, we simulate the callback with a mock token
 			const mockLastfmToken = 'mock-lastfm-token-123'
 			const callbackResponse = await SELF.fetch(
-				`http://localhost/oauth/callback?token=${mockLastfmToken}&client_id=${client.id}&redirect_uri=https://test.example.com/callback&scope=read:listening-history&state=test-state-123`,
-				{ method: 'GET' }
+				`http://localhost/oauth/callback?token=${mockLastfmToken}&client_id=${client.id}&redirect_uri=https://test.example.com/callback&scope=read:listening_history&state=test-state-123`,
+				{ method: 'GET' },
 			)
 
 			// This would normally exchange the Last.fm token and redirect with auth code
 			// For testing without actual Last.fm API, we expect it to fail gracefully
 			expect([302, 400, 500]).toContain(callbackResponse.status)
-			
+
 			if (callbackResponse.status === 302) {
 				const callbackLocation = callbackResponse.headers.get('Location')
 				if (callbackLocation?.includes('code=')) {
@@ -114,15 +113,15 @@ describe('OAuth Integration Flow', () => {
 				method: 'tools/call',
 				params: {
 					name: 'get_recent_tracks',
-					arguments: { limit: 5 }
-				}
+					arguments: { limit: 5 },
+				},
 			}
 
 			const response = await SELF.fetch('http://localhost/', {
 				method: 'POST',
 				headers: {
 					'Content-Type': 'application/json',
-					'Authorization': 'Bearer invalid-oauth-token',
+					Authorization: 'Bearer invalid-oauth-token',
 				},
 				body: JSON.stringify(mcpRequest),
 			})
@@ -141,7 +140,7 @@ describe('OAuth Integration Flow', () => {
 
 			const authResponse = await SELF.fetch(
 				`http://localhost/oauth/authorize?client_id=${client.id}&redirect_uri=https://test.example.com/callback&response_type=code&state=${state}`,
-				{ method: 'GET' }
+				{ method: 'GET' },
 			)
 
 			expect(authResponse.status).toBe(302)
@@ -154,7 +153,7 @@ describe('OAuth Integration Flow', () => {
 
 			const authResponse = await SELF.fetch(
 				`http://localhost/oauth/authorize?client_id=${client.id}&redirect_uri=https://test.example.com/callback&response_type=code`,
-				{ method: 'GET' }
+				{ method: 'GET' },
 			)
 
 			expect(authResponse.status).toBe(302)
@@ -170,12 +169,12 @@ describe('OAuth Integration Flow', () => {
 			// Both clients should be able to initiate auth flows independently
 			const auth1Response = await SELF.fetch(
 				`http://localhost/oauth/authorize?client_id=${client1.id}&redirect_uri=https://app1.example.com/callback&response_type=code`,
-				{ method: 'GET' }
+				{ method: 'GET' },
 			)
 
 			const auth2Response = await SELF.fetch(
 				`http://localhost/oauth/authorize?client_id=${client2.id}&redirect_uri=https://app2.example.com/callback&response_type=code`,
-				{ method: 'GET' }
+				{ method: 'GET' },
 			)
 
 			expect(auth1Response.status).toBe(302)
@@ -216,14 +215,11 @@ describe('OAuth Integration Flow', () => {
 	describe('Error handling integration', () => {
 		it('should handle malformed requests gracefully', async () => {
 			// Test malformed authorization request
-			const malformedAuth = await SELF.fetch(
-				'http://localhost/oauth/authorize?invalid=params',
-				{ method: 'GET' }
-			)
+			const malformedAuth = await SELF.fetch('http://localhost/oauth/authorize?invalid=params', { method: 'GET' })
 
 			expect(malformedAuth.status).toBe(400)
 
-			// Test malformed token request  
+			// Test malformed token request
 			const malformedToken = await SELF.fetch('http://localhost/oauth/token', {
 				method: 'POST',
 				body: 'invalid-body',
@@ -238,7 +234,7 @@ describe('OAuth Integration Flow', () => {
 		it('should provide helpful error messages', async () => {
 			const authResponse = await SELF.fetch(
 				'http://localhost/oauth/authorize?client_id=nonexistent&redirect_uri=https://example.com&response_type=code',
-				{ method: 'GET' }
+				{ method: 'GET' },
 			)
 
 			expect(authResponse.status).toBe(401)
@@ -253,7 +249,7 @@ describe('OAuth Integration Flow', () => {
 
 			const response = await SELF.fetch(
 				`http://localhost/oauth/authorize?client_id=${client.id}&redirect_uri=https://malicious.example.com/callback&response_type=code`,
-				{ method: 'GET' }
+				{ method: 'GET' },
 			)
 
 			expect(response.status).toBe(400)
@@ -262,11 +258,11 @@ describe('OAuth Integration Flow', () => {
 		})
 
 		it('should validate scope permissions', async () => {
-			const client = await registerOAuthClient(env, 'Limited Client', ['https://example.com/callback'], ['read:listening-history'])
+			const client = await registerOAuthClient(env, 'Limited Client', ['https://example.com/callback'], ['read:listening_history'])
 
 			const response = await SELF.fetch(
-				`http://localhost/oauth/authorize?client_id=${client.id}&redirect_uri=https://example.com/callback&response_type=code&scope=read:listening-history%20write:data`,
-				{ method: 'GET' }
+				`http://localhost/oauth/authorize?client_id=${client.id}&redirect_uri=https://example.com/callback&response_type=code&scope=read:listening_history%20write:data`,
+				{ method: 'GET' },
 			)
 
 			expect(response.status).toBe(400)
@@ -295,8 +291,8 @@ describe('OAuth Integration Flow', () => {
 				params: {
 					protocolVersion: '2024-11-05',
 					clientInfo: { name: 'Test', version: '1.0' },
-					capabilities: {}
-				}
+					capabilities: {},
+				},
 			}
 
 			const response = await SELF.fetch('http://localhost/', {

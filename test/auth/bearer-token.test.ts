@@ -10,7 +10,7 @@ describe('Bearer Token Authentication', () => {
 	describe('MCP request authentication', () => {
 		it('should authenticate MCP requests with valid Bearer token', async () => {
 			const client = await registerOAuthClient(env, 'Test Client', ['https://example.com'])
-			
+
 			// Create a valid JWT access token
 			const accessToken = await createSessionToken(
 				{
@@ -19,11 +19,11 @@ describe('Bearer Token Authentication', () => {
 					username: 'testuser',
 				},
 				env.JWT_SECRET!,
-				168 // 7 days
+				168, // 7 days
 			)
-			
+
 			// Store the access token in OAuth tokens KV
-			await storeAccessToken(env, accessToken, client.id, 'testuser', 'testuser', 'read:listening-history')
+			await storeAccessToken(env, accessToken, client.id, 'testuser', 'testuser', 'read:listening_history')
 
 			const mcpRequest = {
 				jsonrpc: '2.0',
@@ -31,15 +31,15 @@ describe('Bearer Token Authentication', () => {
 				method: 'tools/call',
 				params: {
 					name: 'lastfm_auth_status',
-					arguments: {}
-				}
+					arguments: {},
+				},
 			}
 
 			const response = await SELF.fetch('http://localhost/', {
 				method: 'POST',
 				headers: {
 					'Content-Type': 'application/json',
-					'Authorization': `Bearer ${accessToken}`,
+					Authorization: `Bearer ${accessToken}`,
 				},
 				body: JSON.stringify(mcpRequest),
 			})
@@ -58,15 +58,15 @@ describe('Bearer Token Authentication', () => {
 				method: 'tools/call',
 				params: {
 					name: 'get_recent_tracks',
-					arguments: { limit: 10 }
-				}
+					arguments: { limit: 10 },
+				},
 			}
 
 			const response = await SELF.fetch('http://localhost/', {
 				method: 'POST',
 				headers: {
 					'Content-Type': 'application/json',
-					'Authorization': 'Bearer invalid-token-123',
+					Authorization: 'Bearer invalid-token-123',
 				},
 				body: JSON.stringify(mcpRequest),
 			})
@@ -86,7 +86,7 @@ describe('Bearer Token Authentication', () => {
 					username: 'cookieuser',
 				},
 				env.JWT_SECRET!,
-				24 // 24 hours
+				24, // 24 hours
 			)
 
 			const mcpRequest = {
@@ -96,16 +96,16 @@ describe('Bearer Token Authentication', () => {
 				params: {
 					protocolVersion: '2024-11-05',
 					clientInfo: { name: 'Test', version: '1.0' },
-					capabilities: {}
-				}
+					capabilities: {},
+				},
 			}
 
 			const response = await SELF.fetch('http://localhost/', {
 				method: 'POST',
 				headers: {
 					'Content-Type': 'application/json',
-					'Authorization': 'Bearer invalid-token',
-					'Cookie': `session=${sessionToken}`,
+					Authorization: 'Bearer invalid-token',
+					Cookie: `session=${sessionToken}`,
 				},
 				body: JSON.stringify(mcpRequest),
 			})
@@ -124,8 +124,8 @@ describe('Bearer Token Authentication', () => {
 				params: {
 					protocolVersion: '2024-11-05',
 					clientInfo: { name: 'Test', version: '1.0' },
-					capabilities: {}
-				}
+					capabilities: {},
+				},
 			}
 
 			const response = await SELF.fetch('http://localhost/', {
@@ -153,15 +153,15 @@ describe('Bearer Token Authentication', () => {
 				params: {
 					protocolVersion: '2024-11-05',
 					clientInfo: { name: 'Test', version: '1.0' },
-					capabilities: {}
-				}
+					capabilities: {},
+				},
 			}
 
 			const response = await SELF.fetch('http://localhost/', {
 				method: 'POST',
 				headers: {
 					'Content-Type': 'application/json',
-					'Authorization': 'Basic dXNlcjpwYXNz', // Basic auth
+					Authorization: 'Basic dXNlcjpwYXNz', // Basic auth
 				},
 				body: JSON.stringify(mcpRequest),
 			})
@@ -180,15 +180,15 @@ describe('Bearer Token Authentication', () => {
 				params: {
 					protocolVersion: '2024-11-05',
 					clientInfo: { name: 'Test', version: '1.0' },
-					capabilities: {}
-				}
+					capabilities: {},
+				},
 			}
 
 			const response = await SELF.fetch('http://localhost/', {
 				method: 'POST',
 				headers: {
 					'Content-Type': 'application/json',
-					'Authorization': 'Bearer', // Missing token
+					Authorization: 'Bearer', // Missing token
 				},
 				body: JSON.stringify(mcpRequest),
 			})
@@ -203,7 +203,7 @@ describe('Bearer Token Authentication', () => {
 	describe('Token scope information', () => {
 		it('should preserve user context from Bearer token', async () => {
 			const client = await registerOAuthClient(env, 'Scope Test Client', ['https://example.com'])
-			
+
 			const accessToken = await createSessionToken(
 				{
 					userId: 'oauthuser',
@@ -211,11 +211,11 @@ describe('Bearer Token Authentication', () => {
 					username: 'oauthuser',
 				},
 				env.JWT_SECRET!,
-				168
+				168,
 			)
-			
+
 			// Store with specific scopes
-			await storeAccessToken(env, accessToken, client.id, 'oauthuser', 'oauthuser', 'read:listening-history read:profile')
+			await storeAccessToken(env, accessToken, client.id, 'oauthuser', 'oauthuser', 'read:listening_history read:profile')
 
 			const mcpRequest = {
 				jsonrpc: '2.0',
@@ -223,15 +223,15 @@ describe('Bearer Token Authentication', () => {
 				method: 'tools/call',
 				params: {
 					name: 'lastfm_auth_status',
-					arguments: {}
-				}
+					arguments: {},
+				},
 			}
 
 			const response = await SELF.fetch('http://localhost/', {
 				method: 'POST',
 				headers: {
 					'Content-Type': 'application/json',
-					'Authorization': `Bearer ${accessToken}`,
+					Authorization: `Bearer ${accessToken}`,
 				},
 				body: JSON.stringify(mcpRequest),
 			})
@@ -239,14 +239,14 @@ describe('Bearer Token Authentication', () => {
 			expect(response.status).toBe(200)
 			const data = await response.json()
 			const content = data.result.content[0].text
-			
+
 			expect(content).toContain('oauthuser')
 			expect(content).toContain('Authenticated')
 		})
 
 		it('should handle expired Bearer tokens', async () => {
 			const client = await registerOAuthClient(env, 'Expired Test Client', ['https://example.com'])
-			
+
 			// Create an expired access token (JWT expired)
 			const expiredToken = await createSessionToken(
 				{
@@ -255,11 +255,11 @@ describe('Bearer Token Authentication', () => {
 					username: 'testuser',
 				},
 				env.JWT_SECRET!,
-				-1 // Expired 1 hour ago
+				-1, // Expired 1 hour ago
 			)
-			
+
 			// Store the token data (but JWT itself is expired)
-			await storeAccessToken(env, expiredToken, client.id, 'testuser', 'testuser', 'read:listening-history')
+			await storeAccessToken(env, expiredToken, client.id, 'testuser', 'testuser', 'read:listening_history')
 
 			const mcpRequest = {
 				jsonrpc: '2.0',
@@ -267,15 +267,15 @@ describe('Bearer Token Authentication', () => {
 				method: 'tools/call',
 				params: {
 					name: 'get_recent_tracks',
-					arguments: { limit: 10 }
-				}
+					arguments: { limit: 10 },
+				},
 			}
 
 			const response = await SELF.fetch('http://localhost/', {
 				method: 'POST',
 				headers: {
 					'Content-Type': 'application/json',
-					'Authorization': `Bearer ${expiredToken}`,
+					Authorization: `Bearer ${expiredToken}`,
 				},
 				body: JSON.stringify(mcpRequest),
 			})
@@ -291,7 +291,7 @@ describe('Bearer Token Authentication', () => {
 	describe('Rate limiting with Bearer tokens', () => {
 		it('should apply rate limiting based on user ID from Bearer token', async () => {
 			const client = await registerOAuthClient(env, 'Rate Limit Test Client', ['https://example.com'])
-			
+
 			const accessToken = await createSessionToken(
 				{
 					userId: 'ratelimituser',
@@ -299,10 +299,10 @@ describe('Bearer Token Authentication', () => {
 					username: 'ratelimituser',
 				},
 				env.JWT_SECRET!,
-				168
+				168,
 			)
-			
-			await storeAccessToken(env, accessToken, client.id, 'ratelimituser', 'ratelimituser', 'read:listening-history')
+
+			await storeAccessToken(env, accessToken, client.id, 'ratelimituser', 'ratelimituser', 'read:listening_history')
 
 			// Test that user ID is properly extracted for rate limiting
 			const mcpRequest = {
@@ -311,15 +311,15 @@ describe('Bearer Token Authentication', () => {
 				method: 'tools/call',
 				params: {
 					name: 'ping',
-					arguments: { message: 'rate limit test' }
-				}
+					arguments: { message: 'rate limit test' },
+				},
 			}
 
 			const response = await SELF.fetch('http://localhost/', {
 				method: 'POST',
 				headers: {
 					'Content-Type': 'application/json',
-					'Authorization': `Bearer ${accessToken}`,
+					Authorization: `Bearer ${accessToken}`,
 				},
 				body: JSON.stringify(mcpRequest),
 			})

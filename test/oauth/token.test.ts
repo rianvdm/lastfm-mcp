@@ -1,4 +1,4 @@
-// ABOUTME: Unit tests for OAuth 2.0 token endpoint  
+// ABOUTME: Unit tests for OAuth 2.0 token endpoint
 // ABOUTME: Tests POST /oauth/token endpoint for authorization code exchange
 
 import { describe, it, expect } from 'vitest'
@@ -6,7 +6,6 @@ import { env, SELF } from 'cloudflare:test'
 import { registerOAuthClient, generateAuthorizationCode, storeAuthorizationCode } from '../../src/auth/oauth'
 
 describe('OAuth Token Endpoint', () => {
-
 	describe('Grant type validation', () => {
 		it('should reject unsupported grant types', async () => {
 			const formData = new FormData()
@@ -43,7 +42,7 @@ describe('OAuth Token Endpoint', () => {
 		it('should accept authorization_code grant type', async () => {
 			const client = await registerOAuthClient(env, 'Test Client', ['https://example.com'])
 			const code = generateAuthorizationCode()
-			await storeAuthorizationCode(env, code, client.id, 'testuser', 'testuser', 'read:listening-history', 'https://example.com')
+			await storeAuthorizationCode(env, code, client.id, 'testuser', 'testuser', 'read:listening_history', 'https://example.com')
 
 			const formData = new FormData()
 			formData.append('grant_type', 'authorization_code')
@@ -167,7 +166,7 @@ describe('OAuth Token Endpoint', () => {
 		it('should accept valid client credentials', async () => {
 			const client = await registerOAuthClient(env, 'Test Client', ['https://example.com'])
 			const code = generateAuthorizationCode()
-			await storeAuthorizationCode(env, code, client.id, 'testuser', 'testuser', 'read:listening-history', 'https://example.com')
+			await storeAuthorizationCode(env, code, client.id, 'testuser', 'testuser', 'read:listening_history', 'https://example.com')
 
 			const formData = new FormData()
 			formData.append('grant_type', 'authorization_code')
@@ -214,14 +213,14 @@ describe('OAuth Token Endpoint', () => {
 		it('should reject expired authorization code', async () => {
 			const client = await registerOAuthClient(env, 'Test Client', ['https://example.com'])
 			const code = generateAuthorizationCode()
-			
+
 			// Store code with past expiration
 			const expiredCodeData = {
 				code,
 				clientId: client.id,
 				userId: 'testuser',
 				username: 'testuser',
-				scope: 'read:listening-history',
+				scope: 'read:listening_history',
 				redirectUri: 'https://example.com',
 				createdAt: Date.now() - 20 * 60 * 1000, // 20 minutes ago
 				expiresAt: Date.now() - 10 * 60 * 1000, // 10 minutes ago (expired)
@@ -250,9 +249,9 @@ describe('OAuth Token Endpoint', () => {
 			const client1 = await registerOAuthClient(env, 'Test Client 1', ['https://example.com'])
 			const client2 = await registerOAuthClient(env, 'Test Client 2', ['https://example.com'])
 			const code = generateAuthorizationCode()
-			
+
 			// Store code for client1 but try to use with client2
-			await storeAuthorizationCode(env, code, client1.id, 'testuser', 'testuser', 'read:listening-history', 'https://example.com')
+			await storeAuthorizationCode(env, code, client1.id, 'testuser', 'testuser', 'read:listening_history', 'https://example.com')
 
 			const formData = new FormData()
 			formData.append('grant_type', 'authorization_code')
@@ -275,9 +274,9 @@ describe('OAuth Token Endpoint', () => {
 		it('should reject code with mismatched redirect_uri', async () => {
 			const client = await registerOAuthClient(env, 'Test Client', ['https://example.com', 'https://other.com'])
 			const code = generateAuthorizationCode()
-			
+
 			// Store code with one redirect_uri but try to use with another
-			await storeAuthorizationCode(env, code, client.id, 'testuser', 'testuser', 'read:listening-history', 'https://example.com')
+			await storeAuthorizationCode(env, code, client.id, 'testuser', 'testuser', 'read:listening_history', 'https://example.com')
 
 			const formData = new FormData()
 			formData.append('grant_type', 'authorization_code')
@@ -300,7 +299,7 @@ describe('OAuth Token Endpoint', () => {
 		it('should consume authorization code after use', async () => {
 			const client = await registerOAuthClient(env, 'Test Client', ['https://example.com'])
 			const code = generateAuthorizationCode()
-			await storeAuthorizationCode(env, code, client.id, 'testuser', 'testuser', 'read:listening-history', 'https://example.com')
+			await storeAuthorizationCode(env, code, client.id, 'testuser', 'testuser', 'read:listening_history', 'https://example.com')
 
 			const formData = new FormData()
 			formData.append('grant_type', 'authorization_code')
@@ -331,7 +330,7 @@ describe('OAuth Token Endpoint', () => {
 		it('should return access token for valid request', async () => {
 			const client = await registerOAuthClient(env, 'Test Client', ['https://example.com'])
 			const code = generateAuthorizationCode()
-			await storeAuthorizationCode(env, code, client.id, 'testuser', 'testuser', 'read:listening-history', 'https://example.com')
+			await storeAuthorizationCode(env, code, client.id, 'testuser', 'testuser', 'read:listening_history', 'https://example.com')
 
 			const formData = new FormData()
 			formData.append('grant_type', 'authorization_code')
@@ -347,12 +346,12 @@ describe('OAuth Token Endpoint', () => {
 
 			expect(response.status).toBe(200)
 			const data = await response.json()
-			
+
 			expect(data.access_token).toBeDefined()
 			expect(typeof data.access_token).toBe('string')
 			expect(data.token_type).toBe('Bearer')
 			expect(data.expires_in).toBe(7 * 24 * 60 * 60) // 7 days
-			expect(data.scope).toBe('read:listening-history')
+			expect(data.scope).toBe('read:listening_history')
 
 			// Verify security headers
 			expect(response.headers.get('Cache-Control')).toBe('no-store')
@@ -362,7 +361,7 @@ describe('OAuth Token Endpoint', () => {
 		it('should store access token in KV namespace', async () => {
 			const client = await registerOAuthClient(env, 'Test Client', ['https://example.com'])
 			const code = generateAuthorizationCode()
-			await storeAuthorizationCode(env, code, client.id, 'testuser', 'testuser', 'read:listening-history', 'https://example.com')
+			await storeAuthorizationCode(env, code, client.id, 'testuser', 'testuser', 'read:listening_history', 'https://example.com')
 
 			const formData = new FormData()
 			formData.append('grant_type', 'authorization_code')
@@ -378,22 +377,30 @@ describe('OAuth Token Endpoint', () => {
 
 			expect(response.status).toBe(200)
 			const data = await response.json()
-			
+
 			// Verify token is stored in KV
 			const storedToken = await env.OAUTH_TOKENS.get(data.access_token)
 			expect(storedToken).toBeDefined()
-			
+
 			const tokenData = JSON.parse(storedToken!)
 			expect(tokenData.clientId).toBe(client.id)
 			expect(tokenData.userId).toBe('testuser')
 			expect(tokenData.username).toBe('testuser')
-			expect(tokenData.scope).toBe('read:listening-history')
+			expect(tokenData.scope).toBe('read:listening_history')
 		})
 
 		it('should handle multiple scopes correctly', async () => {
 			const client = await registerOAuthClient(env, 'Test Client', ['https://example.com'])
 			const code = generateAuthorizationCode()
-			await storeAuthorizationCode(env, code, client.id, 'testuser', 'testuser', 'read:listening-history read:profile', 'https://example.com')
+			await storeAuthorizationCode(
+				env,
+				code,
+				client.id,
+				'testuser',
+				'testuser',
+				'read:listening_history read:profile',
+				'https://example.com',
+			)
 
 			const formData = new FormData()
 			formData.append('grant_type', 'authorization_code')
@@ -409,7 +416,7 @@ describe('OAuth Token Endpoint', () => {
 
 			expect(response.status).toBe(200)
 			const data = await response.json()
-			expect(data.scope).toBe('read:listening-history read:profile')
+			expect(data.scope).toBe('read:listening_history read:profile')
 		})
 	})
 
@@ -455,7 +462,7 @@ describe('OAuth Token Endpoint', () => {
 
 			expect(response.status).toBe(400)
 			const data = await response.json()
-			
+
 			expect(data.error).toBeDefined()
 			expect(data.error_description).toBeDefined()
 			expect(typeof data.error).toBe('string')
