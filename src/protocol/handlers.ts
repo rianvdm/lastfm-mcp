@@ -29,6 +29,7 @@ import {
 	ValidationError,
 } from './validation'
 import { verifySessionToken, SessionPayload } from '../auth/jwt'
+import { validateAccessToken } from '../auth/oauth'
 import { LastfmClient } from '../clients/lastfm'
 import { CachedLastfmClient } from '../clients/cachedLastfm'
 import { LASTFM_RESOURCES, LASTFM_TOOLS, LASTFM_PROMPTS, parseLastfmUri } from '../types/lastfm-mcp'
@@ -48,11 +49,33 @@ function getCachedLastfmClient(env?: Env): CachedLastfmClient | null {
 }
 
 /**
- * Extract and verify session token from request
+ * Extract and verify session token from request (supports both cookie and Bearer token)
  */
-export async function verifyAuthentication(request: Request, jwtSecret: string): Promise<SessionPayload | null> {
+export async function verifyAuthentication(request: Request, jwtSecret: string, env?: Env): Promise<SessionPayload | null> {
 	try {
-		// Get session cookie
+		// First try Bearer token authentication (OAuth 2.0)
+		const authHeader = request.headers.get('Authorization')
+		if (authHeader && authHeader.startsWith('Bearer ')) {
+			const bearerToken = authHeader.substring(7) // Remove 'Bearer ' prefix
+			if (env) {
+				try {
+					const oauthToken = await validateAccessToken(env, bearerToken)
+					// Convert OAuth token to session payload format
+					return {
+						userId: oauthToken.userId,
+						sessionKey: `oauth-${oauthToken.clientId}`, // OAuth-specific session key
+						username: oauthToken.username,
+						iat: Math.floor(oauthToken.createdAt / 1000),
+						exp: Math.floor(oauthToken.expiresAt / 1000),
+					}
+				} catch (oauthError) {
+					console.log('Bearer token validation failed:', oauthError)
+					// Fall through to cookie authentication
+				}
+			}
+		}
+
+		// Fall back to session cookie authentication
 		const cookieHeader = request.headers.get('Cookie')
 		if (!cookieHeader) {
 			return null
@@ -87,10 +110,10 @@ export async function verifyAuthentication(request: Request, jwtSecret: string):
  * Get connection-specific authentication session
  */
 async function getConnectionSession(request: Request, jwtSecret: string, env?: Env): Promise<SessionPayload | null> {
-	// First try standard authentication via cookie
-	const cookieSession = await verifyAuthentication(request, jwtSecret)
-	if (cookieSession) {
-		return cookieSession
+	// First try standard authentication via cookie or Bearer token
+	const session = await verifyAuthentication(request, jwtSecret, env)
+	if (session) {
+		return session
 	}
 
 	// Try connection-specific authentication only if we have a connection ID and KV storage

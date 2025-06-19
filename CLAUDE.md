@@ -47,7 +47,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 - `npm run dev` - Start development server on localhost:8787
 - `npm run build` - Build check with dry-run deployment
-- `npm test` - Run test suite with Vitest
+- `npm test` - Run test suite with Vitest (watch mode)
+- `npx vitest --run` - Run tests once and exit (recommended for CI/automation)
 - `npm run lint` - Run ESLint on TypeScript files
 - `npm run format` - Format code with Prettier
 - `npm run format:check` - Check code formatting
@@ -61,8 +62,12 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ### Testing
 
+- `npm test` - Run test suite with Vitest (watch mode - will wait for file changes)
+- `npx vitest --run` - Run tests once and exit (avoids timeout issues)
 - `npm run test:multi-user` - Run multi-user integration tests
-- Individual test files can be run with: `npx vitest test/path/to/test.spec.ts`
+- Individual test files can be run with: `npx vitest test/path/to/test.spec.ts --run`
+
+**Note**: Use `npx vitest --run` instead of `npm test` to avoid timeout issues when running tests programmatically. The `--run` flag executes tests once and exits, while the default behavior enters watch mode waiting for file changes.
 
 ## Architecture Overview
 

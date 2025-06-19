@@ -14,18 +14,18 @@ We're implementing OAuth 2.0 authentication to make our Last.fm MCP server work 
 - [x] **3. OAuth types** - Create TypeScript interfaces for OAuth data structures
 
 ### 🏗️ Core OAuth Implementation  
-- [ ] **4. Client management** - OAuth client ID/secret generation and validation utilities
-- [ ] **5. Authorization codes** - Generate and validate temporary OAuth codes (10min TTL)
-- [ ] **6. Authorization endpoint** - GET /oauth/authorize with Last.fm integration
-- [ ] **7. Token endpoint** - POST /oauth/token for code-to-token exchange
-- [ ] **8. Bearer auth** - Add Bearer token support to existing MCP handlers
+- [x] **4. Client management** - OAuth client ID/secret generation and validation utilities
+- [x] **5. Authorization codes** - Generate and validate temporary OAuth codes (10min TTL)
+- [x] **6. Authorization endpoint** - GET /oauth/authorize with Last.fm integration
+- [x] **7. Token endpoint** - POST /oauth/token for code-to-token exchange
+- [x] **8. Bearer auth** - Add Bearer token support to existing MCP handlers
 
 ### 🧪 Testing (Critical)
 - [ ] **12. OAuth authorize tests** - Unit tests for authorization endpoint
 - [ ] **13. OAuth token tests** - Unit tests for token endpoint  
 - [ ] **14. Bearer validation tests** - Unit tests for token validation
 - [ ] **15. Integration tests** - End-to-end OAuth flow testing
-- [ ] **22. Regression tests** - Verify existing functionality still works
+- [x] **22. Regression tests** - Verify existing functionality still works
 
 ## Medium Priority Tasks
 
@@ -39,7 +39,7 @@ We're implementing OAuth 2.0 authentication to make our Last.fm MCP server work 
 - [ ] **17. Claude simulation** - Test with simulated Claude client requests
 - [ ] **19. Security measures** - Rate limiting and OAuth security
 - [ ] **21. E2E deployment** - Test in development environment
-- [ ] **23. Code quality** - Lint and format checks
+- [x] **23. Code quality** - Lint and format checks
 
 ## Low Priority Tasks
 
@@ -91,7 +91,7 @@ During transition, support both:
 
 **Started:** 2025-06-19  
 **Target Completion:** 2-3 weeks from start  
-**Current Phase:** Core OAuth Implementation
+**Current Phase:** Testing & Validation
 
 ### ✅ Completed Infrastructure (2025-06-19)
 - Created `claude-native` branch for safe development
@@ -100,5 +100,22 @@ During transition, support both:
 - Updated `src/types/env.ts` with OAuth KV bindings
 - Created comprehensive OAuth types in `src/types/oauth.ts`
 - All builds and lint checks pass
+
+### ✅ Completed Core OAuth Implementation (2025-06-19)
+- Implemented OAuth client management utilities in `src/auth/oauth.ts`
+  - Client ID/secret generation with crypto.getRandomValues()
+  - Client registration, validation, and configuration management
+  - Authorization code generation and validation (10-minute TTL)
+  - Access token storage and validation (7-day TTL)
+- Added OAuth endpoints to `src/index.ts`:
+  - `GET /oauth/authorize` - Authorization flow initiation with Last.fm integration
+  - `GET /oauth/callback` - Last.fm OAuth callback handler  
+  - `POST /oauth/token` - Authorization code to access token exchange
+- Implemented Bearer token authentication in `src/protocol/handlers.ts`
+  - Extended `verifyAuthentication()` to support OAuth Bearer tokens
+  - Maintains full backward compatibility with existing cookie/session auth
+  - Seamless integration with all existing MCP handlers
+- All 320 existing tests pass - no regressions introduced
+- Bundle size: 136.35 KiB (within acceptable limits)
 
 Mark tasks complete with ✅ as they're finished. Update this document to track progress and any implementation notes or issues discovered.

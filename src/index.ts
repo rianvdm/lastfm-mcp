@@ -13,6 +13,16 @@ import { KVLogger } from './utils/kvLogger'
 import { RateLimiter } from './utils/rateLimit'
 import type { Env } from './types/env'
 import type { ExecutionContext } from '@cloudflare/workers-types'
+import {
+	validateOAuthClient,
+	validateRedirectUri,
+	validateScopes,
+	generateAuthorizationCode,
+	storeAuthorizationCode,
+	validateAuthorizationCode,
+	storeAccessToken,
+} from './auth/oauth'
+import { OAuthError, OAUTH_ERRORS } from './types/oauth'
 
 // These types are available globally in Workers runtime
 /// <reference lib="dom" />
@@ -92,6 +102,27 @@ export default {
 				} else {
 					return new Response('Method not allowed', { status: 405 })
 				}
+
+			case '/oauth/authorize':
+				// OAuth 2.0 authorization endpoint for Claude integration
+				if (request.method !== 'GET') {
+					return new Response('Method not allowed', { status: 405 })
+				}
+				return handleOAuthAuthorize(request, env)
+
+			case '/oauth/token':
+				// OAuth 2.0 token endpoint for code-to-token exchange
+				if (request.method !== 'POST') {
+					return new Response('Method not allowed', { status: 405 })
+				}
+				return handleOAuthToken(request, env)
+
+			case '/oauth/callback':
+				// OAuth callback endpoint (Last.fm auth completion)
+				if (request.method !== 'GET') {
+					return new Response('Method not allowed', { status: 405 })
+				}
+				return handleOAuthCallback(request, env)
 
 			case '/login':
 				// Last.fm authentication - redirect to Last.fm
@@ -448,7 +479,7 @@ async function handleMCPRequest(request: Request, env?: Env): Promise<Response> 
 
 		// Get user ID for rate limiting and logging
 		if (env?.JWT_SECRET) {
-			const session = await verifyAuthentication(request, env.JWT_SECRET)
+			const session = await verifyAuthentication(request, env.JWT_SECRET, env)
 			if (session) {
 				userId = session.userId
 			}
@@ -562,7 +593,7 @@ async function handleMCPAuth(request: Request, env: Env): Promise<Response> {
 		}
 
 		// Fallback: check if user has a valid session cookie
-		const session = await verifyAuthentication(request, env.JWT_SECRET)
+		const session = await verifyAuthentication(request, env.JWT_SECRET, env)
 		if (session) {
 			// Extract session token from cookie
 			const cookieHeader = request.headers.get('Cookie')
@@ -621,5 +652,317 @@ async function handleMCPAuth(request: Request, env: Env): Promise<Response> {
 				headers: addCorsHeaders({ 'Content-Type': 'application/json' }),
 			},
 		)
+	}
+}
+
+/**
+ * Handle OAuth 2.0 authorization endpoint for Claude integration
+ */
+async function handleOAuthAuthorize(request: Request, env: Env): Promise<Response> {
+	try {
+		const url = new URL(request.url)
+		const clientId = url.searchParams.get('client_id')
+		const redirectUri = url.searchParams.get('redirect_uri')
+		const responseType = url.searchParams.get('response_type')
+		const scope = url.searchParams.get('scope')
+		const state = url.searchParams.get('state')
+
+		// Validate required parameters
+		if (!clientId) {
+			throw new OAuthError(OAUTH_ERRORS.INVALID_REQUEST, 'Missing client_id parameter')
+		}
+		if (!redirectUri) {
+			throw new OAuthError(OAUTH_ERRORS.INVALID_REQUEST, 'Missing redirect_uri parameter')
+		}
+		if (responseType !== 'code') {
+			throw new OAuthError(OAUTH_ERRORS.UNSUPPORTED_GRANT_TYPE, 'Only response_type=code is supported')
+		}
+
+		// Validate OAuth client
+		const client = await validateOAuthClient(env, clientId)
+		validateRedirectUri(client, redirectUri)
+		const validScopes = validateScopes(client, scope || '')
+
+		// Check if user already has a valid Last.fm session
+		const sessionCookie = request.headers.get('Cookie')
+		let existingSession = null
+		if (sessionCookie) {
+			// Try to extract and validate existing JWT session
+			const sessionMatch = sessionCookie.match(/session=([^;]+)/)
+			if (sessionMatch) {
+				try {
+					existingSession = await verifyAuthentication(request, env.JWT_SECRET, env)
+				} catch {
+					// Invalid session, continue with auth flow
+				}
+			}
+		}
+
+		if (existingSession) {
+			// User already authenticated, generate authorization code
+			const authCode = generateAuthorizationCode()
+			await storeAuthorizationCode(
+				env,
+				authCode,
+				clientId,
+				existingSession.userId,
+				existingSession.username,
+				validScopes.join(' '),
+				redirectUri
+			)
+
+			// Redirect back to client with authorization code
+			const callbackUrl = new URL(redirectUri)
+			callbackUrl.searchParams.set('code', authCode)
+			if (state) {
+				callbackUrl.searchParams.set('state', state)
+			}
+			return Response.redirect(callbackUrl.toString())
+		} else {
+			// User needs to authenticate with Last.fm first
+			// Store OAuth parameters for after Last.fm auth completes
+			const oauthParams = new URLSearchParams({
+				client_id: clientId,
+				redirect_uri: redirectUri,
+				response_type: responseType,
+				...(scope && { scope }),
+				...(state && { state }),
+			})
+
+			// Redirect to Last.fm auth with OAuth parameters preserved
+			const auth = new LastfmAuth(env.LASTFM_API_KEY, env.LASTFM_SHARED_SECRET)
+			const callbackUrl = `${new URL(request.url).origin}/oauth/callback?${oauthParams}`
+			const lastfmAuthUrl = auth.getAuthUrl(callbackUrl)
+			return Response.redirect(lastfmAuthUrl)
+		}
+	} catch (error) {
+		console.error('OAuth authorization error:', error)
+		
+		if (error instanceof OAuthError) {
+			// If we have a redirect URI, redirect with error
+			const redirectUri = request.url ? new URL(request.url).searchParams.get('redirect_uri') : null
+			if (redirectUri) {
+				try {
+					const errorUrl = new URL(redirectUri)
+					errorUrl.searchParams.set('error', error.error)
+					if (error.description) {
+						errorUrl.searchParams.set('error_description', error.description)
+					}
+					const state = request.url ? new URL(request.url).searchParams.get('state') : null
+					if (state) {
+						errorUrl.searchParams.set('state', state)
+					}
+					return Response.redirect(errorUrl.toString())
+				} catch {
+					// Invalid redirect URI, fall through to error response
+				}
+			}
+			return new Response(error.message, { status: error.statusCode })
+		}
+		
+		return new Response('Internal server error', { status: 500 })
+	}
+}
+
+/**
+ * Handle OAuth callback endpoint (Last.fm auth completion)
+ */
+async function handleOAuthCallback(request: Request, env: Env): Promise<Response> {
+	const url = new URL(request.url)
+	const token = url.searchParams.get('token')
+	const clientId = url.searchParams.get('client_id')
+	const redirectUri = url.searchParams.get('redirect_uri')
+	const scope = url.searchParams.get('scope')
+	const state = url.searchParams.get('state')
+
+	if (!token) {
+		return new Response('Missing authentication token', { status: 400 })
+	}
+
+	if (!clientId || !redirectUri) {
+		return new Response('Missing OAuth parameters', { status: 400 })
+	}
+
+	try {
+		// Complete Last.fm authentication
+		const auth = new LastfmAuth(env.LASTFM_API_KEY, env.LASTFM_SHARED_SECRET)
+		const sessionData = await auth.getSessionKey(token)
+
+		// Validate OAuth client again
+		const client = await validateOAuthClient(env, clientId)
+		validateRedirectUri(client, redirectUri)
+		const validScopes = validateScopes(client, scope || '')
+
+		// Generate authorization code
+		const authCode = generateAuthorizationCode()
+		await storeAuthorizationCode(
+			env,
+			authCode,
+			clientId,
+			sessionData.name, // Last.fm username as user ID
+			sessionData.name,
+			validScopes.join(' '),
+			redirectUri
+		)
+
+		// Redirect back to client with authorization code
+		const callbackUrl = new URL(redirectUri)
+		callbackUrl.searchParams.set('code', authCode)
+		if (state) {
+			callbackUrl.searchParams.set('state', state)
+		}
+		return Response.redirect(callbackUrl.toString())
+	} catch (error) {
+		console.error('OAuth callback error:', error)
+		
+		// Redirect with error
+		try {
+			const errorUrl = new URL(redirectUri)
+			errorUrl.searchParams.set('error', OAUTH_ERRORS.SERVER_ERROR)
+			errorUrl.searchParams.set('error_description', 'Authentication failed')
+			if (state) {
+				errorUrl.searchParams.set('state', state)
+			}
+			return Response.redirect(errorUrl.toString())
+		} catch {
+			return new Response(`Authentication failed: ${error}`, { status: 400 })
+		}
+	}
+}
+
+/**
+ * Handle OAuth 2.0 token endpoint for code-to-token exchange
+ */
+async function handleOAuthToken(request: Request, env: Env): Promise<Response> {
+	try {
+		// Parse form data
+		const formData = await request.formData()
+		const grantType = formData.get('grant_type') as string
+		const code = formData.get('code') as string
+		const clientId = formData.get('client_id') as string
+		const clientSecret = formData.get('client_secret') as string
+		const redirectUri = formData.get('redirect_uri') as string
+
+		// Validate grant type
+		if (grantType !== 'authorization_code') {
+			return new Response(JSON.stringify({
+				error: 'unsupported_grant_type',
+				error_description: 'Only authorization_code grant type is supported'
+			}), {
+				status: 400,
+				headers: { 'Content-Type': 'application/json' }
+			})
+		}
+
+		// Validate required parameters
+		if (!code) {
+			return new Response(JSON.stringify({
+				error: 'invalid_request',
+				error_description: 'Missing authorization code'
+			}), {
+				status: 400,
+				headers: { 'Content-Type': 'application/json' }
+			})
+		}
+
+		if (!clientId || !clientSecret) {
+			return new Response(JSON.stringify({
+				error: 'invalid_client',
+				error_description: 'Missing client credentials'
+			}), {
+				status: 401,
+				headers: { 'Content-Type': 'application/json' }
+			})
+		}
+
+		if (!redirectUri) {
+			return new Response(JSON.stringify({
+				error: 'invalid_request',
+				error_description: 'Missing redirect_uri'
+			}), {
+				status: 400,
+				headers: { 'Content-Type': 'application/json' }
+			})
+		}
+
+		// Validate client credentials
+		await validateOAuthClient(env, clientId, clientSecret)
+
+		// Validate and consume authorization code
+		const authCode = await validateAuthorizationCode(env, code, clientId, redirectUri)
+
+		// Generate access token (JWT)
+		const accessToken = await createSessionToken(
+			{
+				userId: authCode.userId,
+				sessionKey: `oauth-${authCode.clientId}`, // OAuth-specific session key
+				username: authCode.username,
+			},
+			env.JWT_SECRET,
+			168 // 7 days (same as existing JWT tokens)
+		)
+
+		// Store access token mapping
+		await storeAccessToken(
+			env,
+			accessToken,
+			clientId,
+			authCode.userId,
+			authCode.username,
+			authCode.scope,
+			7 * 24 * 60 * 60 // 7 days
+		)
+
+		// Return OAuth token response
+		return new Response(JSON.stringify({
+			access_token: accessToken,
+			token_type: 'Bearer',
+			expires_in: 7 * 24 * 60 * 60, // 7 days in seconds
+			scope: authCode.scope
+		}), {
+			status: 200,
+			headers: { 
+				'Content-Type': 'application/json',
+				'Cache-Control': 'no-store',
+				'Pragma': 'no-cache'
+			}
+		})
+
+	} catch (error) {
+		console.error('OAuth token error:', error)
+
+		// Handle OAuth-specific errors
+		if (error instanceof Error && error.message.includes('OAuth')) {
+			const errorMessage = error.message.toLowerCase()
+			
+			if (errorMessage.includes('client not found') || errorMessage.includes('invalid client')) {
+				return new Response(JSON.stringify({
+					error: 'invalid_client',
+					error_description: 'Invalid client credentials'
+				}), {
+					status: 401,
+					headers: { 'Content-Type': 'application/json' }
+				})
+			}
+			
+			if (errorMessage.includes('authorization code') || errorMessage.includes('invalid grant')) {
+				return new Response(JSON.stringify({
+					error: 'invalid_grant',
+					error_description: 'Invalid authorization code'
+				}), {
+					status: 400,
+					headers: { 'Content-Type': 'application/json' }
+				})
+			}
+		}
+
+		// Generic server error
+		return new Response(JSON.stringify({
+			error: 'server_error',
+			error_description: 'Internal server error'
+		}), {
+			status: 500,
+			headers: { 'Content-Type': 'application/json' }
+		})
 	}
 }
