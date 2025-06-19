@@ -19,6 +19,18 @@ id = "b4caaaa688cc45d2a9a85fe67ba53bfc"
 binding = "MCP_SESSIONS"
 id = "a0bc40f523d54a6ab70fa947ac3daeaf"
 
+[[kv_namespaces]]
+binding = "OAUTH_CLIENTS"
+id = "51aeb5cdc5364eb7bb5c066fc04d7d4b"
+
+[[kv_namespaces]]
+binding = "OAUTH_CODES"
+id = "9f0678400c254efb9ff0ccc6b66922fa"
+
+[[kv_namespaces]]
+binding = "OAUTH_TOKENS"
+id = "1f26b62f28d6420f82cfedbb5c4c3ddc"
+
 # Production environment
 [env.production]
 name = "lastfm-mcp-prod"
@@ -34,6 +46,18 @@ id = "bfc831cedceb4a08a6d997909c3899ce"
 [[env.production.kv_namespaces]]
 binding = "MCP_SESSIONS"
 id = "e45edcc5347e4b409169c1d0a9b2ed5d"
+
+[[env.production.kv_namespaces]]
+binding = "OAUTH_CLIENTS"
+id = "9524d07511ac4ef9a234fd45d9f7fe3c"
+
+[[env.production.kv_namespaces]]
+binding = "OAUTH_CODES"  
+id = "48419869b7a24e98bddcb941e70459bf"
+
+[[env.production.kv_namespaces]]
+binding = "OAUTH_TOKENS"
+id = "c9fc57dcee184742b1070ba937dee25f"
 
 # Secrets (set via wrangler secret put):
 # - LASTFM_API_KEY

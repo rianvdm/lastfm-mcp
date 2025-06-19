@@ -13,4 +13,9 @@ export interface Env {
 	MCP_LOGS: KVNamespace
 	MCP_RL: KVNamespace
 	MCP_SESSIONS: KVNamespace
+
+	// OAuth KV namespaces for Claude native integration
+	OAUTH_CLIENTS: KVNamespace
+	OAUTH_CODES: KVNamespace
+	OAUTH_TOKENS: KVNamespace
 }
