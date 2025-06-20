@@ -151,11 +151,9 @@ export default {
 					return handleLastFmCallback(request, env)
 				
 				case '/sse':
-					// Use the original working SSE endpoint logic
+					// OAuth-protected SSE endpoint for Claude Desktop
 					if (request.method === 'GET') {
-						const { createSSEResponse } = await import('./transport/sse')
-						const { response } = createSSEResponse()
-						return response
+						return handleOAuthProtectedSSE(request, env)
 					} else if (request.method === 'POST') {
 						// Handle JSON-RPC requests exactly like the original implementation
 						const { handleMethod } = await import('./protocol/handlers')
@@ -1045,4 +1043,101 @@ async function handleMCPRequest(request: Request, env: Env, tokenData: AccessTok
 			headers: corsHeaders({ 'Content-Type': 'application/json' })
 		})
 	}
+}
+
+/**
+ * OAuth-protected SSE endpoint for Claude Desktop
+ * Requires valid Bearer token for authentication
+ */
+async function handleOAuthProtectedSSE(request: Request, env: Env): Promise<Response> {
+	// Extract and validate Bearer token
+	const token = extractBearerToken(request)
+	if (!token) {
+		return new Response(JSON.stringify({
+			error: 'unauthorized',
+			error_description: 'Bearer token required for SSE connections'
+		}), {
+			status: 401,
+			headers: corsHeaders({ 'Content-Type': 'application/json' })
+		})
+	}
+
+	// Validate token
+	const tokenData = await env.MCP_SESSIONS.get(`oauth:token:${token}`)
+	if (!tokenData) {
+		return new Response(JSON.stringify({
+			error: 'invalid_token',
+			error_description: 'Invalid or expired bearer token'
+		}), {
+			status: 401,
+			headers: corsHeaders({ 'Content-Type': 'application/json' })
+		})
+	}
+
+	const parsedTokenData: AccessToken = JSON.parse(tokenData)
+	
+	// Check if token is expired
+	if (Date.now() > parsedTokenData.expires_at) {
+		return new Response(JSON.stringify({
+			error: 'invalid_token',
+			error_description: 'Bearer token has expired'
+		}), {
+			status: 401,
+			headers: corsHeaders({ 'Content-Type': 'application/json' })
+		})
+	}
+
+	console.log('Creating OAuth-protected SSE connection for user:', parsedTokenData.username)
+
+	// Create a clean SSE response without authentication prompts
+	const connectionId = crypto.randomUUID()
+	const encoder = new TextEncoder()
+
+	// Create a TransformStream for SSE
+	const { readable, writable } = new TransformStream()
+	const writer = writable.getWriter()
+
+	// Store session data for this connection using the same format as the original
+	const sessionPayload = {
+		token: token, // Use the OAuth token directly
+		userId: parsedTokenData.username,
+		sessionKey: parsedTokenData.lastfm_session_key,
+		username: parsedTokenData.username,
+		timestamp: Date.now(),
+		expiresAt: parsedTokenData.expires_at,
+		connectionId: connectionId,
+		source: 'oauth'
+	}
+
+	await env.MCP_SESSIONS.put(
+		`session:${connectionId}`,
+		JSON.stringify(sessionPayload),
+		{ expirationTtl: Math.floor((parsedTokenData.expires_at - Date.now()) / 1000) }
+	)
+
+	// Set up keepalive
+	const keepaliveInterval = setInterval(() => {
+		try {
+			writer.write(encoder.encode(':keepalive\n\n'))
+		} catch {
+			clearInterval(keepaliveInterval)
+		}
+	}, 30000)
+
+	// Clean up on close
+	writer.closed
+		.then(() => clearInterval(keepaliveInterval))
+		.catch(() => clearInterval(keepaliveInterval))
+
+	const response = new Response(readable, {
+		headers: corsHeaders({
+			'Content-Type': 'text/event-stream',
+			'Cache-Control': 'no-cache',
+			'Connection': 'keep-alive',
+			'X-Connection-ID': connectionId,
+		})
+	})
+
+	console.log('OAuth SSE connection established:', connectionId, 'for user:', parsedTokenData.username)
+	return response
 }
