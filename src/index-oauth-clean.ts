@@ -92,7 +92,13 @@ export default {
 			// Route to appropriate handler
 			switch (url.pathname) {
 				case '/':
-					return handleRoot()
+					if (request.method === 'GET') {
+						return handleRoot()
+					} else if (request.method === 'POST') {
+						// Also handle MCP requests at root endpoint for compatibility
+						return handleOAuthMCP(request, env)
+					}
+					break
 				
 				case '/oauth/register':
 					return handleClientRegistration(request, env)
@@ -147,20 +153,26 @@ export default {
  */
 function handleRoot(): Response {
 	return new Response(JSON.stringify({
-		name: 'Last.fm MCP Server - Clean OAuth',
-		version: '3.0.0-clean',
-		description: 'Pure OAuth 2.0 server for Last.fm MCP with Claude Desktop integration',
+		name: 'Last.fm MCP Server',
+		version: '3.0.0-oauth',
+		description: 'Model Context Protocol server for Last.fm listening data access with OAuth 2.0',
 		endpoints: {
-			authorization: '/oauth/authorize',
-			token: '/oauth/token',
-			registration: '/oauth/register',
-			mcp: '/sse'
+			'/': 'POST - MCP JSON-RPC endpoint (OAuth protected)',
+			'/sse': 'GET - Server-Sent Events endpoint (OAuth protected)',
+			'/oauth/authorize': 'GET - OAuth authorization',
+			'/oauth/token': 'POST - OAuth token exchange',
+			'/oauth/register': 'POST - OAuth client registration',
+			'/health': 'GET - Health check'
 		},
 		oauth: {
 			grant_types_supported: ['authorization_code'],
 			response_types_supported: ['code'],
 			scopes_supported: ['lastfm:read', 'lastfm:profile'],
 			token_endpoint_auth_methods_supported: ['client_secret_basic', 'client_secret_post']
+		},
+		mcp: {
+			protocol_version: '2024-11-05',
+			capabilities: ['tools', 'resources', 'prompts']
 		}
 	}), {
 		headers: corsHeaders({ 'Content-Type': 'application/json' })
