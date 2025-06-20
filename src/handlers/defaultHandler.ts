@@ -57,6 +57,81 @@ export const defaultHandler: ExportedHandler<Env> = {
 						}
 					)
 
+				case '/debug/kv':
+					// Debug endpoint to check KV storage contents
+					if (request.method === 'GET') {
+						try {
+							const clientId = url.searchParams.get('client_id')
+							if (!clientId) {
+								return new Response('Missing client_id parameter', { status: 400 })
+							}
+
+							// Check if the client exists in KV
+							let kvData = null
+							let kvKeys = []
+							
+							if (env.OAUTH_KV) {
+								try {
+									// Check the correct key format that we found
+									kvData = await env.OAUTH_KV.get(`client:${clientId}`)
+									
+									// Also check if there's any data in one of the existing client records for debugging
+									const testClientData = await env.OAUTH_KV.get('client:2JWzg4N8TNqPsQdb')
+									
+									// List all keys 
+									const listResult = await env.OAUTH_KV.list({ limit: 20 })
+									kvKeys = listResult.keys.map(k => k.name)
+									
+									// Check what the OAuth provider thinks its KV namespace is
+									const oauthProviderKV = env.OAUTH_PROVIDER ? 'Available' : 'Not Available'
+									
+									// Return the actual client data structure
+									kvData = {
+										requestedClient: kvData,
+										testClientData: testClientData,
+										clientExists: !!kvData,
+										oauthProviderStatus: oauthProviderKV,
+										kvNamespaceId: 'c9fc57dcee184742b1070ba937dee25f', // Expected production ID
+										environment: 'production'
+									}
+								} catch (error) {
+									console.error('KV access error:', error)
+								}
+							}
+
+							return new Response(
+								JSON.stringify({
+									clientId,
+									kvData,
+									kvKeys,
+									timestamp: new Date().toISOString(),
+								}),
+								{
+									status: 200,
+									headers: {
+										'Content-Type': 'application/json',
+										...corsHeaders,
+									},
+								}
+							)
+						} catch (error) {
+							return new Response(
+								JSON.stringify({
+									error: 'Debug failed',
+									message: error instanceof Error ? error.message : 'Unknown error',
+								}),
+								{
+									status: 500,
+									headers: {
+										'Content-Type': 'application/json',
+										...corsHeaders,
+									},
+								}
+							)
+						}
+					}
+					break
+
 				case '/login':
 					// Legacy Last.fm login - redirect to OAuth flow
 					const connectionId = url.searchParams.get('connection_id')
@@ -365,7 +440,19 @@ async function handleOAuthAuthorize(request: Request, env: Env): Promise<Respons
 	} else {
 		// User needs to authenticate with Last.fm first
 		const auth = new LastfmAuth(env.LASTFM_API_KEY, env.LASTFM_SHARED_SECRET)
-		const callbackUrl = `${new URL(request.url).origin}/oauth/lastfm/callback?state=${encodeURIComponent(state)}&client_id=${encodeURIComponent(clientId)}&redirect_uri=${encodeURIComponent(redirectUri)}&scope=${encodeURIComponent(scope)}`
+		
+		// Store OAuth parameters temporarily in KV to simplify callback URL
+		const tempStateId = `oauth_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
+		if (env.OAUTH_KV) {
+			await env.OAUTH_KV.put(
+				`temp_oauth_${tempStateId}`,
+				JSON.stringify({ state, clientId, redirectUri, scope }),
+				{ expirationTtl: 600 } // 10 minutes
+			)
+		}
+		
+		// Use much simpler callback URL
+		const callbackUrl = `${new URL(request.url).origin}/oauth/lastfm/callback?temp_state=${tempStateId}`
 		const lastfmAuthUrl = auth.getAuthUrl(callbackUrl)
 
 		return new Response(
@@ -390,10 +477,7 @@ async function handleOAuthAuthorize(request: Request, env: Env): Promise<Respons
 async function handleLastfmOAuthCallback(request: Request, env: Env): Promise<Response> {
 	const url = new URL(request.url)
 	const lastfmToken = url.searchParams.get('token')
-	const state = url.searchParams.get('state')
-	const clientId = url.searchParams.get('client_id')
-	const redirectUri = url.searchParams.get('redirect_uri')
-	const scope = url.searchParams.get('scope')
+	const tempStateId = url.searchParams.get('temp_state')
 
 	if (!lastfmToken) {
 		return new Response(
@@ -405,15 +489,48 @@ async function handleLastfmOAuthCallback(request: Request, env: Env): Promise<Re
 		)
 	}
 
-	if (!clientId || !redirectUri) {
+	if (!tempStateId) {
 		return new Response(
-			generateErrorPage('invalid_request', 'Missing OAuth parameters'),
+			generateErrorPage('invalid_request', 'Missing state parameter'),
 			{
 				status: 400,
 				headers: { 'Content-Type': 'text/html' },
 			}
 		)
 	}
+
+	// Retrieve stored OAuth parameters
+	let oauthParams
+	try {
+		if (env.OAUTH_KV) {
+			const storedData = await env.OAUTH_KV.get(`temp_oauth_${tempStateId}`)
+			if (!storedData) {
+				return new Response(
+					generateErrorPage('invalid_request', 'OAuth state expired or invalid'),
+					{
+						status: 400,
+						headers: { 'Content-Type': 'text/html' },
+					}
+				)
+			}
+			oauthParams = JSON.parse(storedData)
+			// Clean up the temporary storage
+			await env.OAUTH_KV.delete(`temp_oauth_${tempStateId}`)
+		} else {
+			throw new Error('KV storage not available')
+		}
+	} catch (error) {
+		console.error('Error retrieving OAuth parameters:', error)
+		return new Response(
+			generateErrorPage('server_error', 'Failed to retrieve OAuth state'),
+			{
+				status: 500,
+				headers: { 'Content-Type': 'text/html' },
+			}
+		)
+	}
+
+	const { state, clientId, redirectUri, scope } = oauthParams
 
 	try {
 		// Exchange Last.fm token for session key

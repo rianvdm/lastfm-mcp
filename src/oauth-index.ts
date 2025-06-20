@@ -67,13 +67,20 @@ export default new OAuthProvider({
 		}
 	},
 
+
 	// Error handling
 	onError: (error) => {
 		console.error('OAuth Provider Error:', {
 			code: error.code,
 			description: error.description,
 			status: error.status,
+			details: error,
 		})
+		
+		// Add additional context for debugging
+		if (error.code === 'invalid_client') {
+			console.error('Client not found - this might be a KV storage consistency issue or client ID mismatch')
+		}
 		
 		// Let the default error handling occur
 		return undefined
