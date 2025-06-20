@@ -617,6 +617,17 @@ async function handleOAuthAuthorizeConfirm(request: Request, env: Env): Promise<
 		)
 	}
 
+	// Ensure Last.fm authentication is completed
+	if (!lastfmUsername || !lastfmSessionKey) {
+		return new Response(
+			generateErrorPage('lastfm_auth_required', 'Last.fm authentication is required. Please click "Connect with Last.fm" to authenticate first.'),
+			{
+				status: 400,
+				headers: { 'Content-Type': 'text/html' },
+			}
+		)
+	}
+
 	try {
 		// Parse the original OAuth request to get the authorization details
 		const mockRequest = new Request(`${new URL(request.url).origin}/oauth/authorize?${new URLSearchParams({
@@ -646,6 +657,30 @@ async function handleOAuthAuthorizeConfirm(request: Request, env: Env): Promise<
 				username: 'unknown',
 			},
 		})
+
+		// Extract the authorization code from the redirect URL for our custom token handler
+		const redirectUrl = new URL(result.redirectTo)
+		const authCode = redirectUrl.searchParams.get('code')
+		
+		if (authCode && env.OAUTH_KV) {
+			// Store authorization code data for our custom token handler
+			const authCodeData = {
+				clientId: clientId?.toString(),
+				userId: lastfmUsername?.toString() || 'unknown',
+				username: lastfmUsername?.toString() || 'unknown',
+				lastfmSessionKey: lastfmSessionKey?.toString(),
+				scope: scope?.toString() || 'mcp.read lastfm.connect',
+				redirectUri: redirectUri?.toString(),
+				issuedAt: Date.now(),
+				expiresAt: Date.now() + (10 * 60 * 1000) // 10 minutes
+			}
+			
+			await env.OAUTH_KV.put(`auth_code:${authCode}`, JSON.stringify(authCodeData), {
+				expirationTtl: 600 // 10 minutes
+			})
+			
+			console.log(`Stored authorization code for custom token handler: ${authCode}`)
+		}
 
 		// Redirect to the client with the authorization code
 		return Response.redirect(result.redirectTo, 302)

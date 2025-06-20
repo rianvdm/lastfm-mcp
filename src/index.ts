@@ -59,9 +59,19 @@ export default {
 							name: 'Last.fm MCP Server',
 							version: '1.0.0',
 							description: 'Model Context Protocol server for Last.fm listening data access',
+							oauth: {
+								enabled: true,
+								discovery: '/.well-known/oauth-authorization-server',
+								authorization: '/oauth/authorize',
+								token: '/oauth/token',
+								registration: '/oauth/register',
+								scopes: ['mcp.read', 'mcp.write', 'lastfm.connect', 'offline_access']
+							},
 							endpoints: {
 								'/': 'POST - MCP JSON-RPC endpoint',
 								'/sse': 'GET - Server-Sent Events endpoint',
+								'/oauth/*': 'OAuth 2.1 authentication endpoints',
+								'/.well-known/oauth-authorization-server': 'OAuth discovery',
 								'/login': 'GET - Last.fm authentication',
 								'/callback': 'GET - Last.fm authentication callback',
 								'/mcp-auth': 'GET - MCP authentication',
