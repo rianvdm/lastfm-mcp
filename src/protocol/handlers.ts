@@ -70,13 +70,36 @@ export async function verifyAuthentication(request: Request, jwtSecret: string):
 			{} as Record<string, string>,
 		)
 
+		// First try JWT-based authentication (legacy)
 		const sessionToken = cookies.session
-		if (!sessionToken) {
-			return null
+		if (sessionToken) {
+			try {
+				const jwtSession = await verifySessionToken(sessionToken, jwtSecret)
+				if (jwtSession) {
+					return jwtSession
+				}
+			} catch (error) {
+				console.error('JWT verification error:', error)
+			}
 		}
 
-		// Verify JWT token
-		return await verifySessionToken(sessionToken, jwtSecret)
+		// Then try direct Last.fm session authentication (OAuth-based)
+		const lastfmUser = cookies.lastfm_user
+		const lastfmSession = cookies.lastfm_session
+		if (lastfmUser && lastfmSession) {
+			console.log('Found Last.fm session cookies:', { username: lastfmUser, hasSession: !!lastfmSession })
+			
+			// Create a session payload compatible with the existing system
+			return {
+				username: lastfmUser,
+				sessionKey: lastfmSession,
+				// Add other required fields for compatibility
+				iat: Math.floor(Date.now() / 1000),
+				exp: Math.floor(Date.now() / 1000) + (24 * 60 * 60), // 24 hours
+			}
+		}
+
+		return null
 	} catch (error) {
 		console.error('Authentication verification error:', error)
 		return null

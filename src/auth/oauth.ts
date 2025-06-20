@@ -94,8 +94,17 @@ export async function authenticateOAuthUser(
 
 		// If no existing session, check if we have Last.fm credentials in the request
 		// This would come from the OAuth authorization UI after Last.fm login
-		const formData = await request.formData()
-		const lastfmToken = formData.get('lastfm_token')
+		let lastfmToken = null
+		
+		// Only try to parse form data if this is a POST request with form data
+		if (request.method === 'POST' && request.headers.get('Content-Type')?.includes('application/x-www-form-urlencoded')) {
+			try {
+				const formData = await request.formData()
+				lastfmToken = formData.get('lastfm_token')
+			} catch (error) {
+				// Not form data, continue without Last.fm token
+			}
+		}
 
 		if (lastfmToken && typeof lastfmToken === 'string') {
 			// Exchange Last.fm token for session key
