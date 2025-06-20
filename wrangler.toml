@@ -1,5 +1,5 @@
 name = "lastfm-mcp"
-main = "src/index-oauth-custom.ts"
+main = "src/index-oauth-clean.ts"
 compatibility_date = "2024-12-01"
 compatibility_flags = ["global_fetch_strictly_public"]
 
