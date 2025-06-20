@@ -569,7 +569,8 @@ async function handleOAuthSSE(request: Request, env: Env): Promise<Response> {
 	if (!token) {
 		return new Response(JSON.stringify({
 			error: 'unauthorized',
-			error_description: 'Bearer token required'
+			error_description: 'OAuth Bearer token required for SSE connections',
+			auth_url: '/oauth/authorize'
 		}), {
 			status: 401,
 			headers: corsHeaders({ 'Content-Type': 'application/json' })
@@ -708,114 +709,16 @@ async function handleOAuthMCP(request: Request, env: Env): Promise<Response> {
 			)
 
 		} else {
-			// No Bearer token - check if this is Claude Desktop trying to use the MCP server after OAuth
-			// Find the most recent OAuth token for this client and use it
-			console.log('No Bearer token - checking for Claude Desktop MCP usage')
-			
-			connectionId = crypto.randomUUID()
-			
-			// Try to find a recent valid OAuth token by looking for the most recent token
-			// This is a workaround for Claude Desktop not sending Bearer tokens to MCP endpoints
-			try {
-				// List recent OAuth tokens (this is a simplified approach)
-				// In a real implementation, we'd need a more sophisticated token lookup
-				
-				// For now, let's try a different approach: look for tokens issued in the last few minutes
-				const recentTimeWindow = Date.now() - 300000 // 5 minutes ago
-				
-				// We'll create a basic authenticated session using the most recent successful OAuth
-				// This requires that we store client info with tokens, which we do
-				
-				// Simple approach: try to find any recent valid token
-				let foundValidToken = false
-				let lastFmSession = null
-				let username = null
-				
-				// Since we can't easily iterate KV, let's try a different approach
-				// Check if there's a "latest" token we can use (we'll improve this)
-				
-				// For now, create a session that can handle Last.fm authentication
-				// by checking if the user recently completed OAuth
-				
-				// Try to find the latest OAuth token for known Claude clients
-				const knownClaudeClientId = '133dc1675c24056f5bd72a11049baab1' // From logs
-				const latestTokenData = await env.MCP_SESSIONS.get(`oauth:latest:${knownClaudeClientId}`)
-				
-				if (latestTokenData) {
-					const tokenInfo: AccessToken = JSON.parse(latestTokenData)
-					console.log('Found latest OAuth token for Claude Desktop, user:', tokenInfo.username)
-					
-					// Create a session with real Last.fm authentication
-					const sessionPayload = {
-						token: tokenInfo.token,
-						userId: tokenInfo.username,
-						sessionKey: tokenInfo.lastfm_session_key,
-						username: tokenInfo.username,
-						timestamp: Date.now(),
-						expiresAt: tokenInfo.expires_at,
-						connectionId: connectionId,
-						source: 'claude-desktop-oauth-bridge'
-					}
-					sessionData = JSON.stringify(sessionPayload)
-
-					// Store temporary session
-					await env.MCP_SESSIONS.put(
-						`session:${connectionId}`,
-						sessionData,
-						{ expirationTtl: 300 } // 5 minutes
-					)
-					
-					console.log('Created OAuth-bridge session with Last.fm auth:', connectionId, 'user:', tokenInfo.username)
-				} else {
-					console.log('No recent OAuth token found, creating basic session')
-					
-					// Create a basic session
-					const sessionPayload = {
-						token: null,
-						userId: 'anonymous',
-						sessionKey: null,
-						username: 'anonymous',
-						timestamp: Date.now(),
-						expiresAt: Date.now() + 300000, // 5 minutes
-						connectionId: connectionId,
-						source: 'claude-desktop-fallback'
-					}
-					sessionData = JSON.stringify(sessionPayload)
-
-					// Store temporary session
-					await env.MCP_SESSIONS.put(
-						`session:${connectionId}`,
-						sessionData,
-						{ expirationTtl: 300 } // 5 minutes
-					)
-					
-					console.log('Created basic fallback session:', connectionId)
-				}
-				
-			} catch (error) {
-				console.error('Failed to create OAuth bridge session:', error)
-				
-				// Fallback to anonymous session
-				const sessionPayload = {
-					token: null,
-					userId: 'anonymous',
-					sessionKey: null,
-					username: 'anonymous',
-					timestamp: Date.now(),
-					expiresAt: Date.now() + 300000,
-					connectionId: connectionId,
-					source: 'claude-desktop-fallback'
-				}
-				sessionData = JSON.stringify(sessionPayload)
-
-				await env.MCP_SESSIONS.put(
-					`session:${connectionId}`,
-					sessionData,
-					{ expirationTtl: 300 }
-				)
-				
-				console.log('Created fallback session for Claude Desktop:', connectionId)
-			}
+			// No Bearer token - this should require authentication
+			// Claude Desktop should go through OAuth first
+			return new Response(JSON.stringify({
+				error: 'unauthorized',
+				error_description: 'OAuth Bearer token required. Please complete authentication first.',
+				auth_url: '/oauth/authorize'
+			}), {
+				status: 401,
+				headers: corsHeaders({ 'Content-Type': 'application/json' })
+			})
 		}
 
 		// Parse and handle MCP request
