@@ -238,6 +238,21 @@ const defaultHandler = {
 			return await handleLastFmCallback(request, env)
 		}
 
+		// Test MCP endpoint with simulated OAuth context
+		if (url.pathname === '/test-mcp' && request.method === 'POST') {
+			// Simulate OAuth context for bordesak user
+			const fakeOAuthContext = {
+				oauth: {
+					user: {
+						id: 'bordesak',
+						username: 'bordesak',
+						lastfm_session_key: 'test-session-key' // We'll need a real one for actual Last.fm calls
+					}
+				}
+			}
+			return await handleOAuthMCPRequest(request, env, fakeOAuthContext)
+		}
+
 		// Test the authorization URL generation
 		if (url.pathname === '/test-auth-url' && request.method === 'GET') {
 			const testUrl = `${url.origin}/oauth/authorize?response_type=code&client_id=YOUR_CLIENT_ID&redirect_uri=http://localhost:5173/callback&state=test123&scope=lastfm:read`
