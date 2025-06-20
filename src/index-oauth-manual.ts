@@ -430,10 +430,16 @@ async function handleLastFmCallback(request: Request, env: any): Promise<Respons
 			env
 		)
 
+		// Create new response with session cookie (can't modify immutable response)
+		const finalResponse = new Response(authResponse.body, {
+			status: authResponse.status,
+			headers: new Headers(authResponse.headers)
+		})
+		
 		// Set session cookie
-		authResponse.headers.set('Set-Cookie', `lastfm_session=${sessionId}; HttpOnly; Secure; SameSite=Lax; Path=/; Max-Age=86400`)
+		finalResponse.headers.set('Set-Cookie', `lastfm_session=${sessionId}; HttpOnly; Secure; SameSite=Lax; Path=/; Max-Age=86400`)
 
-		return authResponse
+		return finalResponse
 
 	} catch (error) {
 		console.error('Last.fm callback error:', error)
