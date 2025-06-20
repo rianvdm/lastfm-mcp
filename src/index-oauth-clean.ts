@@ -92,11 +92,24 @@ export default {
 			// Route to appropriate handler
 			switch (url.pathname) {
 				case '/':
-					console.log('Root endpoint called:', request.method, 'Bearer token:', !!extractBearerToken(request))
+					console.log('🏠 ROOT endpoint called:', request.method, 'Bearer token:', !!extractBearerToken(request))
 					if (request.method === 'GET') {
+						console.log('🏠 ROOT GET request - returning API info')
+						// If this is an authenticated request, return MCP capabilities
+						const token = extractBearerToken(request)
+						if (token) {
+							console.log('🏠 ROOT GET with Bearer token - checking if this should return MCP info')
+							// Validate the token first
+							const tokenData = await env.MCP_SESSIONS.get(`oauth:token:${token}`)
+							if (tokenData) {
+								console.log('🏠 Valid Bearer token on GET - returning enhanced MCP info')
+								return handleAuthenticatedRoot(token, tokenData)
+							}
+						}
 						return handleRoot()
 					} else if (request.method === 'POST') {
 						// Also handle MCP requests at root endpoint for compatibility
+						console.log('🏠 ROOT POST - handling as MCP request')
 						return handleOAuthMCP(request, env)
 					}
 					break
@@ -131,7 +144,12 @@ export default {
 				case '/health':
 					return handleHealth()
 				
+				case '/inspector-auth':
+					// Helper endpoint for MCP Inspector testing
+					return handleInspectorAuth(request, env)
+				
 				default:
+					console.log('🚨 UNKNOWN ENDPOINT ACCESSED:', url.pathname, request.method, 'Bearer token:', !!extractBearerToken(request))
 					return new Response('Not Found', { 
 						status: 404,
 						headers: corsHeaders()
@@ -182,6 +200,49 @@ function handleRoot(): Response {
 }
 
 /**
+ * Authenticated root endpoint - MCP server information with tools
+ */
+async function handleAuthenticatedRoot(token: string, tokenData: string): Promise<Response> {
+	const parsedTokenData: AccessToken = JSON.parse(tokenData)
+	
+	console.log('🏠 Returning authenticated root info for user:', parsedTokenData.username)
+	
+	// Return enhanced MCP info that might help Claude Desktop discover tools
+	return new Response(JSON.stringify({
+		name: 'Last.fm MCP Server',
+		version: '3.0.0-oauth',
+		description: 'Model Context Protocol server for Last.fm listening data access with OAuth 2.0',
+		authenticated: true,
+		user: {
+			username: parsedTokenData.username,
+			user_id: parsedTokenData.user_id
+		},
+		mcp: {
+			protocol_version: '2024-11-05',
+			capabilities: {
+				tools: { listChanged: true },
+				resources: { subscribe: false, listChanged: true },
+				prompts: { listChanged: true },
+				logging: {}
+			},
+			endpoints: {
+				mcp_jsonrpc: '/',
+				sse: '/sse'
+			}
+		},
+		oauth: {
+			token_valid: true,
+			scopes: parsedTokenData.scope.split(' '),
+			expires_at: new Date(parsedTokenData.expires_at).toISOString()
+		},
+		tools_available: 15,
+		hint: 'Send POST requests with MCP JSON-RPC to access tools'
+	}), {
+		headers: corsHeaders({ 'Content-Type': 'application/json' })
+	})
+}
+
+/**
  * OAuth Authorization Server Metadata (RFC 8414)
  */
 function handleWellKnownOAuth(request: Request): Response {
@@ -214,6 +275,73 @@ function handleHealth(): Response {
 	}), {
 		headers: corsHeaders({ 'Content-Type': 'application/json' })
 	})
+}
+
+/**
+ * Inspector authentication helper
+ */
+async function handleInspectorAuth(request: Request, env: Env): Promise<Response> {
+	const url = new URL(request.url)
+	
+	if (request.method === 'GET') {
+		// Show OAuth flow for Inspector testing
+		const clientId = 'inspector-' + generateSecureId(8)
+		const redirectUri = 'http://localhost:3000/callback' // Common Inspector callback
+		
+		const oauthUrl = `${url.origin}/oauth/authorize?` + new URLSearchParams({
+			response_type: 'code',
+			client_id: clientId,
+			redirect_uri: redirectUri,
+			scope: 'lastfm:read lastfm:profile',
+			state: 'inspector-test'
+		}).toString()
+		
+		return new Response(`
+<!DOCTYPE html>
+<html>
+<head>
+	<title>MCP Inspector Authentication</title>
+	<style>
+		body { font-family: Arial, sans-serif; max-width: 600px; margin: 50px auto; padding: 20px; }
+		.step { margin: 20px 0; padding: 15px; background: #f5f5f5; border-radius: 5px; }
+		.token { background: #e8f4fd; padding: 10px; border-radius: 3px; font-family: monospace; }
+		button { background: #007cba; color: white; padding: 10px 20px; border: none; border-radius: 5px; cursor: pointer; }
+		button:hover { background: #005a87; }
+	</style>
+</head>
+<body>
+	<h1>🔍 MCP Inspector Authentication</h1>
+	
+	<div class="step">
+		<h3>Step 1: Complete OAuth Flow</h3>
+		<p>Click the button below to authenticate with Last.fm:</p>
+		<button onclick="window.location.href='${oauthUrl}'">🔐 Authenticate with Last.fm</button>
+	</div>
+	
+	<div class="step">
+		<h3>Step 2: Get Bearer Token</h3>
+		<p>After authentication, you'll get a code. Use this curl command to get your Bearer token:</p>
+		<div class="token">
+curl -X POST ${url.origin}/oauth/token \\<br>
+&nbsp;&nbsp;-H "Content-Type: application/x-www-form-urlencoded" \\<br>
+&nbsp;&nbsp;-d "grant_type=authorization_code&code=YOUR_CODE_HERE&redirect_uri=${redirectUri}&client_id=${clientId}"
+		</div>
+	</div>
+	
+	<div class="step">
+		<h3>Step 3: Use in MCP Inspector</h3>
+		<p>Copy the <code>access_token</code> from the response and use it as the Bearer token in MCP Inspector.</p>
+		<p><strong>Server URL:</strong> <code>${url.origin}</code></p>
+		<p><strong>Transport:</strong> StreamableHttp</p>
+	</div>
+</body>
+</html>
+		`, {
+			headers: corsHeaders({ 'Content-Type': 'text/html' })
+		})
+	}
+	
+	return new Response('Method not allowed', { status: 405 })
 }
 
 /**
@@ -313,8 +441,33 @@ async function handleAuthorization(request: Request, env: Env): Promise<Response
 		})
 	}
 
-	// Validate client
-	const clientData = await env.MCP_SESSIONS.get(`oauth:client:${clientId}`)
+	// Validate client (with auto-registration for Claude Desktop)
+	let clientData = await env.MCP_SESSIONS.get(`oauth:client:${clientId}`)
+	
+	// Auto-register Claude Desktop clients if not found
+	if (!clientData && redirectUri === 'https://claude.ai/api/mcp/auth_callback') {
+		console.log('Auto-registering Claude Desktop client in authorization:', clientId)
+		const claudeClient: OAuthClient = {
+			client_id: clientId,
+			client_secret: '', // Public client - no secret
+			client_name: 'Claude Desktop',
+			redirect_uris: ['https://claude.ai/api/mcp/auth_callback'],
+			grant_types: ['authorization_code'],
+			response_types: ['code'],
+			scope: 'lastfm:read lastfm:profile',
+			created_at: Date.now()
+		}
+		
+		await env.MCP_SESSIONS.put(
+			`oauth:client:${clientId}`,
+			JSON.stringify(claudeClient),
+			{ expirationTtl: 365 * 24 * 60 * 60 } // 1 year
+		)
+		
+		clientData = JSON.stringify(claudeClient)
+		console.log('Claude Desktop client auto-registered in authorization')
+	}
+	
 	if (!clientData) {
 		return new Response(JSON.stringify({
 			error: 'invalid_client',
@@ -424,7 +577,10 @@ async function handleLastFmCallback(request: Request, env: Env): Promise<Respons
  * OAuth Token Exchange Endpoint
  */
 async function handleTokenExchange(request: Request, env: Env): Promise<Response> {
+	console.log('Token exchange handler called')
+	
 	if (request.method !== 'POST') {
+		console.log('Token exchange: Method not POST')
 		return new Response('Method Not Allowed', { 
 			status: 405,
 			headers: corsHeaders()
@@ -439,7 +595,16 @@ async function handleTokenExchange(request: Request, env: Env): Promise<Response
 		const clientId = body.get('client_id')
 		const clientSecret = body.get('client_secret')
 
-		if (grantType !== 'authorization_code' || !code || !redirectUri || !clientId || !clientSecret) {
+		console.log('Token exchange parameters:', {
+			grantType,
+			hasCode: !!code,
+			hasRedirectUri: !!redirectUri,
+			clientId,
+			hasClientSecret: !!clientSecret
+		})
+
+		if (grantType !== 'authorization_code' || !code || !redirectUri || !clientId) {
+			console.log('Token exchange: Missing required parameters')
 			return new Response(JSON.stringify({
 				error: 'invalid_request',
 				error_description: 'Missing required parameters'
@@ -449,9 +614,48 @@ async function handleTokenExchange(request: Request, env: Env): Promise<Response
 			})
 		}
 
-		// Validate client
-		const clientData = await env.MCP_SESSIONS.get(`oauth:client:${clientId}`)
+		// For public clients (like Claude Desktop), client_secret is not required
+		// For confidential clients, it is required
+		const isPublicClient = !clientSecret
+		console.log('Client type:', isPublicClient ? 'public' : 'confidential')
+
+		// Validate client exists (but don't require secret for public clients)
+		console.log('Looking up client:', clientId)
+		let clientData = await env.MCP_SESSIONS.get(`oauth:client:${clientId}`)
+		
+		// Auto-register known MCP clients if not found
+		// Claude Desktop clients can be identified by the redirect URI
+		// MCP Inspector typically uses localhost callbacks
+		if (!clientData && (
+			redirectUri === 'https://claude.ai/api/mcp/auth_callback' ||
+			redirectUri.startsWith('http://localhost:') ||
+			redirectUri.startsWith('http://127.0.0.1:')
+		)) {
+			console.log('Auto-registering MCP client:', clientId, 'with redirect:', redirectUri)
+			const clientName = redirectUri === 'https://claude.ai/api/mcp/auth_callback' ? 'Claude Desktop' : 'MCP Inspector'
+			const claudeClient: OAuthClient = {
+				client_id: clientId,
+				client_secret: '', // Public client - no secret
+				client_name: clientName,
+				redirect_uris: [redirectUri],
+				grant_types: ['authorization_code'],
+				response_types: ['code'],
+				scope: 'lastfm:read lastfm:profile',
+				created_at: Date.now()
+			}
+			
+			await env.MCP_SESSIONS.put(
+				`oauth:client:${clientId}`,
+				JSON.stringify(claudeClient),
+				{ expirationTtl: 365 * 24 * 60 * 60 } // 1 year
+			)
+			
+			clientData = JSON.stringify(claudeClient)
+			console.log('Claude Desktop client auto-registered for any user')
+		}
+		
 		if (!clientData) {
+			console.log('Token exchange: Client not found')
 			return new Response(JSON.stringify({
 				error: 'invalid_client',
 				error_description: 'Invalid client credentials'
@@ -461,8 +665,12 @@ async function handleTokenExchange(request: Request, env: Env): Promise<Response
 			})
 		}
 
+		console.log('Client found')
 		const client: OAuthClient = JSON.parse(clientData)
-		if (client.client_secret !== clientSecret) {
+		
+		// Only validate secret for confidential clients
+		if (!isPublicClient && client.client_secret !== clientSecret) {
+			console.log('Token exchange: Client secret mismatch')
 			return new Response(JSON.stringify({
 				error: 'invalid_client',
 				error_description: 'Invalid client credentials'
@@ -520,6 +728,8 @@ async function handleTokenExchange(request: Request, env: Env): Promise<Response
 			created_at: Date.now()
 		}
 
+		console.log('About to store OAuth tokens for client:', clientId, 'token:', accessToken.substring(0, 8) + '...')
+
 		// Store access token
 		await env.MCP_SESSIONS.put(
 			`oauth:token:${accessToken}`,
@@ -527,12 +737,26 @@ async function handleTokenExchange(request: Request, env: Env): Promise<Response
 			{ expirationTtl: 3600 } // 1 hour
 		)
 
+		console.log('Stored main OAuth token')
+
 		// Also store as "latest" for Claude Desktop fallback
 		await env.MCP_SESSIONS.put(
 			`oauth:latest:${clientId}`,
 			JSON.stringify(tokenData),
 			{ expirationTtl: 3600 } // 1 hour
 		)
+
+		// For Claude Desktop clients, also store a global latest token
+		if (redirectUri === 'https://claude.ai/api/mcp/auth_callback') {
+			await env.MCP_SESSIONS.put(
+				'oauth:latest:claude-desktop',
+				JSON.stringify(tokenData),
+				{ expirationTtl: 3600 } // 1 hour
+			)
+			console.log('Stored global Claude Desktop OAuth token for user:', authCode.username)
+		}
+
+		console.log('Stored latest OAuth token for client:', clientId, 'user:', authCode.username)
 
 		// Delete authorization code (one-time use)
 		await env.MCP_SESSIONS.delete(`oauth:code:${code}`)
@@ -567,10 +791,11 @@ async function handleOAuthSSE(request: Request, env: Env): Promise<Response> {
 	// Extract and validate Bearer token
 	const token = extractBearerToken(request)
 	if (!token) {
+		console.log('SSE GET request without Bearer token - requiring OAuth')
 		return new Response(JSON.stringify({
 			error: 'unauthorized',
 			error_description: 'OAuth Bearer token required for SSE connections',
-			auth_url: '/oauth/authorize'
+			auth_url: new URL(request.url).origin + '/oauth/authorize'
 		}), {
 			status: 401,
 			headers: corsHeaders({ 'Content-Type': 'application/json' })
@@ -709,12 +934,12 @@ async function handleOAuthMCP(request: Request, env: Env): Promise<Response> {
 			)
 
 		} else {
-			// No Bearer token - this should require authentication
-			// Claude Desktop should go through OAuth first
+			// No Bearer token - Claude Desktop should provide Bearer token after OAuth
+			console.log('No Bearer token provided - OAuth Bearer token required')
 			return new Response(JSON.stringify({
 				error: 'unauthorized',
-				error_description: 'OAuth Bearer token required. Please complete authentication first.',
-				auth_url: '/oauth/authorize'
+				error_description: 'OAuth Bearer token required for authenticated access',
+				auth_url: new URL(request.url).origin + '/oauth/authorize'
 			}), {
 				status: 401,
 				headers: corsHeaders({ 'Content-Type': 'application/json' })
@@ -748,6 +973,11 @@ async function handleOAuthMCP(request: Request, env: Env): Promise<Response> {
 		try {
 			jsonrpcRequest = parseMessage(body)
 			console.log('OAuth MCP Request:', jsonrpcRequest.method, 'with token:', !!token)
+			
+			// Special logging for tools requests
+			if (jsonrpcRequest.method === 'tools/list') {
+				console.log('🔧 TOOLS LIST REQUEST RECEIVED!')
+			}
 		} catch (error) {
 			console.error('Failed to parse JSON-RPC message:', error, 'Body:', body.substring(0, 200))
 			return new Response(JSON.stringify({
@@ -784,6 +1014,31 @@ async function handleOAuthMCP(request: Request, env: Env): Promise<Response> {
 			})
 		}
 
+		// Enhanced logging for initialize responses
+		if (jsonrpcRequest.method === 'initialize' && response.result) {
+			console.log('🚀 Initialize response capabilities:', JSON.stringify(response.result.capabilities, null, 2))
+			
+			// After a successful initialize, proactively send tools list to help debug
+			console.log('🔧 Checking what tools we would return for tools/list...')
+			try {
+				const toolsListRequest = {
+					jsonrpc: '2.0' as const,
+					id: 'debug-tools-list',
+					method: 'tools/list',
+					params: {}
+				}
+				
+				const toolsResponse = await handleMethod(toolsListRequest, modifiedRequest, undefined, env)
+				if (toolsResponse && toolsResponse.result) {
+					console.log('🔧 Available tools:', JSON.stringify(toolsResponse.result, null, 2))
+				} else {
+					console.log('🔧 No tools result from handleMethod')
+				}
+			} catch (error) {
+				console.log('🔧 Error getting tools list:', error)
+			}
+		}
+		
 		console.log('OAuth MCP Response for', jsonrpcRequest.method, ':', response.result ? 'has result' : 'no result')
 
 		return new Response(serializeResponse(response), {

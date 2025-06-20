@@ -86,11 +86,46 @@ export async function verifyAuthentication(request: Request, jwtSecret: string):
 /**
  * Get connection-specific authentication session
  */
-async function getConnectionSession(request: Request, jwtSecret: string, env?: Env): Promise<SessionPayload | null> {
-	// First try standard authentication via cookie
-	const cookieSession = await verifyAuthentication(request, jwtSecret)
-	if (cookieSession) {
-		return cookieSession
+async function getConnectionSession(request: Request, jwtSecret: string | undefined, env?: Env): Promise<SessionPayload | null> {
+	// First try OAuth Bearer token authentication
+	const authHeader = request.headers.get('Authorization')
+	console.log('🔍 Authentication check - Authorization header present:', !!authHeader)
+	if (authHeader?.startsWith('Bearer ') && env?.MCP_SESSIONS) {
+		const token = authHeader.substring(7)
+		console.log('🔑 Checking Bearer token for session:', token.substring(0, 8) + '...')
+		
+		const tokenData = await env.MCP_SESSIONS.get(`oauth:token:${token}`)
+		if (tokenData) {
+			const parsedTokenData = JSON.parse(tokenData)
+			console.log('✅ Found OAuth token for user:', parsedTokenData.username)
+			
+			// Check if token is expired
+			if (Date.now() < parsedTokenData.expires_at) {
+				console.log('✅ OAuth token is valid, returning session for:', parsedTokenData.username)
+				// Return session payload format expected by tools
+				return {
+					userId: parsedTokenData.username,
+					sessionKey: parsedTokenData.lastfm_session_key,
+					username: parsedTokenData.username,
+					iat: Math.floor(Date.now() / 1000),
+					exp: Math.floor(parsedTokenData.expires_at / 1000),
+				}
+			} else {
+				console.log('❌ OAuth token expired')
+			}
+		} else {
+			console.log('❌ OAuth token not found in storage')
+		}
+	} else {
+		console.log('🔍 No Bearer token or MCP_SESSIONS not available')
+	}
+
+	// Try standard authentication via cookie (only if we have JWT secret)
+	if (jwtSecret) {
+		const cookieSession = await verifyAuthentication(request, jwtSecret)
+		if (cookieSession) {
+			return cookieSession
+		}
 	}
 
 	// Try connection-specific authentication only if we have a connection ID and KV storage
@@ -218,7 +253,17 @@ export function handleInitialized(): void {
 /**
  * Handle resources/list request
  */
-export function handleResourcesList(): ResourcesListResult {
+export function handleResourcesList(session?: SessionPayload): ResourcesListResult {
+	// If we have a session, replace {username} placeholders with actual username
+	if (session?.username) {
+		const personalizedResources = LASTFM_RESOURCES.map(resource => ({
+			...resource,
+			uri: resource.uri.replace('{username}', session.username)
+		}))
+		return { resources: personalizedResources }
+	}
+	
+	// Return static resources with placeholders if no session
 	return { resources: LASTFM_RESOURCES }
 }
 
@@ -570,47 +615,38 @@ async function handleToolsCall(params: unknown, httpRequest?: Request, env?: Env
 			}
 		}
 		case 'lastfm_auth_status': {
-			// Provide unauthenticated status with connection-specific instructions
-			const connectionId = httpRequest?.headers.get('X-Connection-ID')
-			const connectionInfo = connectionId ? `\n🔗 **Connection ID:** ${connectionId}` : ''
-			const baseUrl = 'https://lastfm-mcp-prod.rian-db8.workers.dev'
-			const loginUrl = connectionId ? `${baseUrl}/login?connection_id=${connectionId}` : `${baseUrl}/login`
-
-			return {
-				content: [
-					{
-						type: 'text',
-						text: `🔐 **Authentication Status: Not Authenticated**${connectionInfo}
-
-You are not currently authenticated with Last.fm. To access your personal listening data, you need to authenticate first.
-
-**How to authenticate:**
-1. Visit: ${loginUrl}
-2. Sign in with your Last.fm account
-3. Authorize access to your listening data
-4. Return here and try your query again
-
-**What you'll be able to do after authentication:**
-• Get your recent tracks and listening history
-• View your top artists and albums by time period
-• Access your loved tracks and user profile
-• Get detailed information about tracks, artists, and albums (with personal stats)
-• Discover similar music and get personalized recommendations
-• Analyze your listening patterns and statistics
-
-Your authentication will be secure and connection-specific - only you will have access to your listening data.
-
-**Available without authentication:**
-• \`ping\` - Test server connectivity
-• \`server_info\` - Get server information
-• \`lastfm_auth_status\` - Check authentication status (this tool)
-• \`get_track_info\` - Get basic track information
-• \`get_artist_info\` - Get basic artist information  
-• \`get_album_info\` - Get basic album information
-• \`get_similar_artists\` - Find similar artists
-• \`get_similar_tracks\` - Find similar tracks`,
-					},
-				],
+			try {
+				// Check actual authentication status
+				const session = await getConnectionSession(httpRequest, undefined, env)
+				
+				if (session?.username) {
+					return {
+						content: [
+							{
+								type: 'text',
+								text: `🟢 **Authentication Status: Authenticated**\n\n**Last.fm User:** ${session.username}\n**User ID:** ${session.userId}\n\nYou are successfully authenticated with Last.fm!`,
+							},
+						],
+					}
+				} else {
+					return {
+						content: [
+							{
+								type: 'text',
+								text: `🔐 **Authentication Status: Not Authenticated**\n\nPlease authenticate with OAuth to access your Last.fm data.`,
+							},
+						],
+					}
+				}
+			} catch (error) {
+				return {
+					content: [
+						{
+							type: 'text',
+							text: `❌ **Error checking authentication:** ${error instanceof Error ? error.message : 'Unknown error'}`,
+						},
+					],
+				}
 			}
 		}
 
@@ -1387,7 +1423,9 @@ export async function handleMethod(request: JSONRPCRequest, httpRequest?: Reques
 	// Some methods don't require authentication
 	switch (method) {
 		case 'resources/list': {
-			const resourcesResult = handleResourcesList()
+			// Get session if available to personalize resource URIs
+			const session = await getConnectionSession(httpRequest, undefined, env)
+			const resourcesResult = handleResourcesList(session)
 			return hasId(request) ? createResponse(id!, resourcesResult) : null
 		}
 
@@ -1402,9 +1440,9 @@ export async function handleMethod(request: JSONRPCRequest, httpRequest?: Reques
 			const toolName = (params as ToolsCallParams)?.name
 			const dualHandlerTools = ['lastfm_auth_status', 'get_artist_info', 'get_track_info', 'get_album_info'] // Tools that exist in both handlers
 
-			if (dualHandlerTools.includes(toolName) && httpRequest && jwtSecret) {
+			if (dualHandlerTools.includes(toolName) && httpRequest) {
 				// Check if user is authenticated first
-				const session = await getConnectionSession(httpRequest, jwtSecret, env)
+				const session = await getConnectionSession(httpRequest, undefined, env)
 
 				if (session) {
 					// User is authenticated, use authenticated handler
@@ -1429,13 +1467,13 @@ export async function handleMethod(request: JSONRPCRequest, httpRequest?: Reques
 					console.log('Attempting authenticated tool call for:', params)
 
 					// Check if we have authentication context
-					if (!httpRequest || !jwtSecret) {
+					if (!httpRequest) {
 						console.log('Missing authentication context')
 						return hasId(request) ? createError(id!, -32603, 'Internal error: Missing authentication context for authenticated tool') : null
 					}
 
 					console.log('Verifying authentication...')
-					const session = await getConnectionSession(httpRequest, jwtSecret, env)
+					const session = await getConnectionSession(httpRequest, undefined, env)
 					console.log('Session verification result:', session ? 'SUCCESS' : 'FAILED')
 
 					if (!session) {
@@ -1485,14 +1523,14 @@ export async function handleMethod(request: JSONRPCRequest, httpRequest?: Reques
 	}
 
 	// All other methods require authentication
-	if (!httpRequest || !jwtSecret) {
+	if (!httpRequest) {
 		if (hasId(request)) {
 			return createError(id!, -32603, 'Internal error: Missing authentication context')
 		}
 		return null
 	}
 
-	const session = await getConnectionSession(httpRequest, jwtSecret, env)
+	const session = await getConnectionSession(httpRequest, undefined, env)
 
 	if (!session) {
 		if (hasId(request)) {
