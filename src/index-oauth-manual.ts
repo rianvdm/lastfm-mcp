@@ -7,18 +7,204 @@ import OAuthProvider from '@cloudflare/workers-oauth-provider'
 import { LastfmAuth } from './auth/lastfm'
 import type { Env } from './types/env'
 
-// OAuth-protected API handler
+// Import MCP protocol handlers
+import { parseMessage, createError, serializeResponse } from './protocol/parser'
+import { handleMethod } from './protocol/handlers'
+import { ErrorCode } from './types/jsonrpc'
+
+// OAuth-protected MCP API handler
 const apiHandler = {
 	async fetch(request: Request, env: any, ctx: any): Promise<Response> {
-		console.log('Protected endpoint accessed successfully!')
-		
-		return new Response(JSON.stringify({
-			message: 'SUCCESS! OAuth authentication works!',
-			url: request.url,
+		console.log('OAuth-protected MCP endpoint accessed:', {
 			method: request.method,
-			timestamp: new Date().toISOString(),
-			note: 'This proves the complete OAuth flow is functional'
-		}), {
+			url: request.url,
+			hasAuthContext: !!ctx.oauth
+		})
+
+		// Handle CORS preflight
+		if (request.method === 'OPTIONS') {
+			return new Response(null, {
+				status: 200,
+				headers: {
+					'Access-Control-Allow-Origin': '*',
+					'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+					'Access-Control-Allow-Headers': 'Content-Type, Authorization, X-Connection-ID',
+					'Access-Control-Max-Age': '86400',
+				},
+			})
+		}
+
+		// Handle GET requests (info endpoint)
+		if (request.method === 'GET') {
+			return new Response(JSON.stringify({
+				message: 'Last.fm MCP Server - OAuth Protected Endpoint',
+				authentication: 'OAuth 2.0 Bearer Token Required',
+				protocol: 'Model Context Protocol (MCP) 2024-11-05',
+				url: request.url,
+				timestamp: new Date().toISOString(),
+				usage: 'Send JSON-RPC 2.0 requests to this endpoint with Bearer token authentication'
+			}), {
+				headers: {
+					'Content-Type': 'application/json',
+					'Access-Control-Allow-Origin': '*'
+				}
+			})
+		}
+
+		// Handle POST requests (MCP JSON-RPC)
+		if (request.method === 'POST') {
+			return await handleOAuthMCPRequest(request, env, ctx)
+		}
+
+		return new Response('Method not allowed', { 
+			status: 405,
+			headers: {
+				'Access-Control-Allow-Origin': '*'
+			}
+		})
+	}
+}
+
+/**
+ * Create an OAuth-compatible session payload for MCP handlers
+ */
+function createOAuthSessionPayload(oauthUser: any): any {
+	return {
+		userId: oauthUser.id,
+		username: oauthUser.username,
+		sessionKey: oauthUser.lastfm_session_key,
+		iat: Math.floor(Date.now() / 1000),
+		exp: Math.floor(Date.now() / 1000) + (24 * 60 * 60), // 24 hours from now
+	}
+}
+
+/**
+ * Handle MCP JSON-RPC requests with OAuth authentication context
+ */
+async function handleOAuthMCPRequest(request: Request, env: any, ctx: any): Promise<Response> {
+	const startTime = Date.now()
+	
+	try {
+		// Get OAuth user context from the OAuth provider
+		const oauthContext = ctx.oauth
+		if (!oauthContext || !oauthContext.user) {
+			console.log('No OAuth user context available')
+			return new Response(JSON.stringify({
+				error: 'Authentication required',
+				message: 'Valid OAuth Bearer token required'
+			}), {
+				status: 401,
+				headers: {
+					'Content-Type': 'application/json',
+					'Access-Control-Allow-Origin': '*'
+				}
+			})
+		}
+
+		console.log('OAuth user context:', {
+			userId: oauthContext.user.id,
+			username: oauthContext.user.username,
+			hasLastFmSession: !!oauthContext.user.lastfm_session_key
+		})
+
+		// Parse request body
+		const body = await request.text()
+		if (!body) {
+			const errorResponse = createError(null, ErrorCode.InvalidRequest, 'Empty request body')
+			return new Response(serializeResponse(errorResponse), {
+				status: 400,
+				headers: {
+					'Content-Type': 'application/json',
+					'Access-Control-Allow-Origin': '*'
+				}
+			})
+		}
+
+		// Parse JSON-RPC message
+		let jsonrpcRequest
+		try {
+			jsonrpcRequest = parseMessage(body)
+		} catch (error) {
+			const errorResponse = createError(null, ErrorCode.ParseError, 'Invalid JSON-RPC request')
+			return new Response(serializeResponse(errorResponse), {
+				status: 400,
+				headers: {
+					'Content-Type': 'application/json',
+					'Access-Control-Allow-Origin': '*'
+				}
+			})
+		}
+
+		// Create a modified request with OAuth user info and simulate a connection ID
+		const modifiedHeaders = new Headers(request.headers)
+		const oauthConnectionId = `oauth-${oauthContext.user.id}`
+		modifiedHeaders.set('X-Connection-ID', oauthConnectionId)
+		modifiedHeaders.set('X-OAuth-User-ID', oauthContext.user.id)
+		modifiedHeaders.set('X-OAuth-Username', oauthContext.user.username)
+		
+		// Store OAuth session data in KV temporarily for MCP handlers to access
+		const sessionPayload = createOAuthSessionPayload(oauthContext.user)
+		if (env.MCP_SESSIONS) {
+			await env.MCP_SESSIONS.put(
+				`session:${oauthConnectionId}`,
+				JSON.stringify({
+					userId: sessionPayload.userId,
+					username: sessionPayload.username,
+					sessionKey: sessionPayload.sessionKey,
+					expiresAt: new Date(sessionPayload.exp * 1000).toISOString(),
+					source: 'oauth'
+				}),
+				{ expirationTtl: 3600 } // 1 hour
+			)
+		}
+
+		const modifiedRequest = new Request(request.url, {
+			method: request.method,
+			headers: modifiedHeaders,
+			body: JSON.stringify(jsonrpcRequest)
+		})
+
+		// Handle the method using existing MCP handlers
+		const response = await handleMethod(jsonrpcRequest, modifiedRequest, env?.JWT_SECRET, env)
+
+		// Clean up temporary session after request
+		if (env.MCP_SESSIONS) {
+			await env.MCP_SESSIONS.delete(`session:${oauthConnectionId}`)
+		}
+
+		// Calculate latency
+		const latency = Date.now() - startTime
+		console.log('OAuth MCP request processed:', {
+			method: jsonrpcRequest.method,
+			user: sessionPayload.username,
+			latency: `${latency}ms`,
+			hasResponse: !!response
+		})
+
+		// If no response (notification), return 204 No Content
+		if (!response) {
+			return new Response(null, {
+				status: 204,
+				headers: {
+					'Access-Control-Allow-Origin': '*'
+				}
+			})
+		}
+
+		// Return JSON-RPC response
+		return new Response(serializeResponse(response), {
+			headers: {
+				'Content-Type': 'application/json',
+				'Access-Control-Allow-Origin': '*'
+			}
+		})
+
+	} catch (error) {
+		console.error('OAuth MCP request error:', error)
+		const errorResponse = createError(null, ErrorCode.InternalError, 'Internal server error')
+		
+		return new Response(serializeResponse(errorResponse), {
+			status: 500,
 			headers: {
 				'Content-Type': 'application/json',
 				'Access-Control-Allow-Origin': '*'
