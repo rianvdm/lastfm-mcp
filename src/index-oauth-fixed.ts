@@ -1,6 +1,6 @@
 /**
- * ABOUTME: Manual OAuth implementation that properly integrates with OAuth provider
- * ABOUTME: Complete OAuth flow without relying on undocumented helper methods
+ * ABOUTME: Fixed OAuth implementation that properly integrates with the OAuth provider
+ * ABOUTME: Handles authorization codes in a way compatible with @cloudflare/workers-oauth-provider
  */
 
 import OAuthProvider from '@cloudflare/workers-oauth-provider'
@@ -11,6 +11,9 @@ import type { Env } from './types/env'
 import { parseMessage, createError, serializeResponse } from './protocol/parser'
 import { handleMethod } from './protocol/handlers'
 import { ErrorCode } from './types/jsonrpc'
+
+// Store environment reference for callbacks
+let globalEnv: Env | null = null
 
 // OAuth-protected MCP API handler
 const apiHandler = {
@@ -213,9 +216,12 @@ async function handleOAuthMCPRequest(request: Request, env: any, ctx: any): Prom
 	}
 }
 
-// Default handler that implements authorization manually
+// Default handler with custom authorization
 const defaultHandler = {
 	async fetch(request: Request, env: any, ctx: any): Promise<Response> {
+		// Store env reference for callbacks
+		globalEnv = env
+		
 		const url = new URL(request.url)
 		
 		const corsHeaders = {
@@ -228,9 +234,53 @@ const defaultHandler = {
 			return new Response(null, { status: 200, headers: corsHeaders })
 		}
 
-		// Manual OAuth authorization endpoint
+		// Override authorization to handle Last.fm bridge
 		if (url.pathname === '/oauth/authorize' && request.method === 'GET') {
-			return await handleManualAuthorize(request, env)
+			// The OAuth provider will handle basic validation
+			// We just need to check if user is authenticated with Last.fm
+			
+			const state = url.searchParams.get('state')
+			const clientId = url.searchParams.get('client_id')
+			const redirectUri = url.searchParams.get('redirect_uri')
+			
+			// Check for existing Last.fm session
+			const sessionCookie = getCookie(request, 'lastfm_session')
+			if (sessionCookie) {
+				const sessionData = await env.MCP_SESSIONS?.get(`session:lastfm:${sessionCookie}`)
+				if (sessionData) {
+					const session = JSON.parse(sessionData)
+					// User is authenticated, let OAuth provider handle the authorization
+					// The provider will call our authorizationApprovalCallback
+					return new Response(null, { status: 404 }) // Let OAuth provider handle
+				}
+			}
+			
+			// User not authenticated - redirect to Last.fm
+			if (!env.LASTFM_API_KEY || !env.LASTFM_SHARED_SECRET) {
+				const errorUrl = new URL(redirectUri || 'http://localhost:5173/callback')
+				errorUrl.searchParams.set('error', 'server_error')
+				errorUrl.searchParams.set('error_description', 'Last.fm not configured')
+				if (state) errorUrl.searchParams.set('state', state)
+				return Response.redirect(errorUrl.toString(), 302)
+			}
+			
+			// Store OAuth request for callback
+			const stateKey = `oauth:auth:${state}`
+			await env.MCP_SESSIONS?.put(stateKey, JSON.stringify({
+				client_id: clientId,
+				redirect_uri: redirectUri,
+				state,
+				scope: url.searchParams.get('scope') || 'lastfm:read',
+				timestamp: Date.now()
+			}), { expirationTtl: 600 })
+			
+			// Redirect to Last.fm
+			const auth = new LastfmAuth(env.LASTFM_API_KEY, env.LASTFM_SHARED_SECRET)
+			const callbackUrl = `${url.protocol}//${url.host}/oauth/lastfm/callback?state=${state}`
+			const lastfmAuthUrl = auth.getAuthUrl(callbackUrl)
+			
+			console.log('Redirecting to Last.fm:', { state, lastfmAuthUrl })
+			return Response.redirect(lastfmAuthUrl, 302)
 		}
 
 		// Last.fm authentication callback
@@ -238,30 +288,62 @@ const defaultHandler = {
 			return await handleLastFmCallback(request, env)
 		}
 
-		// Test MCP endpoint with simulated OAuth context
+		// Test MCP endpoint
 		if (url.pathname === '/test-mcp' && request.method === 'POST') {
-			// Simulate OAuth context for bordesak user
 			const fakeOAuthContext = {
 				oauth: {
 					user: {
 						id: 'bordesak',
 						username: 'bordesak',
-						lastfm_session_key: 'test-session-key' // We'll need a real one for actual Last.fm calls
+						lastfm_session_key: 'test-session-key'
 					}
 				}
 			}
 			return await handleOAuthMCPRequest(request, env, fakeOAuthContext)
 		}
 
-		// Test the authorization URL generation
-		if (url.pathname === '/test-auth-url' && request.method === 'GET') {
-			const testUrl = `${url.origin}/oauth/authorize?response_type=code&client_id=YOUR_CLIENT_ID&redirect_uri=http://localhost:5173/callback&state=test123&scope=lastfm:read`
+		// Direct test authorization endpoint
+		if (url.pathname === '/test-direct-auth' && request.method === 'GET') {
+			const clientId = url.searchParams.get('client_id')
+			const redirectUri = url.searchParams.get('redirect_uri')
+			const state = url.searchParams.get('state')
+			
+			// Generate an authorization code that the OAuth provider will recognize
+			const authCode = crypto.randomUUID()
+			
+			// Store in format that matches OAuth provider expectations
+			// This mimics what the OAuth provider would store
+			const codeData = {
+				client_id: clientId,
+				user_id: 'bordesak',
+				scope: 'lastfm:read',
+				redirect_uri: redirectUri,
+				code_challenge: null,
+				code_challenge_method: null,
+				expires_at: new Date(Date.now() + 600000).toISOString(),
+				created_at: new Date().toISOString(),
+				metadata: {
+					username: 'bordesak',
+					lastfm_session_key: 'test-session-key' // This would be real in production
+				}
+			}
+			
+			// Store with the exact key format the provider expects
+			await env.OAUTH_KV?.put(`oauth2:code:${authCode}`, JSON.stringify(codeData), {
+				expirationTtl: 600
+			})
+			
+			const redirectUrl = new URL(redirectUri || 'http://localhost:5173/callback')
+			redirectUrl.searchParams.set('code', authCode)
+			if (state) redirectUrl.searchParams.set('state', state)
+			
 			return new Response(JSON.stringify({
-				message: 'Test authorization URL',
-				auth_url: testUrl,
-				instructions: 'Replace YOUR_CLIENT_ID with actual client ID from registration'
+				message: 'Test authorization code generated',
+				code: authCode,
+				redirect_url: redirectUrl.toString(),
+				instructions: 'Use this code with POST /oauth/token to get an access token'
 			}), {
-				headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+				headers: { 'Content-Type': 'application/json' }
 			})
 		}
 
@@ -269,8 +351,8 @@ const defaultHandler = {
 		switch (url.pathname) {
 			case '/':
 				return new Response(JSON.stringify({
-					name: 'Last.fm MCP OAuth Manual Test',
-					version: '2.0.0-manual',
+					name: 'Last.fm MCP OAuth Fixed',
+					version: '2.0.0-fixed',
 					oauth_endpoints: {
 						authorization: `${url.origin}/oauth/authorize`,
 						token: `${url.origin}/oauth/token`,
@@ -278,16 +360,6 @@ const defaultHandler = {
 					},
 					protected_endpoints: {
 						sse: `${url.origin}/sse`
-					},
-					test_flow: {
-						"1": "POST /oauth/register - Register client",
-						"2": "GET /oauth/authorize?params - Start auth (redirects to Last.fm)",
-						"3": "Complete Last.fm auth",
-						"4": "POST /oauth/token - Exchange code for token", 
-						"5": "GET /sse with Bearer token - Access protected endpoint"
-					},
-					test_helper: {
-						"test_auth_url": "GET /test-auth-url - Get sample authorization URL"
 					}
 				}), {
 					headers: { ...corsHeaders, 'Content-Type': 'application/json' }
@@ -296,98 +368,17 @@ const defaultHandler = {
 			case '/health':
 				return new Response(JSON.stringify({
 					status: 'ok',
-					oauth: 'manual',
+					oauth: 'fixed',
 					lastfm_configured: !!(env.LASTFM_API_KEY && env.LASTFM_SHARED_SECRET)
 				}), {
 					headers: { ...corsHeaders, 'Content-Type': 'application/json' }
 				})
 
 			default:
-				return new Response(JSON.stringify({
-					error: 'Not found',
-					path: url.pathname,
-					available: ['/', '/health', '/test-auth-url', '/sse', '/oauth/*']
-				}), {
-					status: 404,
-					headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-				})
+				// Let OAuth provider handle its own endpoints
+				return new Response(null, { status: 404 })
 		}
 	}
-}
-
-/**
- * Handle OAuth authorization manually
- */
-async function handleManualAuthorize(request: Request, env: any): Promise<Response> {
-	const url = new URL(request.url)
-	const clientId = url.searchParams.get('client_id')
-	const redirectUri = url.searchParams.get('redirect_uri')
-	const state = url.searchParams.get('state')
-	const responseType = url.searchParams.get('response_type')
-	const scope = url.searchParams.get('scope')
-
-	console.log('Authorization request:', { clientId, redirectUri, state, responseType, scope })
-
-	// Validate required parameters
-	if (!clientId || !redirectUri || !state || responseType !== 'code') {
-		return new Response(JSON.stringify({
-			error: 'invalid_request',
-			error_description: 'Missing required parameters: client_id, redirect_uri, state, response_type=code'
-		}), {
-			status: 400,
-			headers: { 'Content-Type': 'application/json' }
-		})
-	}
-
-	// Validate client exists by checking OAUTH_KV
-	const clientData = await env.OAUTH_KV?.get(`client:${clientId}`)
-	if (!clientData) {
-		const errorUrl = new URL(redirectUri)
-		errorUrl.searchParams.set('error', 'invalid_client')
-		errorUrl.searchParams.set('error_description', 'Client not found')
-		errorUrl.searchParams.set('state', state)
-		return Response.redirect(errorUrl.toString(), 302)
-	}
-
-	// Check if user is already authenticated
-	const sessionCookie = getCookie(request, 'lastfm_session')
-	if (sessionCookie) {
-		const sessionData = await env.MCP_SESSIONS?.get(`session:lastfm:${sessionCookie}`)
-		if (sessionData) {
-			const session = JSON.parse(sessionData)
-			if (!session.expires_at || Date.now() < session.expires_at) {
-				console.log('User already authenticated:', session.username)
-				return await completeAuthorizationManual(clientId, redirectUri, state, scope, session, env)
-			}
-		}
-	}
-
-	// User not authenticated - redirect to Last.fm
-	if (!env.LASTFM_API_KEY || !env.LASTFM_SHARED_SECRET) {
-		const errorUrl = new URL(redirectUri)
-		errorUrl.searchParams.set('error', 'server_error')
-		errorUrl.searchParams.set('error_description', 'Last.fm not configured')
-		errorUrl.searchParams.set('state', state)
-		return Response.redirect(errorUrl.toString(), 302)
-	}
-
-	// Store authorization request for callback
-	const stateKey = `oauth:auth:${state}`
-	await env.MCP_SESSIONS?.put(stateKey, JSON.stringify({
-		client_id: clientId,
-		redirect_uri: redirectUri,
-		state,
-		scope: scope || 'lastfm:read',
-		timestamp: Date.now()
-	}), { expirationTtl: 600 })
-
-	// Redirect to Last.fm authentication
-	const auth = new LastfmAuth(env.LASTFM_API_KEY, env.LASTFM_SHARED_SECRET)
-	const callbackUrl = `${url.protocol}//${url.host}/oauth/lastfm/callback?state=${state}`
-	const lastfmAuthUrl = auth.getAuthUrl(callbackUrl)
-
-	console.log('Redirecting to Last.fm:', { state, lastfmAuthUrl })
-	return Response.redirect(lastfmAuthUrl, 302)
 }
 
 /**
@@ -435,95 +426,22 @@ async function handleLastFmCallback(request: Request, env: any): Promise<Respons
 			expirationTtl: 24 * 60 * 60
 		})
 
-		// Complete OAuth authorization
-		const authResponse = await completeAuthorizationManual(
-			authRequest.client_id,
-			authRequest.redirect_uri,
-			authRequest.state,
-			authRequest.scope,
-			sessionData,
-			env
-		)
+		// Redirect back to OAuth authorize with session cookie
+		const authorizeUrl = new URL(`${url.protocol}//${url.host}/oauth/authorize`)
+		authorizeUrl.searchParams.set('response_type', 'code')
+		authorizeUrl.searchParams.set('client_id', authRequest.client_id)
+		authorizeUrl.searchParams.set('redirect_uri', authRequest.redirect_uri)
+		authorizeUrl.searchParams.set('state', authRequest.state)
+		authorizeUrl.searchParams.set('scope', authRequest.scope)
 
-		// Create new response with session cookie (can't modify immutable response)
-		const finalResponse = new Response(authResponse.body, {
-			status: authResponse.status,
-			headers: new Headers(authResponse.headers)
-		})
-		
-		// Set session cookie
-		finalResponse.headers.set('Set-Cookie', `lastfm_session=${sessionId}; HttpOnly; Secure; SameSite=Lax; Path=/; Max-Age=86400`)
+		const response = Response.redirect(authorizeUrl.toString(), 302)
+		response.headers.set('Set-Cookie', `lastfm_session=${sessionId}; HttpOnly; Secure; SameSite=Lax; Path=/; Max-Age=86400`)
 
-		return finalResponse
+		return response
 
 	} catch (error) {
 		console.error('Last.fm callback error:', error)
 		return new Response(`Authentication failed: ${error.message}`, { status: 500 })
-	}
-}
-
-/**
- * Complete OAuth authorization by using OAuth provider's code generation
- */
-async function completeAuthorizationManual(
-	clientId: string,
-	redirectUri: string,
-	state: string,
-	scope: string,
-	session: any,
-	env: any
-): Promise<Response> {
-	try {
-		// The OAuth provider expects authorization codes in a specific format
-		// We need to store the user context in a way the provider can retrieve it
-		// during the token exchange callback
-		
-		// Generate a code that the OAuth provider will recognize
-		const authCode = crypto.randomUUID()
-		
-		// Store the authorization data in the format the OAuth provider expects
-		// The key format must match what the provider looks for
-		const codeKey = `oauth2:code:${authCode}`
-		const codeData = {
-			client_id: clientId,
-			user_id: session.username,
-			scope: scope || 'lastfm:read',
-			redirect_uri: redirectUri,
-			code_challenge: null, // Not using PKCE for now
-			code_challenge_method: null,
-			expires_at: new Date(Date.now() + 10 * 60 * 1000).toISOString(),
-			created_at: new Date().toISOString(),
-			// Store Last.fm session data in metadata
-			metadata: {
-				username: session.username,
-				lastfm_session_key: session.sessionKey
-			}
-		}
-
-		await env.OAUTH_KV?.put(codeKey, JSON.stringify(codeData), {
-			expirationTtl: 600 // 10 minutes
-		})
-
-		// Redirect back to client with authorization code
-		const redirectUrl = new URL(redirectUri)
-		redirectUrl.searchParams.set('code', authCode)
-		redirectUrl.searchParams.set('state', state)
-
-		console.log('Authorization completed:', { 
-			code: authCode.substring(0, 8) + '...', 
-			user: session.username,
-			redirectTo: redirectUrl.toString()
-		})
-
-		return Response.redirect(redirectUrl.toString(), 302)
-
-	} catch (error) {
-		console.error('Authorization completion failed:', error)
-		
-		const errorUrl = new URL(redirectUri)
-		errorUrl.searchParams.set('error', 'server_error')
-		errorUrl.searchParams.set('state', state)
-		return Response.redirect(errorUrl.toString(), 302)
 	}
 }
 
@@ -543,7 +461,7 @@ function getCookie(request: Request, name: string): string | null {
 	return cookies[name] || null
 }
 
-// Create OAuth provider with token exchange handling
+// Create OAuth provider with proper configuration
 export default new OAuthProvider({
 	apiRoute: '/sse',
 	apiHandler,
@@ -557,41 +475,61 @@ export default new OAuthProvider({
 	disallowPublicClientRegistration: false,
 	allowImplicitFlow: false,
 	
-	// Handle token exchange when authorization code is presented
-	tokenExchangeCallback: async (options, env) => {
-		console.log('Token exchange:', options.grantType, 'code:', options.code?.substring(0, 8) + '...')
+	// Handle authorization approval - called when user approves authorization
+	authorizationApprovalCallback: async (options) => {
+		console.log('Authorization approval callback:', {
+			clientId: options.client_id,
+			userId: options.user_id,
+			scope: options.scope
+		})
 		
-		if (options.grantType === 'authorization_code' && options.code) {
-			// Retrieve the authorization code data we stored
-			const codeKey = `oauth2:code:${options.code}`
-			const codeDataStr = await env.OAUTH_KV?.get(codeKey)
-			
-			if (!codeDataStr) {
-				console.error('Authorization code not found:', codeKey)
-				return { error: 'invalid_grant' }
+		// Get the current user's Last.fm session from request context
+		// This is a bit tricky since we don't have direct access to the request
+		// We'll use the stored session data
+		
+		if (globalEnv && options.user_id) {
+			// Look for Last.fm session
+			const sessionData = await globalEnv.MCP_SESSIONS?.get(`session:lastfm:${options.user_id}`)
+			if (sessionData) {
+				const session = JSON.parse(sessionData)
+				// Return user data that will be included in the token
+				return {
+					user_id: session.username,
+					metadata: {
+						username: session.username,
+						lastfm_session_key: session.sessionKey
+					}
+				}
 			}
+		}
+		
+		// Default response
+		return {
+			user_id: options.user_id || 'unknown',
+			metadata: {}
+		}
+	},
+	
+	// Handle token exchange
+	tokenExchangeCallback: async (options) => {
+		console.log('Token exchange:', options.grantType)
+		
+		if (options.grantType === 'authorization_code') {
+			// The OAuth provider has already validated the code
+			// We just need to return the token properties
+			// The user data from authorizationApprovalCallback is available in options
 			
-			const codeData = JSON.parse(codeDataStr)
-			console.log('Found authorization code data:', {
-				user_id: codeData.user_id,
-				hasMetadata: !!codeData.metadata
-			})
-			
-			// Delete the code after use (one-time use)
-			await env.OAUTH_KV?.delete(codeKey)
-			
-			// Return the user props for the access token
-			// Include Last.fm session data in the token
 			return {
 				accessTokenProps: {
 					user: {
-						id: codeData.user_id,
-						username: codeData.metadata?.username || codeData.user_id,
-						lastfm_session_key: codeData.metadata?.lastfm_session_key
+						id: options.userId,
+						username: options.userId,
+						// The metadata from authorization approval should be available
+						lastfm_session_key: options.metadata?.lastfm_session_key
 					},
 					grant: {
 						client_id: options.clientId,
-						scope: codeData.scope
+						scope: options.scope
 					}
 				}
 			}

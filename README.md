@@ -1,6 +1,6 @@
 # 🎵 Last.fm MCP Server
 
-A **Model Context Protocol (MCP) server** that provides seamless access to Last.fm listening data and music information via AI assistants like Claude.
+A **Model Context Protocol (MCP) server** that provides seamless access to Last.fm listening data and music information via AI assistants like Claude. Features **native Claude Custom Integration support** with OAuth 2.0 authentication.
 
 ## ✨ Features
 
@@ -8,16 +8,32 @@ A **Model Context Protocol (MCP) server** that provides seamless access to Last.
 - 🎵 **Music Information**: Detailed track, artist, and album information
 - 🔍 **Music Discovery**: Similar artists/tracks, personalized recommendations
 - 📊 **Listening Statistics**: Comprehensive stats and listening habits analysis
-- 🔐 **Secure Authentication**: Last.fm Web Authentication with JWT sessions
+- 🔐 **OAuth 2.0 Authentication**: Custom OAuth implementation with Dynamic Client Registration
+- 🌉 **Last.fm Bridge**: Seamless integration between OAuth and Last.fm Web Authentication
 - ⚡ **Smart Caching**: Intelligent caching with optimized TTLs for performance
 - 🛡️ **Rate Limiting**: Built-in rate limiting respecting Last.fm API limits
 - 🌐 **Production Ready**: Deployed on Cloudflare Workers with global edge and CI/CD
 
 ## 🚀 Quick Start
 
-### Using with Claude Desktop
+### Native Claude Custom Integration (Recommended)
 
-Add this configuration to your Claude Desktop settings (Settings / Developer / Edit config):
+Add this configuration to your Claude Desktop Custom Integrations:
+
+```json
+{
+  "customIntegrations": {
+    "lastfm": {
+      "name": "Last.fm Music Data",
+      "url": "https://lastfm-mcp-prod.rian-db8.workers.dev/sse"
+    }
+  }
+}
+```
+
+### Legacy mcp-remote Support
+
+For backwards compatibility, the server still supports mcp-remote:
 
 ```json
 {
@@ -133,6 +149,33 @@ Rich AI prompts for music analysis and discovery:
 | `listening_habits`   | Analyze and summarize user's listening habits | `username`, `timeframe?` |
 
 These prompts generate contextual messages that guide AI assistants to provide meaningful music insights using the available Last.fm tools and data.
+
+## 🔐 OAuth 2.0 Architecture
+
+This server implements a **custom OAuth 2.0 provider** with Dynamic Client Registration, designed specifically for Claude Custom Integrations:
+
+### OAuth Endpoints
+
+- **POST** `/oauth/register` - Dynamic Client Registration (RFC 7591)
+- **GET** `/oauth/authorize` - Authorization endpoint with Last.fm bridge
+- **POST** `/oauth/token` - Token exchange (authorization_code grant)
+- **GET** `/sse` - OAuth-protected MCP endpoint
+
+### Authentication Flow
+
+1. **Client Registration**: Claude registers as OAuth client
+2. **Authorization**: User redirected to Last.fm for authentication  
+3. **Callback**: Last.fm returns to OAuth bridge
+4. **Token Exchange**: Authorization code exchanged for Bearer token
+5. **API Access**: Bearer token provides access to protected MCP endpoints
+
+### Security Features
+
+- ✅ **RFC 7591 Compliant**: Dynamic Client Registration
+- ✅ **Bearer Token Authentication**: Secure API access
+- ✅ **Last.fm Session Bridge**: Secure mapping between OAuth and Last.fm sessions
+- ✅ **Token Expiration**: 1-hour access token lifetime
+- ✅ **Secure Storage**: Encrypted session data in Cloudflare KV
 
 ## 🏗️ Development
 

@@ -100,9 +100,10 @@ async function getConnectionSession(request: Request, jwtSecret: string, env?: E
 		return null
 	}
 
-	// For mcp-remote connections, skip the SSE connection check
+	// For mcp-remote and oauth connections, skip the SSE connection check
 	// mcp-remote uses deterministic connection IDs and doesn't establish SSE connections
-	if (!connectionId.startsWith('mcp-remote-')) {
+	// oauth connections use Bearer token authentication instead of SSE
+	if (!connectionId.startsWith('mcp-remote-') && !connectionId.startsWith('oauth-')) {
 		// Check if SSE connection is authenticated
 		if (!isConnectionAuthenticated(connectionId)) {
 			return null
