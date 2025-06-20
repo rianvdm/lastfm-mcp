@@ -1,6 +1,6 @@
 # 🎵 Last.fm MCP Server
 
-A **Model Context Protocol (MCP) server** that provides seamless access to Last.fm listening data and music information via AI assistants like Claude. Features **native Claude Custom Integration support** with OAuth 2.0 authentication.
+A **Model Context Protocol (MCP) server** that provides seamless access to Last.fm listening data and music information via AI assistants like Claude. Features **native Claude Desktop integration** with OAuth 2.0 authentication.
 
 ## ✨ Features
 
@@ -16,37 +16,30 @@ A **Model Context Protocol (MCP) server** that provides seamless access to Last.
 
 ## 🚀 Quick Start
 
-### Native Claude Custom Integration (Recommended)
+### Native Claude Desktop Integration (Recommended)
 
-Add this configuration to your Claude Desktop Custom Integrations:
+Add this URL to your Claude Desktop MCP servers:
+
+```
+https://lastfm-mcp-prod.rian-db8.workers.dev
+```
+
+**Important**: Use the **root URL** (without `/sse`), as Claude Desktop expects OAuth-authenticated MCP servers at the root endpoint.
+
+### MCP Inspector Testing
+
+For development and testing with MCP Inspector:
 
 ```json
 {
-  "customIntegrations": {
-    "lastfm": {
-      "name": "Last.fm Music Data",
-      "url": "https://lastfm-mcp-prod.rian-db8.workers.dev/sse"
-    }
-  }
+  "url": "https://lastfm-mcp-prod.rian-db8.workers.dev",
+  "transport": "http"
 }
 ```
 
-### Legacy mcp-remote Support
+### Legacy mcp-remote Support (Deprecated)
 
-For backwards compatibility, the server still supports mcp-remote:
-
-```json
-{
-	"mcpServers": {
-		"lastfm": {
-			"command": "npx",
-			"args": ["mcp-remote", "https://lastfm-mcp-prod.rian-db8.workers.dev/sse"]
-		}
-	}
-}
-```
-
-> **💡 Tip**: This uses the hosted server via `mcp-remote`, which works reliably across all platforms and doesn't require local Node.js setup.
+> ⚠️ **Note**: The mcp-remote compatibility has been removed in favor of native OAuth integration. Use Claude Desktop's built-in MCP support instead.
 
 #### 🐛 Platform-Specific Troubleshooting
 
@@ -83,13 +76,16 @@ For backwards compatibility, the server still supports mcp-remote:
 
 </details>
 
-### 🔑 Authentication Flow
+### 🔑 OAuth Authentication Flow
 
-1. Try any authenticated tool (like "Get my recent tracks")
-2. Claude will provide a Last.fm authentication URL
-3. Sign in with your Last.fm account and authorize the app
-4. Return to Claude - you're now authenticated!
-5. Enjoy access to your personal Last.fm data
+1. **Add Server**: Add the server URL to Claude Desktop
+2. **Connect**: Claude will prompt you to connect with OAuth
+3. **Authenticate**: You'll be redirected to Last.fm to sign in
+4. **Authorize**: Grant access to your Last.fm listening data
+5. **Return**: You'll be redirected back and automatically authenticated
+6. **Access**: All personal tools and resources are now available!
+
+> **🎯 Current Status**: OAuth flow works perfectly with tools. Resources may require additional authentication context (known limitation).
 
 ## 🛠️ Available Tools
 
@@ -152,22 +148,43 @@ These prompts generate contextual messages that guide AI assistants to provide m
 
 ## 🔐 OAuth 2.0 Architecture
 
-This server implements a **custom OAuth 2.0 provider** with Dynamic Client Registration, designed specifically for Claude Custom Integrations:
+This server implements a **custom OAuth 2.0 provider** with Dynamic Client Registration, designed specifically for Claude Desktop's native MCP OAuth support:
 
 ### OAuth Endpoints
 
 - **POST** `/oauth/register` - Dynamic Client Registration (RFC 7591)
 - **GET** `/oauth/authorize` - Authorization endpoint with Last.fm bridge
 - **POST** `/oauth/token` - Token exchange (authorization_code grant)
-- **GET** `/sse` - OAuth-protected MCP endpoint
+- **POST** `/` - OAuth-protected MCP JSON-RPC endpoint
 
 ### Authentication Flow
 
-1. **Client Registration**: Claude registers as OAuth client
-2. **Authorization**: User redirected to Last.fm for authentication  
-3. **Callback**: Last.fm returns to OAuth bridge
+1. **Auto-Registration**: Claude Desktop clients are automatically registered
+2. **Authorization**: Users redirected to Last.fm for authentication via OAuth bridge
+3. **Last.fm Callback**: Last.fm Web Auth session key obtained
 4. **Token Exchange**: Authorization code exchanged for Bearer token
-5. **API Access**: Bearer token provides access to protected MCP endpoints
+5. **MCP Access**: Bearer token provides access to all MCP tools and most resources
+
+### Implementation Learnings
+
+#### ✅ **What Works:**
+- **OAuth Flow**: Complete RFC-compliant implementation with Claude Desktop
+- **Auto-Registration**: Claude Desktop and MCP Inspector clients auto-register
+- **Last.fm Bridge**: Seamless integration between OAuth and Last.fm Web Auth
+- **Tools Access**: All MCP tools work perfectly with Bearer token authentication
+- **JWT-Free**: Pure OAuth implementation without JWT dependencies
+
+#### ⚠️ **Known Limitations:**
+- **Resources Authentication**: MCP resources may not receive proper authentication context
+- **Architecture Complexity**: OAuth → Last.fm → Bearer Token → MCP chain introduces complexity
+- **Error Handling**: Some authentication context errors persist in edge cases
+
+#### 🎯 **Key Technical Insights:**
+- Claude Desktop expects OAuth servers at **root endpoint** (`/`), not `/sse`
+- **Public OAuth clients** (no client_secret) work fine for MCP use cases
+- **Dynamic Client Registration** essential for seamless Claude Desktop integration
+- **Bearer token** authentication preferred over cookie-based sessions
+- **Authentication bridging** between OAuth and existing Last.fm sessions is complex but functional
 
 ### Security Features
 
@@ -175,7 +192,8 @@ This server implements a **custom OAuth 2.0 provider** with Dynamic Client Regis
 - ✅ **Bearer Token Authentication**: Secure API access
 - ✅ **Last.fm Session Bridge**: Secure mapping between OAuth and Last.fm sessions
 - ✅ **Token Expiration**: 1-hour access token lifetime
-- ✅ **Secure Storage**: Encrypted session data in Cloudflare KV
+- ✅ **Secure Storage**: Session data in Cloudflare KV
+- ✅ **Public Client Support**: No client secrets required for MCP clients
 
 ## 🏗️ Development
 
@@ -200,8 +218,9 @@ This server implements a **custom OAuth 2.0 provider** with Dynamic Client Regis
    ```env
    LASTFM_API_KEY=your_api_key_here
    LASTFM_SHARED_SECRET=your_shared_secret_here
-   JWT_SECRET=your_secure_jwt_secret
    ```
+
+   > **Note**: `JWT_SECRET` is no longer required for the OAuth-only implementation.
 
 3. **Start development server**:
 
@@ -223,8 +242,9 @@ This server implements a **custom OAuth 2.0 provider** with Dynamic Client Regis
    ```bash
    echo "your_api_key" | wrangler secret put LASTFM_API_KEY --env production
    echo "your_shared_secret" | wrangler secret put LASTFM_SHARED_SECRET --env production
-   echo "your_jwt_secret" | wrangler secret put JWT_SECRET --env production
    ```
+
+   > **Note**: `JWT_SECRET` is no longer required for the OAuth-only implementation.
 
 2. **Deploy**:
 
@@ -277,12 +297,12 @@ curl -X POST https://lastfm-mcp-prod.rian-db8.workers.dev \
   }'
 ```
 
-**Get recent tracks with pagination:**
+**Get recent tracks with OAuth authentication:**
 
 ```bash
 curl -X POST https://lastfm-mcp-prod.rian-db8.workers.dev \
   -H "Content-Type: application/json" \
-  -H "Cookie: session=your_session_token" \
+  -H "Authorization: Bearer your_oauth_token" \
   -d '{
     "jsonrpc": "2.0",
     "id": 1,
@@ -291,8 +311,8 @@ curl -X POST https://lastfm-mcp-prod.rian-db8.workers.dev \
       "name": "get_recent_tracks",
       "arguments": {
         "username": "your_username",
-        "limit": 500,
-        "page": 2
+        "limit": 50,
+        "page": 1
       }
     }
   }'
@@ -302,10 +322,11 @@ curl -X POST https://lastfm-mcp-prod.rian-db8.workers.dev \
 
 - **🌐 Runtime**: Cloudflare Workers (global edge deployment)
 - **📡 Protocol**: Model Context Protocol (MCP) 2024-11-05
-- **🔐 Authentication**: Last.fm Web Auth + JWT sessions
-- **💾 Storage**: Cloudflare KV (sessions, caching, rate limiting)
+- **🔐 Authentication**: OAuth 2.0 + Last.fm Web Auth bridge (JWT-free)
+- **💾 Storage**: Cloudflare KV (OAuth tokens, sessions, caching, rate limiting)
 - **🎵 API**: Last.fm Web API v2.0
 - **⚡ Performance**: Smart caching, rate limiting, retry logic
+- **🏗️ Implementation**: Clean OAuth-only architecture in `src/index-oauth-clean.ts`
 
 ## 🧪 Testing
 

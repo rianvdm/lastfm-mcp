@@ -207,23 +207,53 @@ By following the recommended strategy and focusing on OAuth implementation first
 
 ---
 
-## 🎉 **UPDATE: MIGRATION SUCCESSFUL (December 20, 2024)**
+## 🎉 **UPDATE: MIGRATION COMPLETED (June 20, 2025)**
 
-**The migration has been successfully completed!** A custom OAuth 2.0 implementation was built from scratch after discovering that `@cloudflare/workers-oauth-provider` was incompatible with the required authorization flow.
+**The migration to Claude Desktop native OAuth integration has been successfully completed!** After three attempts and significant architectural learning, a clean OAuth-only implementation has been delivered.
 
-### ✅ **What Was Achieved:**
+### ✅ **Final Achievement Summary:**
 
-1. **Custom OAuth 2.0 Provider**: Built RFC 7591 compliant Dynamic Client Registration
-2. **Last.fm Authentication Bridge**: Seamless integration between OAuth and Last.fm Web Auth
-3. **Complete MCP Integration**: All 14 Last.fm tools working with OAuth Bearer tokens
-4. **Real Data Access**: Successfully retrieved user's actual listening data (135,399 tracks)
-5. **Production Ready**: Ready for Claude Desktop Custom Integration deployment
+1. **Pure OAuth 2.0 Implementation**: Complete RFC-compliant OAuth server with Dynamic Client Registration
+2. **Claude Desktop Native Support**: Works directly with Claude Desktop's built-in OAuth MCP support
+3. **Last.fm Authentication Bridge**: Seamless OAuth ↔ Last.fm Web Auth integration
+4. **JWT-Free Architecture**: Clean OAuth-only implementation without JWT dependencies
+5. **Auto-Registration**: Claude Desktop and MCP Inspector clients automatically register
+6. **Production Deployed**: Clean implementation active at `https://lastfm-mcp-prod.rian-db8.workers.dev`
 
-### 🔧 **Key Technical Solutions:**
+### 🔧 **Technical Implementation Details:**
 
-- **OAuth Infrastructure**: `/oauth/register`, `/oauth/authorize`, `/oauth/token` endpoints
-- **Authentication Bridge**: OAuth ↔ Last.fm session mapping with secure KV storage
-- **Session Compatibility**: OAuth sessions properly formatted for existing MCP handlers
-- **Bearer Token Support**: Full OAuth Bearer token authentication for protected endpoints
+- **OAuth Endpoints**: `/oauth/register`, `/oauth/authorize`, `/oauth/token` 
+- **MCP Endpoint**: Root endpoint `/` handles OAuth-authenticated MCP requests
+- **Auto-Registration**: Public OAuth clients (Claude Desktop) automatically register without secrets
+- **Bearer Token Auth**: Full OAuth Bearer token authentication for MCP protocol
+- **Clean Architecture**: `src/index-oauth-clean.ts` - pure OAuth implementation
 
-**Result**: The Last.fm MCP server now supports native Claude Custom Integrations without requiring `mcp-remote`, while maintaining full backwards compatibility.
+### 📊 **What Works:**
+
+- ✅ **OAuth Flow**: Complete authorization flow with Claude Desktop
+- ✅ **Tool Access**: All 15 MCP tools work perfectly with Bearer token authentication
+- ✅ **Authentication Status**: `lastfm_auth_status` tool works correctly
+- ✅ **Public Tools**: Non-authenticated tools work for public music data
+- ✅ **MCP Inspector**: Full compatibility for development and testing
+
+### ⚠️ **Known Limitations:**
+
+- ❌ **Resources Authentication**: MCP resources may not receive proper authentication context
+- ⚠️ **Architecture Complexity**: OAuth → Last.fm → Bearer Token → MCP chain introduces edge cases
+- ⚠️ **Error Handling**: Some "Missing authentication context" errors persist in resources
+
+### 🎯 **Key Learning:**
+
+1. **Claude Desktop expects OAuth servers at root endpoint** (`/`), not `/sse`
+2. **Public OAuth clients work fine** - no client_secret required for MCP use cases
+3. **Dynamic Client Registration is essential** for seamless Claude Desktop integration
+4. **JWT-free architecture is possible and cleaner** for OAuth-only implementations
+5. **Resources authentication is more complex** than tools authentication in MCP
+
+### 🏗️ **Migration Attempts Summary:**
+
+- **Attempt 1**: mcp-remote compatibility preservation (failed - transport conflicts)
+- **Attempt 2**: Hybrid OAuth + JWT implementation (failed - authentication complexity)  
+- **Attempt 3**: Clean OAuth-only implementation (**✅ SUCCESS** - tools working, resources limited)
+
+**Final Result**: The Last.fm MCP server now supports native Claude Desktop integration with OAuth 2.0, providing access to all Last.fm tools without requiring `mcp-remote`. The clean implementation represents a significant architectural improvement and demonstrates successful OAuth integration with MCP.
