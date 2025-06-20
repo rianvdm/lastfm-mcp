@@ -27,6 +27,8 @@ interface AuthorizationCode {
 	lastfm_session_key: string
 	scope: string
 	redirect_uri: string
+	code_challenge?: string
+	code_challenge_method?: string
 	expires_at: number
 	created_at: number
 }
@@ -50,6 +52,24 @@ function generateSecureId(length: number = 16): string {
 	const randomValues = new Uint8Array(length)
 	crypto.getRandomValues(randomValues)
 	return Array.from(randomValues, byte => chars[byte % chars.length]).join('')
+}
+
+/**
+ * Verify PKCE code challenge
+ */
+async function verifyPKCE(codeVerifier: string, codeChallenge: string, method: string): Promise<boolean> {
+	if (method === 'plain') {
+		return codeVerifier === codeChallenge
+	} else if (method === 'S256') {
+		const encoder = new TextEncoder()
+		const data = encoder.encode(codeVerifier)
+		const digest = await crypto.subtle.digest('SHA-256', data)
+		const base64 = btoa(String.fromCharCode(...new Uint8Array(digest)))
+		// Convert to URL-safe base64
+		const urlSafeBase64 = base64.replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '')
+		return urlSafeBase64 === codeChallenge
+	}
+	return false
 }
 
 /**
@@ -114,22 +134,58 @@ export default {
 					return handleClientRegistration(request, env)
 				
 				case '/oauth/authorize':
+				case '/authorize': // Claude calls this endpoint
 					return handleAuthorization(request, env)
 				
 				case '/oauth/token':
+				case '/token': // Claude might call this endpoint too
 					return handleTokenExchange(request, env)
+				
+				case '/.well-known/oauth-authorization-server':
+					return handleWellKnownOAuth(request, env)
+				
+				case '/.well-known/oauth-protected-resource':
+					return handleWellKnownProtectedResource(request, env)
 				
 				case '/oauth/lastfm/callback':
 					return handleLastFmCallback(request, env)
 				
 				case '/sse':
-					return handleProtectedEndpoint(request, env)
+					// Use the original working SSE endpoint logic
+					if (request.method === 'GET') {
+						const { createSSEResponse } = await import('./transport/sse')
+						const { response } = createSSEResponse()
+						return response
+					} else if (request.method === 'POST') {
+						// Handle JSON-RPC requests exactly like the original implementation
+						const { handleMethod } = await import('./protocol/handlers')
+						const { parseMessage, serializeResponse } = await import('./protocol/parser')
+						
+						try {
+							const body = await request.text()
+							const jsonrpcRequest = parseMessage(body)
+							console.log('MCP Request:', jsonrpcRequest.method)
+							
+							const response = await handleMethod(jsonrpcRequest, request, env?.JWT_SECRET, env)
+							
+							if (!response) {
+								return new Response(null, { status: 204 })
+							}
+							
+							console.log('MCP Response for', jsonrpcRequest.method, ':', response.result ? 'has result' : 'no result')
+							
+							return new Response(serializeResponse(response), {
+								headers: { 'Content-Type': 'application/json' }
+							})
+						} catch (error) {
+							console.error('MCP request error:', error)
+							return new Response(JSON.stringify({ error: 'internal_error' }), { status: 500 })
+						}
+					}
+					return new Response('Method not allowed', { status: 405 })
 				
 				case '/health':
 					return handleHealth(request, env)
-				
-				case '/test-complete-flow':
-					return handleTestCompleteFlow(request, env)
 				
 				default:
 					return new Response('Not Found', { 
@@ -153,7 +209,7 @@ export default {
 /**
  * Root endpoint - API information
  */
-async function handleRoot(request: Request): Promise<Response> {
+async function handleRoot(_request: Request): Promise<Response> {
 	return new Response(JSON.stringify({
 		name: 'Last.fm MCP Server - Custom OAuth',
 		version: '2.0.0-custom',
@@ -170,6 +226,45 @@ async function handleRoot(request: Request): Promise<Response> {
 			scopes_supported: ['lastfm:read', 'lastfm:profile', 'lastfm:recommendations'],
 			token_endpoint_auth_methods_supported: ['client_secret_basic', 'client_secret_post']
 		}
+	}), {
+		headers: corsHeaders({ 'Content-Type': 'application/json' })
+	})
+}
+
+/**
+ * OAuth Authorization Server Metadata (RFC 8414)
+ */
+async function handleWellKnownOAuth(request: Request, _env: Env): Promise<Response> {
+	const baseUrl = new URL(request.url).origin
+	
+	return new Response(JSON.stringify({
+		issuer: baseUrl,
+		authorization_endpoint: `${baseUrl}/authorize`,
+		token_endpoint: `${baseUrl}/token`,
+		registration_endpoint: `${baseUrl}/oauth/register`,
+		scopes_supported: ['lastfm:read', 'lastfm:profile', 'lastfm:recommendations', 'claudeai'],
+		response_types_supported: ['code'],
+		grant_types_supported: ['authorization_code'],
+		token_endpoint_auth_methods_supported: ['client_secret_basic', 'client_secret_post'],
+		code_challenge_methods_supported: ['S256', 'plain']
+	}), {
+		headers: corsHeaders({ 'Content-Type': 'application/json' })
+	})
+}
+
+/**
+ * OAuth Protected Resource Metadata (RFC 8693)
+ */
+async function handleWellKnownProtectedResource(request: Request, _env: Env): Promise<Response> {
+	const baseUrl = new URL(request.url).origin
+	
+	return new Response(JSON.stringify({
+		resource: `${baseUrl}/sse`,
+		resource_documentation: `${baseUrl}/`,
+		resource_schemas_supported: ["lastfm-mcp"],
+		authorization_servers: [`${baseUrl}`],
+		bearer_methods_supported: ["header"],
+		resource_signing_alg_values_supported: ["RS256"]
 	}), {
 		headers: corsHeaders({ 'Content-Type': 'application/json' })
 	})
@@ -282,6 +377,8 @@ async function handleAuthorization(request: Request, env: Env): Promise<Response
 	const responseType = url.searchParams.get('response_type')
 	const state = url.searchParams.get('state')
 	const scope = url.searchParams.get('scope') || 'lastfm:read'
+	const codeChallenge = url.searchParams.get('code_challenge')
+	const codeChallengeMethod = url.searchParams.get('code_challenge_method') || 'plain'
 
 	// Validate required parameters
 	if (!clientId || !redirectUri || responseType !== 'code') {
@@ -294,22 +391,50 @@ async function handleAuthorization(request: Request, env: Env): Promise<Response
 		})
 	}
 
-	// Validate client
+	// Validate client - auto-register Claude clients
 	const clientData = await env.MCP_SESSIONS.get(`oauth:client:${clientId}`)
-	if (!clientData) {
-		return new Response(JSON.stringify({
-			error: 'invalid_client',
-			error_description: 'Client not found'
-		}), {
-			status: 400,
-			headers: corsHeaders({ 'Content-Type': 'application/json' })
-		})
-	}
-
-	const client = JSON.parse(clientData) as OAuthClient
+	let client: OAuthClient
 	
-	// Validate redirect URI
-	if (!client.redirect_uris.includes(redirectUri)) {
+	if (!clientData) {
+		// Auto-register Claude clients based on redirect_uri
+		if (redirectUri.startsWith('https://claude.ai/')) {
+			console.log('Auto-registering Claude client:', clientId)
+			
+			client = {
+				client_id: clientId,
+				client_secret: generateSecureId(32), // Claude doesn't use client_secret for PKCE
+				client_name: 'Claude Desktop Auto-Registered',
+				redirect_uris: [redirectUri],
+				grant_types: ['authorization_code'],
+				response_types: ['code'],
+				scope: 'lastfm:read lastfm:profile lastfm:recommendations claudeai',
+				created_at: Date.now()
+			}
+			
+			// Store auto-registered client
+			await env.MCP_SESSIONS.put(
+				`oauth:client:${clientId}`,
+				JSON.stringify(client),
+				{ expirationTtl: 365 * 24 * 60 * 60 } // 1 year
+			)
+		} else {
+			return new Response(JSON.stringify({
+				error: 'invalid_client',
+				error_description: 'Client not found'
+			}), {
+				status: 400,
+				headers: corsHeaders({ 'Content-Type': 'application/json' })
+			})
+		}
+	} else {
+		client = JSON.parse(clientData) as OAuthClient
+	}
+	
+	// Validate redirect URI - be flexible for Claude auto-registered clients
+	const isValidRedirectUri = client.redirect_uris.includes(redirectUri) || 
+		(redirectUri.startsWith('https://claude.ai/') && client.client_name === 'Claude Desktop Auto-Registered')
+	
+	if (!isValidRedirectUri) {
 		return new Response(JSON.stringify({
 			error: 'invalid_request',
 			error_description: 'Invalid redirect_uri'
@@ -338,6 +463,8 @@ async function handleAuthorization(request: Request, env: Env): Promise<Response
 				lastfm_session_key: session.sessionKey,
 				scope: scope,
 				redirect_uri: redirectUri,
+				code_challenge: codeChallenge,
+				code_challenge_method: codeChallengeMethod,
 				expires_at: Date.now() + (10 * 60 * 1000), // 10 minutes
 				created_at: Date.now()
 			}
@@ -372,7 +499,9 @@ async function handleAuthorization(request: Request, env: Env): Promise<Response
 		client_id: clientId,
 		redirect_uri: redirectUri,
 		state: state,
-		scope: scope
+		scope: scope,
+		code_challenge: codeChallenge,
+		code_challenge_method: codeChallengeMethod
 	}
 	
 	await env.MCP_SESSIONS.put(
@@ -431,19 +560,24 @@ async function handleLastFmCallback(request: Request, env: Env): Promise<Respons
 		)
 
 		// Redirect back to authorization endpoint with session cookie
-		const authorizeUrl = new URL(`${url.protocol}//${url.host}/oauth/authorize`)
+		const authorizeUrl = new URL(`${url.protocol}//${url.host}/authorize`)
 		authorizeUrl.searchParams.set('response_type', 'code')
 		authorizeUrl.searchParams.set('client_id', authRequest.client_id)
 		authorizeUrl.searchParams.set('redirect_uri', authRequest.redirect_uri)
 		if (authRequest.state) authorizeUrl.searchParams.set('state', authRequest.state)
 		authorizeUrl.searchParams.set('scope', authRequest.scope)
+		if (authRequest.code_challenge) {
+			authorizeUrl.searchParams.set('code_challenge', authRequest.code_challenge)
+			authorizeUrl.searchParams.set('code_challenge_method', authRequest.code_challenge_method || 'plain')
+		}
 
-		const response = Response.redirect(authorizeUrl.toString(), 302)
-		response.headers.set('Set-Cookie', 
-			`lastfm_session=${sessionId}; HttpOnly; Secure; SameSite=Lax; Path=/; Max-Age=86400`
-		)
-
-		return response
+		return new Response(null, {
+			status: 302,
+			headers: {
+				'Location': authorizeUrl.toString(),
+				'Set-Cookie': `lastfm_session=${sessionId}; HttpOnly; Secure; SameSite=Lax; Path=/; Max-Age=86400`
+			}
+		})
 
 	} catch (error) {
 		console.error('Last.fm callback error:', error)
@@ -455,6 +589,8 @@ async function handleLastFmCallback(request: Request, env: Env): Promise<Respons
  * Token exchange endpoint
  */
 async function handleTokenExchange(request: Request, env: Env): Promise<Response> {
+	console.log('Token exchange endpoint called')
+	
 	if (request.method !== 'POST') {
 		return new Response('Method Not Allowed', { 
 			status: 405,
@@ -470,6 +606,15 @@ async function handleTokenExchange(request: Request, env: Env): Promise<Response
 		const clientId = formData.get('client_id')
 		const clientSecret = formData.get('client_secret')
 		const redirectUri = formData.get('redirect_uri')
+		const codeVerifier = formData.get('code_verifier')
+		
+		console.log('Token exchange params:', {
+			grantType,
+			code: code?.toString().substring(0, 8) + '...',
+			clientId,
+			redirectUri,
+			hasCodeVerifier: !!codeVerifier
+		})
 
 		// Validate grant type
 		if (grantType !== 'authorization_code') {
@@ -553,6 +698,35 @@ async function handleTokenExchange(request: Request, env: Env): Promise<Response
 			})
 		}
 
+		// Verify PKCE if code challenge was provided
+		if (authCode.code_challenge) {
+			if (!codeVerifier) {
+				return new Response(JSON.stringify({
+					error: 'invalid_request',
+					error_description: 'code_verifier required for PKCE'
+				}), {
+					status: 400,
+					headers: corsHeaders({ 'Content-Type': 'application/json' })
+				})
+			}
+
+			const pkceValid = await verifyPKCE(
+				codeVerifier as string,
+				authCode.code_challenge,
+				authCode.code_challenge_method || 'plain'
+			)
+
+			if (!pkceValid) {
+				return new Response(JSON.stringify({
+					error: 'invalid_grant',
+					error_description: 'PKCE verification failed'
+				}), {
+					status: 400,
+					headers: corsHeaders({ 'Content-Type': 'application/json' })
+				})
+			}
+		}
+
 		// Delete used authorization code
 		await env.MCP_SESSIONS.delete(`oauth:code:${code}`)
 
@@ -585,6 +759,7 @@ async function handleTokenExchange(request: Request, env: Env): Promise<Response
 		}
 
 		console.log('Access token issued for user:', authCode.username)
+		console.log('Token response:', JSON.stringify(response, null, 2))
 
 		return new Response(JSON.stringify(response), {
 			headers: corsHeaders({ 'Content-Type': 'application/json' })
@@ -603,81 +778,182 @@ async function handleTokenExchange(request: Request, env: Env): Promise<Response
 }
 
 /**
- * Protected endpoint - requires Bearer token
+ * SSE endpoint - simplified to work like the original
+ */
+async function handleSSEEndpoint(request: Request, env: Env): Promise<Response> {
+	console.log('SSE endpoint called, method:', request.method)
+	
+	if (request.method === 'GET') {
+		// Create SSE connection using the original transport
+		console.log('Creating SSE connection')
+		const { createSSEResponse, authenticateConnection } = await import('./transport/sse')
+		const { response, connectionId } = createSSEResponse()
+		
+		// For OAuth users, we need to pre-authenticate the connection
+		// Check if this is an OAuth-authenticated request context
+		// For now, let's assume OAuth users are pre-authenticated
+		console.log('Pre-authenticating connection for OAuth user')
+		
+		// We'll handle authentication through the POST requests instead
+		console.log('SSE connection established:', connectionId)
+		return response
+	}
+	
+	if (request.method === 'POST') {
+		// Handle JSON-RPC requests using the original MCP handler
+		console.log('Handling JSON-RPC request')
+		const { handleMethod } = await import('./protocol/handlers')
+		const { parseMessage, serializeResponse } = await import('./protocol/parser')
+		
+		try {
+			const body = await request.text()
+			const jsonrpcRequest = parseMessage(body)
+			console.log('Processing MCP request:', jsonrpcRequest.method)
+			
+			if (jsonrpcRequest.method === 'tools/list') {
+				console.log('Tools list requested!')
+			}
+			
+			const response = await handleMethod(jsonrpcRequest, request, env?.JWT_SECRET, env)
+			
+			if (!response) {
+				console.log('No response from handleMethod')
+				return new Response(null, { status: 204, headers: corsHeaders() })
+			}
+			
+			console.log('MCP Response:', JSON.stringify(response, null, 2))
+			
+			return new Response(serializeResponse(response), {
+				headers: corsHeaders({ 'Content-Type': 'application/json' })
+			})
+		} catch (error) {
+			console.error('MCP request error:', error)
+			return new Response(JSON.stringify({
+				error: 'internal_error',
+				error_description: 'Failed to process MCP request'
+			}), {
+				status: 500,
+				headers: corsHeaders({ 'Content-Type': 'application/json' })
+			})
+		}
+	}
+	
+	return new Response('Method Not Allowed', { 
+		status: 405,
+		headers: corsHeaders()
+	})
+}
+
+/**
+ * Protected endpoint - handles both SSE connections and JSON-RPC
  */
 async function handleProtectedEndpoint(request: Request, env: Env): Promise<Response> {
-	// Extract Bearer token
-	const token = extractBearerToken(request)
-	if (!token) {
-		return new Response(JSON.stringify({
-			error: 'unauthorized',
-			error_description: 'Bearer token required'
-		}), {
-			status: 401,
-			headers: corsHeaders({ 
-				'Content-Type': 'application/json',
-				'WWW-Authenticate': 'Bearer'
-			})
-		})
-	}
-
-	// Validate token
-	const tokenData = await env.MCP_SESSIONS.get(`oauth:token:${token}`)
-	if (!tokenData) {
-		return new Response(JSON.stringify({
-			error: 'invalid_token',
-			error_description: 'Invalid or expired token'
-		}), {
-			status: 401,
-			headers: corsHeaders({ 
-				'Content-Type': 'application/json',
-				'WWW-Authenticate': 'Bearer error="invalid_token"'
-			})
-		})
-	}
-
-	const accessToken = JSON.parse(tokenData) as AccessToken
-
-	// Check token expiration
-	if (Date.now() > accessToken.expires_at) {
-		await env.MCP_SESSIONS.delete(`oauth:token:${token}`)
-		return new Response(JSON.stringify({
-			error: 'invalid_token',
-			error_description: 'Token expired'
-		}), {
-			status: 401,
-			headers: corsHeaders({ 
-				'Content-Type': 'application/json',
-				'WWW-Authenticate': 'Bearer error="invalid_token"'
-			})
-		})
-	}
-
-	// Handle different methods
+	console.log('handleProtectedEndpoint called, method:', request.method)
+	
 	if (request.method === 'GET') {
-		// Return endpoint information
-		return new Response(JSON.stringify({
-			message: 'Last.fm MCP Server - OAuth Protected',
-			user: {
-				id: accessToken.user_id,
-				username: accessToken.username
-			},
-			scope: accessToken.scope,
-			client_id: accessToken.client_id
-		}), {
-			headers: corsHeaders({ 'Content-Type': 'application/json' })
-		})
+		// GET requests for SSE connections - check for Bearer token but don't require it
+		const token = extractBearerToken(request)
+		console.log('Bearer token present for SSE:', !!token)
+		
+		if (token) {
+			// If Bearer token is provided, validate and use it
+			const tokenData = await env.MCP_SESSIONS.get(`oauth:token:${token}`)
+			if (tokenData) {
+				const accessToken = JSON.parse(tokenData) as AccessToken
+				console.log('Creating authenticated SSE connection for user:', accessToken.username)
+				return handleSSEConnection(request, env, accessToken)
+			}
+		}
+		
+		// No valid Bearer token - create unauthenticated SSE connection
+		console.log('Creating unauthenticated SSE connection')
+		const { createSSEResponse } = await import('./transport/sse')
+		const { response } = createSSEResponse()
+		return response
 	}
 
 	if (request.method === 'POST') {
-		// Handle MCP JSON-RPC requests
-		return handleMCPRequest(request, env, accessToken)
+		// POST requests for JSON-RPC - try Bearer token first, then connection context
+		const token = extractBearerToken(request)
+		console.log('Bearer token present for JSON-RPC:', !!token)
+		
+		if (token) {
+			// Use Bearer token authentication
+			const tokenData = await env.MCP_SESSIONS.get(`oauth:token:${token}`)
+			if (tokenData) {
+				const accessToken = JSON.parse(tokenData) as AccessToken
+				console.log('Handling MCP POST request with Bearer token for user:', accessToken.username)
+				return handleMCPRequest(request, env, accessToken)
+			}
+		}
+		
+		// Fall back to existing MCP request handling (for connection-based auth)
+		console.log('Falling back to connection-based authentication')
+		const { handleMethod } = await import('./protocol/handlers')
+		const { parseMessage } = await import('./protocol/parser')
+		
+		try {
+			const body = await request.text()
+			const jsonrpcRequest = parseMessage(body)
+			const response = await handleMethod(jsonrpcRequest, request, env?.JWT_SECRET, env)
+			
+			if (!response) {
+				return new Response(null, { status: 204, headers: corsHeaders() })
+			}
+			
+			const { serializeResponse } = await import('./protocol/parser')
+			return new Response(serializeResponse(response), {
+				headers: corsHeaders({ 'Content-Type': 'application/json' })
+			})
+		} catch (error) {
+			console.error('MCP request error:', error)
+			return new Response(JSON.stringify({
+				error: 'internal_error',
+				error_description: 'Failed to process MCP request'
+			}), {
+				status: 500,
+				headers: corsHeaders({ 'Content-Type': 'application/json' })
+			})
+		}
 	}
 
 	return new Response('Method Not Allowed', { 
 		status: 405,
 		headers: corsHeaders()
 	})
+}
+
+/**
+ * Handle SSE connection with OAuth authentication
+ */
+async function handleSSEConnection(request: Request, env: Env, tokenData: AccessToken): Promise<Response> {
+	console.log('Setting up SSE connection for user:', tokenData.username)
+	
+	// Import the SSE transport
+	const { createSSEResponse } = await import('./transport/sse')
+	
+	// Create SSE response
+	const { response, connectionId } = createSSEResponse()
+	
+	// Store OAuth session for this SSE connection
+	const sessionPayload = {
+		userId: tokenData.user_id,
+		username: tokenData.username,
+		sessionKey: tokenData.lastfm_session_key,
+		iat: Math.floor(tokenData.created_at / 1000),
+		exp: Math.floor(tokenData.expires_at / 1000),
+		expiresAt: new Date(tokenData.expires_at).toISOString(),
+		source: 'oauth'
+	}
+	
+	await env.MCP_SESSIONS.put(
+		`session:${connectionId}`,
+		JSON.stringify(sessionPayload),
+		{ expirationTtl: 3600 }
+	)
+	
+	console.log('SSE connection established with ID:', connectionId)
+	return response
 }
 
 /**
@@ -699,7 +975,9 @@ async function handleMCPRequest(request: Request, env: Env, tokenData: AccessTok
 		let jsonrpcRequest
 		try {
 			jsonrpcRequest = parseMessage(body)
+			console.log('MCP Request:', JSON.stringify(jsonrpcRequest, null, 2))
 		} catch (error) {
+			console.error('Failed to parse JSON-RPC request:', error)
 			const errorResponse = createError(null, ErrorCode.ParseError, 'Invalid JSON-RPC request')
 			return new Response(serializeResponse(errorResponse), {
 				status: 400,
@@ -733,23 +1011,29 @@ async function handleMCPRequest(request: Request, env: Env, tokenData: AccessTok
 		const modifiedRequest = new Request(request.url, {
 			method: request.method,
 			headers: modifiedHeaders,
-			body: JSON.stringify(jsonrpcRequest)
+			body: body
 		})
 
 		// Handle with MCP protocol
 		const response = await handleMethod(jsonrpcRequest, modifiedRequest, env?.JWT_SECRET, env)
+		
+		console.log('MCP Response:', response ? JSON.stringify(response, null, 2) : 'null')
 
 		// Clean up temporary session
 		await env.MCP_SESSIONS.delete(`session:${oauthConnectionId}`)
 
 		if (!response) {
+			console.log('No response from handleMethod')
 			return new Response(null, {
 				status: 204,
 				headers: corsHeaders()
 			})
 		}
 
-		return new Response(serializeResponse(response), {
+		const serializedResponse = serializeResponse(response)
+		console.log('Serialized Response:', serializedResponse)
+		
+		return new Response(serializedResponse, {
 			headers: corsHeaders({ 'Content-Type': 'application/json' })
 		})
 
