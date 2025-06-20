@@ -634,44 +634,101 @@ async function handleOAuthSSE(request: Request, env: Env): Promise<Response> {
  */
 async function handleOAuthMCP(request: Request, env: Env): Promise<Response> {
 	try {
-		// Extract connection ID from header
-		const connectionId = request.headers.get('X-Connection-ID')
-		
-		if (!connectionId) {
-			return new Response(JSON.stringify({
-				error: 'missing_connection_id',
-				error_description: 'X-Connection-ID header required'
-			}), {
-				status: 400,
-				headers: corsHeaders({ 'Content-Type': 'application/json' })
-			})
-		}
+		// Check for Bearer token first (Claude Desktop might send this in POST requests)
+		const token = extractBearerToken(request)
+		let sessionData: string | null = null
+		let connectionId: string | null = null
 
-		// Validate session exists for this connection
-		const sessionData = await env.MCP_SESSIONS.get(`session:${connectionId}`)
-		if (!sessionData) {
-			return new Response(JSON.stringify({
-				error: 'invalid_session',
-				error_description: 'Session not found for connection'
-			}), {
-				status: 401,
-				headers: corsHeaders({ 'Content-Type': 'application/json' })
-			})
+		if (token) {
+			// Validate OAuth token directly
+			const tokenData = await env.MCP_SESSIONS.get(`oauth:token:${token}`)
+			if (!tokenData) {
+				return new Response(JSON.stringify({
+					error: 'invalid_token',
+					error_description: 'Invalid bearer token'
+				}), {
+					status: 401,
+					headers: corsHeaders({ 'Content-Type': 'application/json' })
+				})
+			}
+
+			const parsedTokenData: AccessToken = JSON.parse(tokenData)
+			
+			// Check if token is expired
+			if (Date.now() > parsedTokenData.expires_at) {
+				return new Response(JSON.stringify({
+					error: 'invalid_token',
+					error_description: 'Bearer token expired'
+				}), {
+					status: 401,
+					headers: corsHeaders({ 'Content-Type': 'application/json' })
+				})
+			}
+
+			// Create temporary session for this request
+			connectionId = crypto.randomUUID()
+			const sessionPayload = {
+				token: token,
+				userId: parsedTokenData.username,
+				sessionKey: parsedTokenData.lastfm_session_key,
+				username: parsedTokenData.username,
+				timestamp: Date.now(),
+				expiresAt: parsedTokenData.expires_at,
+				connectionId: connectionId,
+				source: 'oauth-bearer'
+			}
+			sessionData = JSON.stringify(sessionPayload)
+
+			// Store temporary session
+			await env.MCP_SESSIONS.put(
+				`session:${connectionId}`,
+				sessionData,
+				{ expirationTtl: 300 } // 5 minutes
+			)
+
+		} else {
+			// Fallback to connection ID method
+			connectionId = request.headers.get('X-Connection-ID')
+			
+			if (!connectionId) {
+				return new Response(JSON.stringify({
+					error: 'unauthorized',
+					error_description: 'Bearer token or X-Connection-ID header required'
+				}), {
+					status: 401,
+					headers: corsHeaders({ 'Content-Type': 'application/json' })
+				})
+			}
+
+			// Validate session exists for this connection
+			sessionData = await env.MCP_SESSIONS.get(`session:${connectionId}`)
+			if (!sessionData) {
+				return new Response(JSON.stringify({
+					error: 'invalid_session',
+					error_description: 'Session not found for connection'
+				}), {
+					status: 401,
+					headers: corsHeaders({ 'Content-Type': 'application/json' })
+				})
+			}
 		}
 
 		// Parse and handle MCP request
 		const body = await request.text()
 		const jsonrpcRequest = parseMessage(body)
-		console.log('OAuth MCP Request:', jsonrpcRequest.method)
+		console.log('OAuth MCP Request:', jsonrpcRequest.method, 'with token:', !!token)
 
-		// Create a modified request with session data for authentication
+		// Create a modified request with connection ID header for MCP handlers
+		const modifiedHeaders = new Headers(request.headers)
+		modifiedHeaders.set('X-Connection-ID', connectionId)
+
 		const modifiedRequest = new Request(request.url, {
 			method: request.method,
-			headers: request.headers,
+			headers: modifiedHeaders,
 			body: body
 		})
 
-		// Use the existing MCP handler but with OAuth session
+		// Use the existing MCP handler
 		const response = await handleMethod(jsonrpcRequest, modifiedRequest, undefined, env)
 
 		if (!response) {
