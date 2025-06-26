@@ -91,7 +91,7 @@ export interface LastfmTool {
 
 /**
  * Last.fm MCP Tools - Provides access to Last.fm music data and personal listening history
- * 
+ *
  * AUTHENTICATION WORKFLOW:
  * 1. Use 'lastfm_auth_status' first to check if user is logged in
  * 2. If not authenticated, user needs to authenticate via /login endpoint
@@ -133,7 +133,8 @@ export const LASTFM_TOOLS: LastfmTool[] = [
 	},
 	{
 		name: 'get_recent_tracks',
-		description: "Get user's recent Last.fm listening history - REQUIRES AUTHENTICATION. Use lastfm_auth_status first to check login status.",
+		description:
+			"Get user's recent Last.fm listening history - REQUIRES AUTHENTICATION. Use lastfm_auth_status first to check login status.",
 		inputSchema: {
 			type: 'object',
 			properties: {
@@ -166,7 +167,8 @@ export const LASTFM_TOOLS: LastfmTool[] = [
 	},
 	{
 		name: 'get_top_artists',
-		description: "Get user's most listened to artists from Last.fm - REQUIRES AUTHENTICATION. Specify time period like '7day', '1month', '6month', 'overall'.",
+		description:
+			"Get user's most listened to artists from Last.fm - REQUIRES AUTHENTICATION. Specify time period like '7day', '1month', '6month', 'overall'.",
 		inputSchema: {
 			type: 'object',
 			properties: {
@@ -191,7 +193,8 @@ export const LASTFM_TOOLS: LastfmTool[] = [
 	},
 	{
 		name: 'get_top_albums',
-		description: "Get user's most listened to albums from Last.fm - REQUIRES AUTHENTICATION. Specify time period like '7day', '1month', '6month', 'overall'.",
+		description:
+			"Get user's most listened to albums from Last.fm - REQUIRES AUTHENTICATION. Specify time period like '7day', '1month', '6month', 'overall'.",
 		inputSchema: {
 			type: 'object',
 			properties: {
@@ -236,7 +239,8 @@ export const LASTFM_TOOLS: LastfmTool[] = [
 	},
 	{
 		name: 'get_track_info',
-		description: 'Get detailed Last.fm information about any track (artist, album, play count, tags, similar tracks) - No authentication required',
+		description:
+			'Get detailed Last.fm information about any track (artist, album, play count, tags, similar tracks) - No authentication required',
 		inputSchema: {
 			type: 'object',
 			properties: {
@@ -258,7 +262,8 @@ export const LASTFM_TOOLS: LastfmTool[] = [
 	},
 	{
 		name: 'get_artist_info',
-		description: 'Get detailed Last.fm information about any artist (biography, tags, similar artists, top tracks) - No authentication required',
+		description:
+			'Get detailed Last.fm information about any artist (biography, tags, similar artists, top tracks) - No authentication required',
 		inputSchema: {
 			type: 'object',
 			properties: {
@@ -356,7 +361,8 @@ export const LASTFM_TOOLS: LastfmTool[] = [
 	},
 	{
 		name: 'get_listening_stats',
-		description: 'Get comprehensive Last.fm listening statistics and analytics - REQUIRES AUTHENTICATION. Shows detailed insights about music habits.',
+		description:
+			'Get comprehensive Last.fm listening statistics and analytics - REQUIRES AUTHENTICATION. Shows detailed insights about music habits.',
 		inputSchema: {
 			type: 'object',
 			properties: {
