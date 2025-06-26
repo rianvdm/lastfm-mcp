@@ -2,6 +2,14 @@
 
 A **Model Context Protocol (MCP) server** that provides seamless access to Last.fm listening data and music information via AI assistants like Claude.
 
+## 🎉 What's New in v1.0
+
+- **🕰️ Temporal Queries**: Ask "When did I start listening to Led Zeppelin?" or "What was I into in 2023?"
+- **📊 Historical Analysis**: Access weekly artist and track charts from your entire Last.fm history
+- **🔄 Smart Caching**: Intelligent caching system optimized for different data types
+- **🛡️ Enhanced Security**: 7-day JWT sessions with proper session management
+- **🚀 Production Ready**: Battle-tested with comprehensive test coverage and CI/CD
+
 ## ✨ Features
 
 - 🎧 **Personal Listening Data**: Recent tracks, top artists, albums, loved tracks
@@ -210,6 +218,8 @@ These prompts generate contextual messages that guide AI assistants to provide m
 
 ## 📋 Example Usage
 
+### 🎵 Public Music Data (No Authentication)
+
 **Get track information:**
 
 ```bash
@@ -248,6 +258,8 @@ curl -X POST https://lastfm-mcp-prod.rian-db8.workers.dev \
   }'
 ```
 
+### 🔐 Personal Data (Requires Authentication)
+
 **Get recent tracks with pagination:**
 
 ```bash
@@ -268,6 +280,58 @@ curl -X POST https://lastfm-mcp-prod.rian-db8.workers.dev \
     }
   }'
 ```
+
+### 🕰️ Temporal Queries (New in v1.0!)
+
+**Get available historical periods:**
+
+```bash
+curl -X POST https://lastfm-mcp-prod.rian-db8.workers.dev \
+  -H "Content-Type: application/json" \
+  -H "Cookie: session=your_session_token" \
+  -d '{
+    "jsonrpc": "2.0",
+    "id": 1,
+    "method": "tools/call",
+    "params": {
+      "name": "get_weekly_chart_list",
+      "arguments": {
+        "username": "your_username"
+      }
+    }
+  }'
+```
+
+**Discover what you were listening to in a specific time period:**
+
+```bash
+curl -X POST https://lastfm-mcp-prod.rian-db8.workers.dev \
+  -H "Content-Type: application/json" \
+  -H "Cookie: session=your_session_token" \
+  -d '{
+    "jsonrpc": "2.0",
+    "id": 1,
+    "method": "tools/call",
+    "params": {
+      "name": "get_weekly_artist_chart",
+      "arguments": {
+        "username": "your_username",
+        "from": 1577836800,
+        "to": 1578441600
+      }
+    }
+  }'
+```
+
+### 🤖 AI Assistant Examples
+
+With Claude or other AI assistants, you can now ask natural language questions like:
+
+- *"When did I start listening to Led Zeppelin?"*
+- *"What was I obsessed with in summer 2023?"*
+- *"Show me how my music taste has evolved over the years"*
+- *"Find artists similar to my current favorites"*
+- *"What tracks should I check out based on my listening history?"*
 
 ## 🏗️ Architecture
 
