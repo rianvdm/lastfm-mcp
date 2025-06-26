@@ -23,6 +23,11 @@ export interface CacheConfig {
 	userListeningStats: number // 1 hour
 	userRecommendations: number // 24 hours
 
+	// Temporal data (changes rarely - historical data)
+	userWeeklyChartList: number // 24 hours
+	userWeeklyArtistChart: number // 24 hours
+	userWeeklyTrackChart: number // 24 hours
+
 	// Static music data (changes rarely)
 	trackInfo: number // 24 hours
 	artistInfo: number // 24 hours
@@ -40,6 +45,11 @@ export const DEFAULT_CACHE_CONFIG: CacheConfig = {
 	userInfo: 6 * 60 * 60, // 6 hours in seconds
 	userListeningStats: 60 * 60, // 1 hour in seconds
 	userRecommendations: 24 * 60 * 60, // 24 hours in seconds
+
+	// Temporal data (changes rarely - historical data)
+	userWeeklyChartList: 24 * 60 * 60, // 24 hours in seconds
+	userWeeklyArtistChart: 24 * 60 * 60, // 24 hours in seconds
+	userWeeklyTrackChart: 24 * 60 * 60, // 24 hours in seconds
 
 	// Static music data (changes rarely)
 	trackInfo: 24 * 60 * 60, // 24 hours in seconds
@@ -325,6 +335,13 @@ export const CacheKeys = {
 
 	similarTracks: (artist: string, track: string, limit?: number) =>
 		`${encodeURIComponent(artist)}:${encodeURIComponent(track)}:${limit || 30}`,
+
+	// Temporal data keys
+	userWeeklyChartList: (username: string) => username,
+
+	userWeeklyArtistChart: (username: string, from?: number, to?: number) => `${username}:${from || ''}:${to || ''}`,
+
+	userWeeklyTrackChart: (username: string, from?: number, to?: number) => `${username}:${from || ''}:${to || ''}`,
 }
 
 /**
@@ -368,6 +385,11 @@ export function createLastfmCache(kv?: KVNamespace): SmartCache {
 		userInfo: 6 * 60 * 60, // User profiles rarely change
 		userListeningStats: 60 * 60, // Stats can be cached for an hour
 		userRecommendations: 24 * 60 * 60, // Recommendations can be cached longer
+
+		// Temporal data is historical and changes very rarely
+		userWeeklyChartList: 24 * 60 * 60, // Chart list rarely changes
+		userWeeklyArtistChart: 24 * 60 * 60, // Historical data is stable
+		userWeeklyTrackChart: 24 * 60 * 60, // Historical data is stable
 
 		// Static music data can be cached for a long time
 		trackInfo: 24 * 60 * 60, // Track data is mostly static

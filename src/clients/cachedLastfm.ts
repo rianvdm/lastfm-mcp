@@ -15,6 +15,9 @@ import {
 	type LastfmUserInfoResponse,
 	type LastfmSimilarArtistsResponse,
 	type LastfmSimilarTracksResponse,
+	type LastfmWeeklyChartListResponse,
+	type LastfmWeeklyArtistChartResponse,
+	type LastfmWeeklyTrackChartResponse,
 } from './lastfm'
 import { SmartCache, CacheKeys, createLastfmCache } from '../utils/cache'
 
@@ -245,5 +248,32 @@ export class CachedLastfmClient {
 				recommendedTracks: recommendedTracks.slice(0, limit),
 			}
 		})
+	}
+
+	/**
+	 * Get user's weekly chart list with caching (historical data - long TTL)
+	 */
+	async getWeeklyChartList(username: string): Promise<LastfmWeeklyChartListResponse> {
+		const cacheKey = CacheKeys.userWeeklyChartList(username)
+
+		return this.cache.getOrFetch('userWeeklyChartList', cacheKey, () => this.client.getWeeklyChartList(username))
+	}
+
+	/**
+	 * Get user's weekly artist chart with caching (historical data - long TTL)
+	 */
+	async getWeeklyArtistChart(username: string, from?: number, to?: number): Promise<LastfmWeeklyArtistChartResponse> {
+		const cacheKey = CacheKeys.userWeeklyArtistChart(username, from, to)
+
+		return this.cache.getOrFetch('userWeeklyArtistChart', cacheKey, () => this.client.getWeeklyArtistChart(username, from, to))
+	}
+
+	/**
+	 * Get user's weekly track chart with caching (historical data - long TTL)
+	 */
+	async getWeeklyTrackChart(username: string, from?: number, to?: number): Promise<LastfmWeeklyTrackChartResponse> {
+		const cacheKey = CacheKeys.userWeeklyTrackChart(username, from, to)
+
+		return this.cache.getOrFetch('userWeeklyTrackChart', cacheKey, () => this.client.getWeeklyTrackChart(username, from, to))
 	}
 }

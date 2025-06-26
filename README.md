@@ -102,6 +102,20 @@ Add this configuration to your Claude Desktop settings (Settings / Developer / E
 | `get_listening_stats`       | Comprehensive listening statistics                  |
 | `get_music_recommendations` | Personalized music recommendations                  |
 
+### 🕰️ **Temporal Query Tools** (Authentication Required) 🆕
+
+| Tool                      | Description                                                 |
+| ------------------------- | ----------------------------------------------------------- |
+| `get_weekly_chart_list`   | Get available historical time periods for temporal analysis |
+| `get_weekly_artist_chart` | Get artist listening data for specific time periods         |
+| `get_weekly_track_chart`  | Get track listening data for specific time periods          |
+
+**Perfect for questions like:**
+
+- "When did I start listening to Led Zeppelin?"
+- "What was I listening to in March 2023?"
+- "How has my music taste evolved over time?"
+
 ## 📚 MCP Resources
 
 Access Last.fm data via standardized MCP resource URIs:

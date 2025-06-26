@@ -303,6 +303,51 @@ export interface LastfmSimilarTracksResponse {
 	}
 }
 
+export interface LastfmWeeklyChartListResponse {
+	weeklychartlist: {
+		chart: Array<{
+			from: string
+			to: string
+		}>
+	}
+}
+
+export interface LastfmWeeklyArtistChartResponse {
+	weeklyartistchart: {
+		artist: Array<
+			LastfmArtist & {
+				playcount: string
+				'@attr': {
+					rank: string
+				}
+			}
+		>
+		'@attr': {
+			user: string
+			from: string
+			to: string
+		}
+	}
+}
+
+export interface LastfmWeeklyTrackChartResponse {
+	weeklytrackchart: {
+		track: Array<
+			LastfmTrack & {
+				playcount: string
+				'@attr': {
+					rank: string
+				}
+			}
+		>
+		'@attr': {
+			user: string
+			from: string
+			to: string
+		}
+	}
+}
+
 export interface LastfmError {
 	error: number
 	message: string
@@ -510,5 +555,45 @@ export class LastfmClient {
 			track,
 			limit: limit.toString(),
 		})
+	}
+
+	/**
+	 * Get user's weekly chart list (available date ranges)
+	 */
+	async getWeeklyChartList(username: string): Promise<LastfmWeeklyChartListResponse> {
+		return this.makeRequest<LastfmWeeklyChartListResponse>({
+			method: 'user.getWeeklyChartList',
+			user: username,
+		})
+	}
+
+	/**
+	 * Get user's weekly artist chart for a specific date range
+	 */
+	async getWeeklyArtistChart(username: string, from?: number, to?: number): Promise<LastfmWeeklyArtistChartResponse> {
+		const params: Record<string, string> = {
+			method: 'user.getWeeklyArtistChart',
+			user: username,
+		}
+
+		if (from) params.from = from.toString()
+		if (to) params.to = to.toString()
+
+		return this.makeRequest<LastfmWeeklyArtistChartResponse>(params)
+	}
+
+	/**
+	 * Get user's weekly track chart for a specific date range
+	 */
+	async getWeeklyTrackChart(username: string, from?: number, to?: number): Promise<LastfmWeeklyTrackChartResponse> {
+		const params: Record<string, string> = {
+			method: 'user.getWeeklyTrackChart',
+			user: username,
+		}
+
+		if (from) params.from = from.toString()
+		if (to) params.to = to.toString()
+
+		return this.makeRequest<LastfmWeeklyTrackChartResponse>(params)
 	}
 }
