@@ -452,7 +452,7 @@ export const MARKETING_PAGE_HTML = `<!DOCTYPE html>
         <div class="container">
             <h1>Last.fm MCP Server - Model Context Protocol for Claude AI</h1>
             <p class="subtitle">
-                The official MCP implementation for Last.fm API integration. Connect Claude Desktop and other AI assistants to your Last.fm listening data. Features temporal queries ("When did I start listening to...?"), music insights, and 18+ specialized tools.
+                A robust MCP implementation for Last.fm API integration. Connect Claude Desktop and other AI assistants to your Last.fm listening data. Features temporal queries ("When did I start listening to...?"), music insights, and 18+ specialized tools.
             </p>
             
             <div class="badges">
