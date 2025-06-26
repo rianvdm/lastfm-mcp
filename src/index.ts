@@ -227,7 +227,7 @@ async function handleCallback(request: Request, env: Env): Promise<Response> {
 				username,
 			},
 			env.JWT_SECRET,
-			24, // expires in 24 hours
+			168, // expires in 7 days (168 hours)
 		)
 
 		// Determine final connection ID
@@ -253,7 +253,7 @@ async function handleCallback(request: Request, env: Env): Promise<Response> {
 					sessionKey,
 					username,
 					timestamp: Date.now(),
-					expiresAt: Date.now() + 24 * 60 * 60 * 1000, // 24 hours
+					expiresAt: Date.now() + 7 * 24 * 60 * 60 * 1000, // 7 days
 					connectionId: finalConnectionId,
 				}
 
@@ -290,7 +290,7 @@ async function handleCallback(request: Request, env: Env): Promise<Response> {
 			'Secure',
 			'SameSite=Strict',
 			'Path=/',
-			'Max-Age=86400', // 24 hours in seconds
+			'Max-Age=604800', // 7 days in seconds (7 * 24 * 60 * 60)
 		].join('; ')
 
 		const responseMessage =
