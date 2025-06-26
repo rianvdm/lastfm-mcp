@@ -18,13 +18,13 @@ export const MARKETING_PAGE_HTML = `<!DOCTYPE html>
     <meta property="og:description" content="Connect Claude AI to your Last.fm data. Temporal queries, music insights, recommendations. Open source MCP server with 18+ tools.">
     <meta property="og:type" content="website">
     <meta property="og:url" content="https://lastfm-mcp.com">
-    <meta property="og:image" content="https://lastfm-mcp.com/og-image.png">
+    <meta property="og:image" content="https://file.elezea.com/lastfm-img.jpg">
     
     <!-- Twitter Card -->
     <meta name="twitter:card" content="summary_large_image">
     <meta name="twitter:title" content="Last.fm MCP Server - Model Context Protocol for Music Data">
     <meta name="twitter:description" content="Connect AI assistants to Last.fm. Temporal queries like 'When did I start listening to X?' Open source.">
-    <meta name="twitter:image" content="https://lastfm-mcp.com/twitter-card.png">
+    <meta name="twitter:image" content="https://file.elezea.com/lastfm-img.jpg">
     
     <!-- Additional SEO -->
     <meta name="robots" content="index, follow">
