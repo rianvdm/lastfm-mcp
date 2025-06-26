@@ -63,8 +63,8 @@ describe('Last.fm MCP Server', () => {
 		expect(response.headers.get('content-type')).toBe('text/html')
 
 		const html = await response.text()
-		expect(html).toContain('🎵 Last.fm MCP Server')
-		expect(html).toContain('Bridge AI assistants with your Last.fm music data')
+		expect(html).toContain('Last.fm MCP Server')
+		expect(html).toContain('Model Context Protocol for Claude AI')
 	})
 
 	it('should return server info for GET requests to API endpoint', async () => {
