@@ -838,7 +838,7 @@ ${trackList}`,
 /**
  * Handle authenticated tools
  */
-async function handleAuthenticatedToolsCall(
+export async function handleAuthenticatedToolsCall(
 	params: unknown,
 	session: SessionPayload,
 	env?: Env,
@@ -901,6 +901,9 @@ async function handleAuthenticatedToolsCall(
 • \`get_similar_tracks\` - Find similar tracks
 • \`get_listening_stats\` - Get listening statistics
 • \`get_music_recommendations\` - Get personalized recommendations
+• \`get_weekly_chart_list\` - Get available historical time periods 🆕
+• \`get_weekly_artist_chart\` - Get artist listening data for specific periods 🆕
+• \`get_weekly_track_chart\` - Get track listening data for specific periods 🆕
 
 **Examples to try:**
 - "Get my recent tracks"
@@ -908,6 +911,9 @@ async function handleAuthenticatedToolsCall(
 - "Find similar artists to Radiohead"
 - "Get my listening statistics"
 - "Recommend some music based on my taste"
+- "When did I start listening to Led Zeppelin?" 🆕
+- "What was I listening to in March 2023?" 🆕
+- "Show me my historical listening periods" 🆕
 
 Your authentication is secure and tied to your specific session.`,
 					},
@@ -1308,6 +1314,115 @@ ${genre ? `**Genre Filter:** ${genre}\n` : ''}
 ${artistList}
 
 *Based on your listening history and similar user preferences*`,
+					},
+				],
+			}
+		}
+
+		case 'get_weekly_chart_list': {
+			const username = (args?.username as string) || session.username
+
+			const data = await client.getWeeklyChartList(username)
+
+			const charts = data.weeklychartlist.chart
+			const chartList = charts
+				.slice(-20)
+				.reverse()
+				.map((chart) => {
+					const fromDate = new Date(parseInt(chart.from) * 1000).toLocaleDateString()
+					const toDate = new Date(parseInt(chart.to) * 1000).toLocaleDateString()
+					return `• ${fromDate} to ${toDate} (from: ${chart.from}, to: ${chart.to})`
+				})
+				.join('\n')
+
+			return {
+				content: [
+					{
+						type: 'text',
+						text: `📅 **Weekly Chart Periods for ${username}**
+
+🗓️ **Available Date Ranges** (showing most recent 20):
+
+${chartList}
+
+💡 **Usage:** Use the 'from' and 'to' timestamps with \`get_weekly_artist_chart\` or \`get_weekly_track_chart\` to explore specific time periods.
+
+📊 **Total periods available:** ${charts.length}
+
+**Example:** To see what artists you were listening to during a specific week:
+\`get_weekly_artist_chart\` with from: ${charts[charts.length - 1]?.from} and to: ${charts[charts.length - 1]?.to}`,
+					},
+				],
+			}
+		}
+
+		case 'get_weekly_artist_chart': {
+			const username = (args?.username as string) || session.username
+			const from = args?.from as number
+			const to = args?.to as number
+
+			const data = await client.getWeeklyArtistChart(username, from, to)
+
+			const artists = data.weeklyartistchart.artist
+			const periodInfo =
+				from && to ? `${new Date(from * 1000).toLocaleDateString()} to ${new Date(to * 1000).toLocaleDateString()}` : 'Most Recent Week'
+
+			const artistList = artists
+				.slice(0, 30)
+				.map((artist, index) => {
+					return `${index + 1}. ${artist.name} (${artist.playcount} plays)`
+				})
+				.join('\n')
+
+			return {
+				content: [
+					{
+						type: 'text',
+						text: `🎤 **Weekly Artist Chart for ${username}**
+📅 **Period:** ${periodInfo}
+
+${artistList}
+
+📊 **Total artists in this period:** ${artists.length}
+${artists.length > 30 ? '\n📝 **Note:** Showing top 30 artists only' : ''}
+
+💡 **Tip:** Use \`get_weekly_chart_list\` to find other time periods to explore!`,
+					},
+				],
+			}
+		}
+
+		case 'get_weekly_track_chart': {
+			const username = (args?.username as string) || session.username
+			const from = args?.from as number
+			const to = args?.to as number
+
+			const data = await client.getWeeklyTrackChart(username, from, to)
+
+			const tracks = data.weeklytrackchart.track
+			const periodInfo =
+				from && to ? `${new Date(from * 1000).toLocaleDateString()} to ${new Date(to * 1000).toLocaleDateString()}` : 'Most Recent Week'
+
+			const trackList = tracks
+				.slice(0, 30)
+				.map((track, index) => {
+					return `${index + 1}. ${track.artist['#text']} - ${track.name} (${track.playcount} plays)`
+				})
+				.join('\n')
+
+			return {
+				content: [
+					{
+						type: 'text',
+						text: `🎵 **Weekly Track Chart for ${username}**
+📅 **Period:** ${periodInfo}
+
+${trackList}
+
+📊 **Total tracks in this period:** ${tracks.length}
+${tracks.length > 30 ? '\n📝 **Note:** Showing top 30 tracks only' : ''}
+
+💡 **Tip:** Use \`get_weekly_chart_list\` to find other time periods to explore!`,
 					},
 				],
 			}

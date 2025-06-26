@@ -500,7 +500,7 @@ describe('MCP Client Integration Tests', () => {
 
 			// Test tools
 			const toolsList = await client.listTools()
-			expect(toolsList.result.tools).toHaveLength(15) // All Last.fm tools including authenticated and non-authenticated versions
+			expect(toolsList.result.tools).toHaveLength(18) // All Last.fm tools including authenticated and non-authenticated versions + 3 new temporal tools
 
 			const trackResult = await client.callTool('get_track_info', { artist: 'The Beatles', track: 'Come Together' })
 			console.log('Track result:', JSON.stringify(trackResult, null, 2))

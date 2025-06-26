@@ -403,6 +403,67 @@ export const LASTFM_TOOLS: LastfmTool[] = [
 			required: ['username'],
 		},
 	},
+	{
+		name: 'get_weekly_chart_list',
+		description:
+			'Get available weekly chart date ranges for user\'s listening history - REQUIRES AUTHENTICATION. Use this to find historical time periods for temporal queries like "when did I start listening to X".',
+		inputSchema: {
+			type: 'object',
+			properties: {
+				username: {
+					type: 'string',
+					description: 'Last.fm username',
+				},
+			},
+			required: ['username'],
+		},
+	},
+	{
+		name: 'get_weekly_artist_chart',
+		description:
+			'Get artist listening data for a specific time period - REQUIRES AUTHENTICATION. Perfect for temporal queries like "what artists was I into in 2023" or "when did I start listening to Led Zeppelin".',
+		inputSchema: {
+			type: 'object',
+			properties: {
+				username: {
+					type: 'string',
+					description: 'Last.fm username',
+				},
+				from: {
+					type: 'number',
+					description: 'Start timestamp (Unix timestamp) - get from weekly_chart_list',
+				},
+				to: {
+					type: 'number',
+					description: 'End timestamp (Unix timestamp) - get from weekly_chart_list',
+				},
+			},
+			required: ['username'],
+		},
+	},
+	{
+		name: 'get_weekly_track_chart',
+		description:
+			'Get track listening data for a specific time period - REQUIRES AUTHENTICATION. Perfect for temporal queries like "what songs was I obsessed with in summer 2023" or finding when you discovered specific tracks.',
+		inputSchema: {
+			type: 'object',
+			properties: {
+				username: {
+					type: 'string',
+					description: 'Last.fm username',
+				},
+				from: {
+					type: 'number',
+					description: 'Start timestamp (Unix timestamp) - get from weekly_chart_list',
+				},
+				to: {
+					type: 'number',
+					description: 'End timestamp (Unix timestamp) - get from weekly_chart_list',
+				},
+			},
+			required: ['username'],
+		},
+	},
 ]
 
 // Last.fm MCP Prompt Definitions
