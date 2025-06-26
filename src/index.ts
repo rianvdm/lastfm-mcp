@@ -11,6 +11,7 @@ import { createSSEResponse, getConnection, authenticateConnection } from './tran
 import { LastfmAuth } from './auth/lastfm'
 import { KVLogger } from './utils/kvLogger'
 import { RateLimiter } from './utils/rateLimit'
+import { MARKETING_PAGE_HTML } from './marketing-page'
 import type { Env } from './types/env'
 import type { ExecutionContext } from '@cloudflare/workers-types'
 
@@ -50,22 +51,45 @@ export default {
 		// Handle different endpoints
 		switch (url.pathname) {
 			case '/':
-				// Main MCP endpoint - accepts JSON-RPC messages for POST, info for GET
+				// Main endpoint - serves marketing page for GET, JSON-RPC for POST
 				if (request.method === 'POST') {
 					return handleMCPRequest(request, env)
 				} else if (request.method === 'GET') {
+					return new Response(MARKETING_PAGE_HTML, {
+						status: 200,
+						headers: {
+							'Content-Type': 'text/html',
+							'Cache-Control': 'public, max-age=3600', // Cache for 1 hour
+						},
+					})
+				} else {
+					return new Response('Method not allowed', { status: 405 })
+				}
+
+			case '/api':
+				// API info endpoint for programmatic access
+				if (request.method === 'GET') {
 					return new Response(
 						JSON.stringify({
 							name: 'Last.fm MCP Server',
 							version: '1.0.0',
 							description: 'Model Context Protocol server for Last.fm listening data access',
 							endpoints: {
-								'/': 'POST - MCP JSON-RPC endpoint',
+								'/': 'GET - Marketing page, POST - MCP JSON-RPC endpoint',
+								'/api': 'GET - API information',
 								'/sse': 'GET - Server-Sent Events endpoint',
 								'/login': 'GET - Last.fm authentication',
 								'/callback': 'GET - Last.fm authentication callback',
 								'/mcp-auth': 'GET - MCP authentication',
 								'/health': 'GET - Health check',
+							},
+							mcp: {
+								protocol: '2024-11-05',
+								capabilities: ['tools', 'resources', 'prompts'],
+							},
+							lastfm: {
+								api_version: '2.0',
+								authentication: 'Web Authentication Flow',
 							},
 						}),
 						{

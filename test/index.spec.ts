@@ -53,8 +53,22 @@ describe('Last.fm MCP Server', () => {
 		})
 	})
 
-	it('should return server info for GET requests to main endpoint', async () => {
+	it('should return marketing page for GET requests to main endpoint', async () => {
 		const request = new Request<unknown, IncomingRequestCfProperties>('http://example.com/')
+		const ctx = createExecutionContext()
+		const response = await worker.fetch(request, env, ctx)
+		await waitOnExecutionContext(ctx)
+
+		expect(response.status).toBe(200)
+		expect(response.headers.get('content-type')).toBe('text/html')
+
+		const html = await response.text()
+		expect(html).toContain('🎵 Last.fm MCP Server')
+		expect(html).toContain('Bridge AI assistants with your Last.fm music data')
+	})
+
+	it('should return server info for GET requests to API endpoint', async () => {
+		const request = new Request<unknown, IncomingRequestCfProperties>('http://example.com/api')
 		const ctx = createExecutionContext()
 		const response = await worker.fetch(request, env, ctx)
 		await waitOnExecutionContext(ctx)
