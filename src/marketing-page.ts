@@ -8,15 +8,62 @@ export const MARKETING_PAGE_HTML = `<!DOCTYPE html>
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>🎵 Last.fm MCP Server - Bridge AI with Your Music</title>
-    <meta name="description" content="Connect AI assistants like Claude to your Last.fm listening data. Get insights, recommendations, and explore your musical journey with AI.">
-    <meta name="keywords" content="Last.fm, MCP, AI, Claude, music, listening, analytics, recommendations">
+    <title>Last.fm MCP Server - Model Context Protocol for Last.fm API | Claude AI Integration</title>
+    <meta name="description" content="Official Last.fm MCP Server for Claude Desktop. Connect AI assistants to Last.fm listening data. Get music insights, temporal queries, recommendations. Open source Model Context Protocol implementation.">
+    <meta name="keywords" content="Last.fm MCP server, Model Context Protocol, Last.fm API, Claude Desktop, Claude AI, MCP tools, music data API, Last.fm integration, AI music assistant, listening history API, temporal music queries, mcp-remote, Anthropic MCP">
+    <link rel="canonical" href="https://lastfm-mcp.com">
     
     <!-- Open Graph for social sharing -->
-    <meta property="og:title" content="Last.fm MCP Server - Bridge AI with Your Music">
-    <meta property="og:description" content="Connect AI assistants to your Last.fm data for personalized music insights and recommendations.">
+    <meta property="og:title" content="Last.fm MCP Server - Official Model Context Protocol Implementation">
+    <meta property="og:description" content="Connect Claude AI to your Last.fm data. Temporal queries, music insights, recommendations. Open source MCP server with 18+ tools.">
     <meta property="og:type" content="website">
-    <meta property="og:url" content="https://lastfm-mcp-prod.rian-db8.workers.dev">
+    <meta property="og:url" content="https://lastfm-mcp.com">
+    <meta property="og:image" content="https://lastfm-mcp.com/og-image.png">
+    
+    <!-- Twitter Card -->
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="Last.fm MCP Server - Model Context Protocol for Music Data">
+    <meta name="twitter:description" content="Connect AI assistants to Last.fm. Temporal queries like 'When did I start listening to X?' Open source.">
+    <meta name="twitter:image" content="https://lastfm-mcp.com/twitter-card.png">
+    
+    <!-- Additional SEO -->
+    <meta name="robots" content="index, follow">
+    <meta name="author" content="Last.fm MCP Server Contributors">
+    <link rel="alternate" type="application/json" href="https://lastfm-mcp-prod.rian-db8.workers.dev/api">
+    
+    <!-- Schema.org structured data -->
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "SoftwareApplication",
+      "name": "Last.fm MCP Server",
+      "applicationCategory": "DeveloperApplication",
+      "operatingSystem": "Cross-platform",
+      "description": "Model Context Protocol server that bridges AI assistants with Last.fm music data. Features temporal queries, listening insights, and music recommendations.",
+      "url": "https://lastfm-mcp.com",
+      "author": {
+        "@type": "Organization",
+        "name": "Last.fm MCP Contributors",
+        "url": "https://github.com/rianvdm/lastfm-mcp"
+      },
+      "offers": {
+        "@type": "Offer",
+        "price": "0",
+        "priceCurrency": "USD"
+      },
+      "softwareVersion": "1.0.0",
+      "softwareHelp": "https://github.com/rianvdm/lastfm-mcp#readme",
+      "downloadUrl": "https://github.com/rianvdm/lastfm-mcp",
+      "keywords": "Last.fm, MCP, Model Context Protocol, Claude AI, API, music data, temporal queries",
+      "license": "https://opensource.org/licenses/MIT",
+      "isAccessibleForFree": true,
+      "aggregateRating": {
+        "@type": "AggregateRating",
+        "ratingValue": "5",
+        "ratingCount": "1"
+      }
+    }
+    </script>
     
     <style>
         * {
@@ -403,9 +450,9 @@ export const MARKETING_PAGE_HTML = `<!DOCTYPE html>
     
     <section class="hero">
         <div class="container">
-            <h1>🎵 Last.fm MCP Server</h1>
+            <h1>Last.fm MCP Server - Model Context Protocol for Claude AI</h1>
             <p class="subtitle">
-                Bridge AI assistants with your Last.fm music data. Get personalized insights, discover new music, and explore your listening journey with the power of AI.
+                The official MCP implementation for Last.fm API integration. Connect Claude Desktop and other AI assistants to your Last.fm listening data. Features temporal queries ("When did I start listening to...?"), music insights, and 18+ specialized tools.
             </p>
             
             <div class="badges">

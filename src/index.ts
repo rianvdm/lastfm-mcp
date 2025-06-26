@@ -156,6 +156,61 @@ export default {
 					},
 				)
 
+			case '/sitemap.xml':
+				// Sitemap for search engines
+				return new Response(
+					`<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+  <url>
+    <loc>https://lastfm-mcp.com/</loc>
+    <lastmod>${new Date().toISOString().split('T')[0]}</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>1.0</priority>
+  </url>
+  <url>
+    <loc>https://lastfm-mcp.com/api</loc>
+    <lastmod>${new Date().toISOString().split('T')[0]}</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.8</priority>
+  </url>
+  <url>
+    <loc>https://lastfm-mcp.com/health</loc>
+    <lastmod>${new Date().toISOString().split('T')[0]}</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.5</priority>
+  </url>
+</urlset>`,
+					{
+						status: 200,
+						headers: {
+							'Content-Type': 'application/xml',
+							'Cache-Control': 'public, max-age=86400', // Cache for 1 day
+						},
+					},
+				)
+
+			case '/robots.txt':
+				// Robots.txt for search engines
+				return new Response(
+					`User-agent: *
+Allow: /
+Allow: /api
+Allow: /health
+Disallow: /login
+Disallow: /callback
+Disallow: /mcp-auth
+Disallow: /sse
+
+Sitemap: https://lastfm-mcp.com/sitemap.xml`,
+					{
+						status: 200,
+						headers: {
+							'Content-Type': 'text/plain',
+							'Cache-Control': 'public, max-age=86400', // Cache for 1 day
+						},
+					},
+				)
+
 			default:
 				return new Response('Not found', { status: 404 })
 		}
