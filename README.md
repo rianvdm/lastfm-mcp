@@ -1,5 +1,12 @@
 # 🎵 Last.fm MCP Server
 
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![TypeScript](https://img.shields.io/badge/TypeScript-007ACC?logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
+[![Cloudflare Workers](https://img.shields.io/badge/Cloudflare-Workers-F38020?logo=cloudflare&logoColor=white)](https://workers.cloudflare.com/)
+[![Last.fm](https://img.shields.io/badge/Last.fm-API-D51007?logo=last.fm&logoColor=white)](https://www.last.fm/api)
+[![MCP](https://img.shields.io/badge/MCP-2024--11--05-blue)](https://github.com/modelcontextprotocol)
+[![CI](https://github.com/rianvdm/lastfm-mcp/actions/workflows/ci.yml/badge.svg)](https://github.com/rianvdm/lastfm-mcp/actions/workflows/ci.yml)
+
 A **Model Context Protocol (MCP) server** that provides seamless access to Last.fm listening data and music information via AI assistants like Claude.
 
 A powerful, production-ready server that bridges AI assistants with Last.fm's comprehensive music database.
