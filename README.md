@@ -2,13 +2,7 @@
 
 A **Model Context Protocol (MCP) server** that provides seamless access to Last.fm listening data and music information via AI assistants like Claude.
 
-## 🎉 What's New in v1.0
-
-- **🕰️ Temporal Queries**: Ask "When did I start listening to Led Zeppelin?" or "What was I into in 2023?"
-- **📊 Historical Analysis**: Access weekly artist and track charts from your entire Last.fm history
-- **🔄 Smart Caching**: Intelligent caching system optimized for different data types
-- **🛡️ Enhanced Security**: 7-day JWT sessions with proper session management
-- **🚀 Production Ready**: Battle-tested with comprehensive test coverage and CI/CD
+A powerful, production-ready server that bridges AI assistants with Last.fm's comprehensive music database.
 
 ## ✨ Features
 
@@ -110,7 +104,7 @@ Add this configuration to your Claude Desktop settings (Settings / Developer / E
 | `get_listening_stats`       | Comprehensive listening statistics                  |
 | `get_music_recommendations` | Personalized music recommendations                  |
 
-### 🕰️ **Temporal Query Tools** (Authentication Required) 🆕
+### 🕰️ **Temporal Query Tools** (Authentication Required)
 
 | Tool                      | Description                                                 |
 | ------------------------- | ----------------------------------------------------------- |
@@ -281,7 +275,7 @@ curl -X POST https://lastfm-mcp-prod.rian-db8.workers.dev \
   }'
 ```
 
-### 🕰️ Temporal Queries (New in v1.0!)
+### 🕰️ Temporal Queries
 
 **Get available historical periods:**
 
