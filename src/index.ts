@@ -367,7 +367,7 @@ async function handleCallback(request: Request, env: Env): Promise<Response> {
 		const cookieOptions = [
 			'HttpOnly',
 			'Secure',
-			'SameSite=Strict',
+			'SameSite=Lax',
 			'Path=/',
 			'Max-Age=604800', // 7 days in seconds (7 * 24 * 60 * 60)
 		].join('; ')
