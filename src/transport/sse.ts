@@ -41,11 +41,15 @@ export function createSSEResponse(): { response: Response; connectionId: string 
 	connections.set(connectionId, connection)
 
 	// Send initial connection event with authentication info
-	sendSSEMessage(connection, 'endpoint', {
-		endpoint: '/', // Main JSON-RPC endpoint
+	// Split the endpoint information into separate events to avoid mcp-remote URL confusion
+	sendSSEMessage(connection, 'connected', {
 		connectionId,
-		requiresAuth: true,
+		message: 'SSE connection established',
+	})
+	
+	sendSSEMessage(connection, 'auth-required', {
 		authUrl: `/login?connection_id=${connectionId}`,
+		message: 'Authentication required for full access',
 	})
 
 	// Set up keepalive
