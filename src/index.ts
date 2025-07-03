@@ -7,7 +7,7 @@ import { parseMessage, createError, serializeResponse } from './protocol/parser'
 import { handleMethod, verifyAuthentication } from './protocol/handlers'
 import { createSessionToken } from './auth/jwt'
 import { ErrorCode, JSONRPCError } from './types/jsonrpc'
-import { createSSEResponse, getConnection, authenticateConnection, broadcastResponse } from './transport/sse'
+import { createSSEResponse, getConnection, authenticateConnection, broadcastResponse, getActiveConnections } from './transport/sse'
 import { LastfmAuth } from './auth/lastfm'
 import { KVLogger } from './utils/kvLogger'
 import { RateLimiter } from './utils/rateLimit'
@@ -454,10 +454,27 @@ async function handleMCPRequestWithSSEContext(request: Request, env?: Env): Prom
  */
 async function handleMCPRequestWithSSE(request: Request, env?: Env, connectionId?: string): Promise<Response> {
 	// For SSE transport, we need to check if the connection exists
-	// If no connection exists, this could be an mcp-remote client without active SSE connection
-	if (!connectionId || !getConnection(connectionId)) {
+	// If no connection exists for mcp-remote clients, try to find any active connection
+	// that might be the client's SSE connection
+	let targetConnectionId = connectionId
+	let connection = connectionId ? getConnection(connectionId) : null
+	
+	if (!connection && connectionId?.startsWith('mcp-remote-')) {
+		// For mcp-remote clients, the POST connection ID might differ from the SSE connection ID
+		// Try to find the most recent SSE connection that could be from this client
+		const activeConnections = getActiveConnections()
+		if (activeConnections.length > 0) {
+			// Use the most recent connection (last in the list)
+			const recentConnection = activeConnections[activeConnections.length - 1]
+			targetConnectionId = recentConnection.id
+			connection = getConnection(targetConnectionId)
+			console.log(`Using recent SSE connection ${targetConnectionId} for mcp-remote client ${connectionId}`)
+		}
+	}
+	
+	if (!targetConnectionId || !connection) {
 		console.log(`No SSE connection found for ID: ${connectionId}`)
-		// For mcp-remote clients without active SSE connections, fall back to HTTP response
+		// For clients without active SSE connections, fall back to HTTP response
 		return handleMCPRequest(request, env)
 	}
 
@@ -482,7 +499,7 @@ async function handleMCPRequestWithSSE(request: Request, env?: Env, connectionId
 		// Handle empty body
 		if (!body) {
 			const errorResponse = createError(null, ErrorCode.InvalidRequest, 'Empty request body')
-			broadcastResponse(connectionId, errorResponse)
+			broadcastResponse(targetConnectionId, errorResponse)
 			
 			// Log the error
 			if (logger) {
@@ -508,7 +525,7 @@ async function handleMCPRequestWithSSE(request: Request, env?: Env, connectionId
 			// Parse error or invalid request
 			const jsonrpcError = error as JSONRPCError
 			const errorResponse = createError(null, jsonrpcError.code || ErrorCode.ParseError, jsonrpcError.message || 'Parse error')
-			broadcastResponse(connectionId, errorResponse)
+			broadcastResponse(targetConnectionId, errorResponse)
 			
 			// Log the parse error
 			if (logger) {
@@ -542,7 +559,7 @@ async function handleMCPRequestWithSSE(request: Request, env?: Env, connectionId
 					rateLimitResult.errorCode || -32000,
 					rateLimitResult.errorMessage || 'Rate limit exceeded',
 				)
-				broadcastResponse(connectionId, errorResponse)
+				broadcastResponse(targetConnectionId, errorResponse)
 
 				// Log the rate limit error
 				if (logger) {
@@ -579,9 +596,9 @@ async function handleMCPRequestWithSSE(request: Request, env?: Env, connectionId
 		}
 
 		// Broadcast JSON-RPC response via SSE
-		const broadcastSuccess = broadcastResponse(connectionId, response)
+		const broadcastSuccess = broadcastResponse(targetConnectionId, response)
 		if (!broadcastSuccess) {
-			console.error(`Failed to broadcast response to connection: ${connectionId}`)
+			console.error(`Failed to broadcast response to connection: ${targetConnectionId}`)
 		}
 
 		// Return 204 No Content for the POST request (response was sent via SSE)
@@ -590,7 +607,7 @@ async function handleMCPRequestWithSSE(request: Request, env?: Env, connectionId
 		// Internal server error
 		console.error('Internal error in SSE handler:', error)
 		const errorResponse = createError(null, ErrorCode.InternalError, 'Internal server error')
-		broadcastResponse(connectionId, errorResponse)
+		broadcastResponse(targetConnectionId, errorResponse)
 
 		// Log the internal error
 		if (logger) {
