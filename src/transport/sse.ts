@@ -42,7 +42,15 @@ export function createSSEResponse(): { response: Response; connectionId: string 
 
 	// Send the required endpoint event for MCP compatibility
 	// The endpoint event tells the client where to send JSON-RPC requests
-	sendSSEMessage(connection, 'endpoint', '/sse')
+	// Note: endpoint data should be sent as plain text, not JSON
+	try {
+		const message = `event: endpoint\ndata: /sse\n\n`
+		connection.writer.write(connection.encoder.encode(message))
+		connection.lastActivity = Date.now()
+	} catch (error) {
+		console.error('Failed to send endpoint event:', error)
+		connections.delete(connection.id)
+	}
 
 	// Set up keepalive
 	const keepaliveInterval = setInterval(() => {
