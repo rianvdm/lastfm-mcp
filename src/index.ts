@@ -7,7 +7,7 @@ import { parseMessage, createError, serializeResponse } from './protocol/parser'
 import { handleMethod, verifyAuthentication } from './protocol/handlers'
 import { createSessionToken } from './auth/jwt'
 import { ErrorCode, JSONRPCError } from './types/jsonrpc'
-import { createSSEResponse, getConnection, authenticateConnection } from './transport/sse'
+import { createSSEResponse, getConnection, authenticateConnection, broadcastResponse } from './transport/sse'
 import { LastfmAuth } from './auth/lastfm'
 import { KVLogger } from './utils/kvLogger'
 import { RateLimiter } from './utils/rateLimit'
@@ -404,6 +404,7 @@ function handleSSEConnection(): Response {
 /**
  * Handle MCP JSON-RPC request with SSE context for mcp-remote compatibility
  * This handles the case where mcp-remote makes POST requests to /sse without proper connection headers
+ * For SSE transport, responses are sent via the SSE connection rather than as HTTP responses
  */
 async function handleMCPRequestWithSSEContext(request: Request, env?: Env): Promise<Response> {
 	// Check if we already have a connection ID header
@@ -440,11 +441,170 @@ async function handleMCPRequestWithSSEContext(request: Request, env?: Env): Prom
 			body: request.body,
 		})
 
-		return handleMCPRequest(newRequest, env)
+		return handleMCPRequestWithSSE(newRequest, env, connectionId)
 	}
 
-	// If we have a connection ID, use the normal handler
-	return handleMCPRequest(request, env)
+	// If we have a connection ID, handle with SSE broadcasting
+	return handleMCPRequestWithSSE(request, env, connectionId)
+}
+
+/**
+ * Handle MCP JSON-RPC request with SSE broadcasting
+ * Processes the request and sends the response via SSE instead of returning an HTTP response
+ */
+async function handleMCPRequestWithSSE(request: Request, env?: Env, connectionId?: string): Promise<Response> {
+	// For SSE transport, we need to check if the connection exists
+	// If no connection exists, this could be an mcp-remote client without active SSE connection
+	if (!connectionId || !getConnection(connectionId)) {
+		console.log(`No SSE connection found for ID: ${connectionId}`)
+		// For mcp-remote clients without active SSE connections, fall back to HTTP response
+		return handleMCPRequest(request, env)
+	}
+
+	const startTime = Date.now()
+	let userId = 'anonymous'
+	let method = 'unknown'
+	let params: unknown = null
+
+	// Initialize utilities
+	const logger = env?.MCP_LOGS ? new KVLogger(env.MCP_LOGS) : null
+	const rateLimiter = env?.MCP_RL
+		? new RateLimiter(env.MCP_RL, {
+				requestsPerMinute: 60,
+				requestsPerHour: 1000,
+			})
+		: null
+
+	try {
+		// Parse request body
+		const body = await request.text()
+
+		// Handle empty body
+		if (!body) {
+			const errorResponse = createError(null, ErrorCode.InvalidRequest, 'Empty request body')
+			broadcastResponse(connectionId, errorResponse)
+			
+			// Log the error
+			if (logger) {
+				const latency = Date.now() - startTime
+				await logger.log(userId, method, params, {
+					status: 'error',
+					latency,
+					errorCode: ErrorCode.InvalidRequest,
+					errorMessage: 'Empty request body',
+				})
+			}
+
+			return new Response(null, { status: 204, headers: addCorsHeaders() })
+		}
+
+		// Parse JSON-RPC message
+		let jsonrpcRequest
+		try {
+			jsonrpcRequest = parseMessage(body)
+			method = jsonrpcRequest.method
+			params = jsonrpcRequest.params
+		} catch (error) {
+			// Parse error or invalid request
+			const jsonrpcError = error as JSONRPCError
+			const errorResponse = createError(null, jsonrpcError.code || ErrorCode.ParseError, jsonrpcError.message || 'Parse error')
+			broadcastResponse(connectionId, errorResponse)
+			
+			// Log the parse error
+			if (logger) {
+				const latency = Date.now() - startTime
+				await logger.log(userId, method, params, {
+					status: 'error',
+					latency,
+					errorCode: jsonrpcError.code || ErrorCode.ParseError,
+					errorMessage: jsonrpcError.message || 'Parse error',
+				})
+			}
+
+			return new Response(null, { status: 204, headers: addCorsHeaders() })
+		}
+
+		// Get user ID for rate limiting and logging
+		if (env?.JWT_SECRET) {
+			const session = await verifyAuthentication(request, env.JWT_SECRET)
+			if (session) {
+				userId = session.userId
+			}
+		}
+
+		// Apply rate limiting (skip for initialize method)
+		if (rateLimiter && method !== 'initialize' && method !== 'initialized') {
+			const rateLimitResult = await rateLimiter.checkLimit(userId)
+
+			if (!rateLimitResult.allowed) {
+				const errorResponse = createError(
+					jsonrpcRequest.id || null,
+					rateLimitResult.errorCode || -32000,
+					rateLimitResult.errorMessage || 'Rate limit exceeded',
+				)
+				broadcastResponse(connectionId, errorResponse)
+
+				// Log the rate limit error
+				if (logger) {
+					const latency = Date.now() - startTime
+					await logger.log(userId, method, params, {
+						status: 'error',
+						latency,
+						errorCode: rateLimitResult.errorCode || -32000,
+						errorMessage: rateLimitResult.errorMessage || 'Rate limit exceeded',
+					})
+				}
+
+				return new Response(null, { status: 204, headers: addCorsHeaders() })
+			}
+		}
+
+		// Handle the method
+		const response = await handleMethod(jsonrpcRequest, request, env?.JWT_SECRET, env)
+
+		// Calculate latency
+		const latency = Date.now() - startTime
+
+		// Log successful request
+		if (logger) {
+			await logger.log(userId, method, params, {
+				status: 'success',
+				latency,
+			})
+		}
+
+		// If no response (notification), return 204 No Content
+		if (!response) {
+			return new Response(null, { status: 204, headers: addCorsHeaders() })
+		}
+
+		// Broadcast JSON-RPC response via SSE
+		const broadcastSuccess = broadcastResponse(connectionId, response)
+		if (!broadcastSuccess) {
+			console.error(`Failed to broadcast response to connection: ${connectionId}`)
+		}
+
+		// Return 204 No Content for the POST request (response was sent via SSE)
+		return new Response(null, { status: 204, headers: addCorsHeaders() })
+	} catch (error) {
+		// Internal server error
+		console.error('Internal error in SSE handler:', error)
+		const errorResponse = createError(null, ErrorCode.InternalError, 'Internal server error')
+		broadcastResponse(connectionId, errorResponse)
+
+		// Log the internal error
+		if (logger) {
+			const latency = Date.now() - startTime
+			await logger.log(userId, method, params, {
+				status: 'error',
+				latency,
+				errorCode: ErrorCode.InternalError,
+				errorMessage: error instanceof Error ? error.message : 'Internal server error',
+			})
+		}
+
+		return new Response(null, { status: 204, headers: addCorsHeaders() })
+	}
 }
 
 /**
