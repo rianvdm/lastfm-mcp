@@ -1,6 +1,7 @@
 /**
  * Server-Sent Events (SSE) Transport for MCP
- * Manages bidirectional communication with clients and per-connection authentication
+ * Manages SSE connections for server-initiated messages (notifications, keepalives)
+ * Note: In Cloudflare Workers, request/response should use HTTP responses, not SSE broadcasting
  */
 
 import { JSONRPCResponse } from '../types/jsonrpc'
@@ -104,8 +105,19 @@ export function createSSEResponse(): { response: Response; connectionId: string 
 export function sendSSEMessage(connection: SSEConnection, event: string, data: unknown): void {
 	try {
 		const message = `event: ${event}\ndata: ${JSON.stringify(data)}\n\n`
-		connection.writer.write(connection.encoder.encode(message))
-		connection.lastActivity = Date.now()
+		// Make the write operation non-blocking to prevent Worker hangs
+		Promise.resolve().then(async () => {
+			try {
+				await connection.writer.write(connection.encoder.encode(message))
+				connection.lastActivity = Date.now()
+			} catch (error) {
+				console.error('Failed to write SSE message:', error)
+				connections.delete(connection.id)
+			}
+		}).catch(error => {
+			console.error('SSE write promise failed:', error)
+			connections.delete(connection.id)
+		})
 	} catch (error) {
 		console.error('Failed to send SSE message:', error)
 		connections.delete(connection.id)
@@ -114,15 +126,38 @@ export function sendSSEMessage(connection: SSEConnection, event: string, data: u
 
 /**
  * Broadcast a JSON-RPC response to a specific connection
+ * NOTE: This function is deprecated and should not be used in Cloudflare Workers
+ * due to cross-request context limitations. Use HTTP responses instead.
  */
 export function broadcastResponse(connectionId: string, response: JSONRPCResponse): boolean {
+	console.warn('broadcastResponse is deprecated - use HTTP responses instead')
 	const connection = connections.get(connectionId)
 	if (!connection) {
 		return false
 	}
 
-	sendSSEMessage(connection, 'message', response)
-	return true
+	// This will fail in Cloudflare Workers when called from different request contexts
+	// Keep for backward compatibility but log the issue
+	try {
+		const message = `event: message\ndata: ${JSON.stringify(response)}\n\n`
+		// Make the write operation non-blocking to prevent Worker hangs
+		Promise.resolve().then(async () => {
+			try {
+				await connection.writer.write(connection.encoder.encode(message))
+				connection.lastActivity = Date.now()
+			} catch (error) {
+				console.error('Failed to broadcast response (expected in Cloudflare Workers):', error)
+				connections.delete(connection.id)
+			}
+		}).catch(error => {
+			console.error('Failed to broadcast response (expected in Cloudflare Workers):', error)
+			connections.delete(connection.id)
+		})
+		return true
+	} catch (error) {
+		console.error('Failed to broadcast response (expected in Cloudflare Workers):', error)
+		return false
+	}
 }
 
 /**

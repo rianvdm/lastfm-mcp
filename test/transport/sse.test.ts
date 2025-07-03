@@ -27,7 +27,7 @@ describe('SSE Transport', () => {
 
 			expect(response).toBeInstanceOf(Response)
 			expect(response.headers.get('content-type')).toBe('text/event-stream')
-			expect(response.headers.get('cache-control')).toBe('no-cache')
+			expect(response.headers.get('cache-control')).toBe('no-cache, no-store, must-revalidate')
 			expect(connectionId).toMatch(/^test-uuid-/)
 		})
 
@@ -57,14 +57,23 @@ describe('SSE Transport', () => {
 	})
 
 	describe('sendSSEMessage', () => {
-		it('should send formatted SSE message', () => {
+		it('should send formatted SSE message', async () => {
 			const { connectionId } = createSSEResponse()
 			const connection = getConnection(connectionId)!
 
 			// Mock the writer
 			const writeSpy = vi.spyOn(connection.writer, 'write').mockResolvedValue()
 
+			// Wait for the initial endpoint event to be sent
+			await new Promise(resolve => setTimeout(resolve, 10))
+			
+			// Clear previous calls (from endpoint event)
+			writeSpy.mockClear()
+
 			sendSSEMessage(connection, 'test-event', { data: 'test' })
+
+			// Wait for the promise to resolve
+			await new Promise(resolve => setTimeout(resolve, 10))
 
 			expect(writeSpy).toHaveBeenCalled()
 			const call = writeSpy.mock.calls[0][0] as Uint8Array
@@ -72,7 +81,7 @@ describe('SSE Transport', () => {
 			expect(message).toBe('event: test-event\ndata: {"data":"test"}\n\n')
 		})
 
-		it('should update last activity timestamp', () => {
+		it('should update last activity timestamp', async () => {
 			const { connectionId } = createSSEResponse()
 			const connection = getConnection(connectionId)!
 			const initialActivity = connection.lastActivity
@@ -81,38 +90,83 @@ describe('SSE Transport', () => {
 			vi.spyOn(connection.writer, 'write').mockResolvedValue()
 
 			// Wait a bit to ensure timestamp changes
-			setTimeout(() => {
-				sendSSEMessage(connection, 'test', {})
-				expect(connection.lastActivity).toBeGreaterThan(initialActivity)
-			}, 10)
+			await new Promise(resolve => setTimeout(resolve, 10))
+			
+			sendSSEMessage(connection, 'test', {})
+			
+			// Wait for the promise to resolve
+			await new Promise(resolve => setTimeout(resolve, 10))
+			
+			expect(connection.lastActivity).toBeGreaterThan(initialActivity)
 		})
 	})
 
 	describe('broadcastResponse', () => {
-		it('should broadcast JSON-RPC response to connection', () => {
+		it('should warn about deprecated usage and attempt broadcast', async () => {
 			const { connectionId } = createSSEResponse()
 			const connection = getConnection(connectionId)!
 
 			// Mock the writer
 			const writeSpy = vi.spyOn(connection.writer, 'write').mockResolvedValue()
+			const consoleSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
+
+			// Wait for the initial endpoint event to be sent
+			await new Promise(resolve => setTimeout(resolve, 10))
+			
+			// Clear previous calls (from endpoint event)
+			writeSpy.mockClear()
 
 			const response = createResponse(1, { result: 'test' })
 			const success = broadcastResponse(connectionId, response)
 
+			expect(consoleSpy).toHaveBeenCalledWith('broadcastResponse is deprecated - use HTTP responses instead')
 			expect(success).toBe(true)
+			
+			// Wait for the promise to resolve
+			await new Promise(resolve => setTimeout(resolve, 10))
+			
 			expect(writeSpy).toHaveBeenCalled()
 
 			const call = writeSpy.mock.calls[0][0] as Uint8Array
 			const message = new TextDecoder().decode(call)
 			expect(message).toContain('event: message')
 			expect(message).toContain('"jsonrpc":"2.0"')
+
+			consoleSpy.mockRestore()
 		})
 
 		it('should return false for invalid connection ID', () => {
+			const consoleSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
+			
 			const response = createResponse(1, { result: 'test' })
 			const success = broadcastResponse('invalid-id', response)
 
 			expect(success).toBe(false)
+			consoleSpy.mockRestore()
+		})
+
+		it('should handle write errors gracefully', async () => {
+			const { connectionId } = createSSEResponse()
+			const connection = getConnection(connectionId)!
+
+			// Mock the writer to throw an error
+			const writeSpy = vi.spyOn(connection.writer, 'write').mockRejectedValue(new Error('Write failed'))
+			const consoleSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
+			const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+
+			const response = createResponse(1, { result: 'test' })
+			const success = broadcastResponse(connectionId, response)
+
+			// Initially returns true, but error handling happens asynchronously
+			expect(success).toBe(true)
+			
+			// Wait for the error handling to complete
+			await new Promise(resolve => setTimeout(resolve, 20))
+			
+			expect(errorSpy).toHaveBeenCalledWith('Failed to broadcast response (expected in Cloudflare Workers):', expect.any(Error))
+
+			consoleSpy.mockRestore()
+			errorSpy.mockRestore()
 		})
 	})
 

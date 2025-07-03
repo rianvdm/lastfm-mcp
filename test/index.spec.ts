@@ -147,7 +147,7 @@ describe('Last.fm MCP Server', () => {
 
 			expect(response.status).toBe(200)
 			expect(response.headers.get('content-type')).toBe('text/event-stream')
-			expect(response.headers.get('cache-control')).toBe('no-cache')
+			expect(response.headers.get('cache-control')).toBe('no-cache, no-store, must-revalidate')
 		})
 
 		it('should accept POST requests to /sse for JSON-RPC', async () => {
