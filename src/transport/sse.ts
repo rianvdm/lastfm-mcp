@@ -40,30 +40,33 @@ export function createSSEResponse(): { response: Response; connectionId: string 
 	}
 	connections.set(connectionId, connection)
 
-	// Send the required endpoint event for MCP compatibility
-	// The endpoint event tells the client where to send JSON-RPC requests
-	// Note: endpoint data should be sent as plain text, not JSON
-	try {
-		const message = `event: endpoint\ndata: /sse\n\n`
-		connection.writer.write(connection.encoder.encode(message))
-		connection.lastActivity = Date.now()
-	} catch (error) {
-		console.error('Failed to send endpoint event:', error)
-		connections.delete(connection.id)
-	}
+	// Send the required endpoint event for MCP compatibility after the response is established
+	// Defer the initial write to prevent stream hanging issues
+	Promise.resolve().then(() => {
+		try {
+			const message = `event: endpoint\ndata: /sse\n\n`
+			connection.writer.write(connection.encoder.encode(message))
+			connection.lastActivity = Date.now()
+		} catch (error) {
+			console.error('Failed to send endpoint event:', error)
+			connections.delete(connection.id)
+		}
+	})
 
 	// Set up keepalive
 	const keepaliveInterval = setInterval(() => {
-		if (!connections.has(connectionId)) {
+		const currentConnection = connections.get(connectionId)
+		if (!currentConnection) {
 			clearInterval(keepaliveInterval)
 			return
 		}
 
 		// Send keepalive comment
 		try {
-			writer.write(encoder.encode(':keepalive\n\n'))
-			connection.lastActivity = Date.now()
-		} catch {
+			currentConnection.writer.write(currentConnection.encoder.encode(':keepalive\n\n'))
+			currentConnection.lastActivity = Date.now()
+		} catch (error) {
+			console.log(`Keepalive failed for connection ${connectionId}:`, error)
 			// Connection closed
 			connections.delete(connectionId)
 			clearInterval(keepaliveInterval)
@@ -84,10 +87,11 @@ export function createSSEResponse(): { response: Response; connectionId: string 
 	const response = new Response(readable, {
 		headers: {
 			'Content-Type': 'text/event-stream',
-			'Cache-Control': 'no-cache',
-			Connection: 'keep-alive',
+			'Cache-Control': 'no-cache, no-store, must-revalidate',
+			'Connection': 'keep-alive',
 			'Access-Control-Allow-Origin': '*',
 			'X-Connection-ID': connectionId, // Include connection ID in headers
+			'X-Accel-Buffering': 'no', // Prevent proxy buffering
 		},
 	})
 
