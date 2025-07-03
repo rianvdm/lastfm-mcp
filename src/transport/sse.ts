@@ -203,7 +203,7 @@ export function getActiveConnections(): Array<{ id: string; isAuthenticated: boo
 export function cleanupConnections(): void {
 	const now = Date.now()
 	const INACTIVE_TIMEOUT = 30 * 60 * 1000 // 30 minutes
-	const MAX_AGE = 24 * 60 * 60 * 1000 // 24 hours
+	const MAX_AGE = 7 * 24 * 60 * 60 * 1000 // 7 days
 
 	for (const [connectionId, connection] of connections) {
 		const inactive = now - connection.lastActivity > INACTIVE_TIMEOUT

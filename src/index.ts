@@ -416,10 +416,10 @@ async function handleMCPRequestWithSSEContext(request: Request, env?: Env): Prom
 		// This ensures the same client gets the same connection ID across requests
 		const clientIP = request.headers.get('CF-Connecting-IP') || request.headers.get('X-Forwarded-For') || 'unknown'
 		const userAgent = request.headers.get('User-Agent') || 'unknown'
-		// Use daily timestamp to ensure connection ID is stable for 24 hours
-		const timestamp = Math.floor(Date.now() / (1000 * 60 * 60 * 24)) // Changes every 24 hours
+		// Use weekly timestamp to ensure connection ID is stable for 7 days
+		const timestamp = Math.floor(Date.now() / (1000 * 60 * 60 * 24 * 7)) // Changes every 7 days
 
-		// Create a hash-based connection ID that's consistent for the same client/day
+		// Create a hash-based connection ID that's consistent for the same client/week
 		const encoder = new TextEncoder()
 		const data = encoder.encode(`${clientIP}-${userAgent}-${timestamp}`)
 		const hashBuffer = await crypto.subtle.digest('SHA-256', data)
