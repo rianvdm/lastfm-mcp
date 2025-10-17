@@ -84,19 +84,60 @@ export async function verifyAuthentication(request: Request, jwtSecret: string):
 }
 
 /**
- * Get connection-specific authentication session
+ * Get session based on session ID or connection ID
  */
-async function getConnectionSession(request: Request, jwtSecret: string, env?: Env): Promise<SessionPayload | null> {
+async function getConnectionSession(request: Request, jwtSecret: string, env?: Env, sessionId?: string): Promise<SessionPayload | null> {
 	// First try standard authentication via cookie
 	const cookieSession = await verifyAuthentication(request, jwtSecret)
 	if (cookieSession) {
 		return cookieSession
 	}
 
-	// Try connection-specific authentication only if we have a connection ID and KV storage
+	// Try session ID first (modern Streamable HTTP approach)
+	if (sessionId && env?.MCP_SESSIONS) {
+		try {
+			const sessionDataStr = await env.MCP_SESSIONS.get(`session:${sessionId}`)
+			if (sessionDataStr) {
+				const sessionData = JSON.parse(sessionDataStr)
+
+				console.log('Retrieved session data for session ID:', sessionId, {
+					hasUserId: !!sessionData.userId,
+					hasUsername: !!sessionData.username,
+					hasSessionKey: !!sessionData.sessionKey,
+					userId: sessionData.userId,
+					username: sessionData.username,
+				})
+
+				// Verify the stored session is still valid
+				if (!sessionData.expiresAt || new Date(sessionData.expiresAt) <= new Date()) {
+					console.log('Session has expired')
+					return null
+				}
+
+				// Check if session data is complete
+				if (!sessionData.username || !sessionData.sessionKey) {
+					console.log('Session data incomplete, missing username or sessionKey')
+					return null
+				}
+
+				// Return session payload
+				return {
+					userId: sessionData.userId,
+					sessionKey: sessionData.sessionKey,
+					username: sessionData.username,
+					iat: Math.floor(Date.now() / 1000),
+					exp: Math.floor(new Date(sessionData.expiresAt).getTime() / 1000),
+				}
+			}
+		} catch (error) {
+			console.error('Error retrieving session by session ID:', error)
+		}
+	}
+
+	// Fall back to legacy connection ID approach
 	const connectionId = request.headers.get('X-Connection-ID')
 	if (!connectionId || !env?.MCP_SESSIONS) {
-		// No connection ID or KV storage, but cookie auth failed, so return null
+		// No connection ID or KV storage, and no session ID, so return null
 		return null
 	}
 
@@ -156,17 +197,24 @@ async function getConnectionSession(request: Request, jwtSecret: string, env?: E
 /**
  * Generate authentication instructions for unauthenticated requests
  */
-function generateAuthInstructions(request: Request): string {
-	const connectionId = request.headers.get('X-Connection-ID')
-	const baseUrl = 'https://lastfm-mcp-prod.rian-db8.workers.dev'
+function generateAuthInstructions(request: Request, sessionId?: string): string {
+	// Extract base URL from the request
+	const url = new URL(request.url)
+	const baseUrl = `${url.protocol}//${url.host}`
 
-	if (connectionId) {
-		// Connection-specific auth instructions
-		return `visit ${baseUrl}/login?connection_id=${connectionId} to authenticate with your Last.fm account`
-	} else {
-		// Generic auth instructions
-		return `visit ${baseUrl}/login to authenticate with Last.fm`
+	// Prefer session_id (modern) over connection_id (legacy)
+	if (sessionId) {
+		return `visit ${baseUrl}/login?session_id=${sessionId} to authenticate with your Last.fm account`
 	}
+
+	const connectionId = request.headers.get('X-Connection-ID') || request.headers.get('Mcp-Session-Id')
+	if (connectionId) {
+		// Legacy connection-specific auth instructions
+		return `visit ${baseUrl}/login?session_id=${connectionId} to authenticate with your Last.fm account`
+	}
+
+	// Generic auth instructions
+	return `visit ${baseUrl}/login to authenticate with Last.fm`
 }
 
 /**
@@ -503,7 +551,7 @@ interface ToolCallResult {
 /**
  * Handle non-authenticated tools
  */
-async function handleToolsCall(params: unknown, httpRequest?: Request, env?: Env): Promise<ToolCallResult> {
+async function handleToolsCall(params: unknown, httpRequest?: Request, env?: Env, sessionId?: string): Promise<ToolCallResult> {
 	// Validate params
 	if (!isToolsCallParams(params)) {
 		throw new Error('Invalid tools/call params - name and arguments are required')
@@ -554,10 +602,10 @@ async function handleToolsCall(params: unknown, httpRequest?: Request, env?: Env
 			}
 		}
 		case 'server_info': {
-			// Provide connection-specific authentication URL if available
-			const connectionId = httpRequest?.headers.get('X-Connection-ID')
-			const baseUrl = 'https://lastfm-mcp-prod.rian-db8.workers.dev'
-			const authUrl = connectionId ? `${baseUrl}/login?connection_id=${connectionId}` : `${baseUrl}/login`
+			// Provide session-specific authentication URL if available
+			const url = httpRequest ? new URL(httpRequest.url) : null
+			const baseUrl = url ? `${url.protocol}//${url.host}` : 'https://lastfm-mcp-prod.rian-db8.workers.dev'
+			const authUrl = sessionId ? `${baseUrl}/login?session_id=${sessionId}` : `${baseUrl}/login`
 
 			return {
 				content: [
@@ -569,17 +617,17 @@ async function handleToolsCall(params: unknown, httpRequest?: Request, env?: Env
 			}
 		}
 		case 'lastfm_auth_status': {
-			// Provide unauthenticated status with connection-specific instructions
-			const connectionId = httpRequest?.headers.get('X-Connection-ID')
-			const connectionInfo = connectionId ? `\n🔗 **Connection ID:** ${connectionId}` : ''
-			const baseUrl = 'https://lastfm-mcp-prod.rian-db8.workers.dev'
-			const loginUrl = connectionId ? `${baseUrl}/login?connection_id=${connectionId}` : `${baseUrl}/login`
+			// Provide unauthenticated status with session-specific instructions
+			const sessionInfo = sessionId ? `\n🔗 **Session ID:** ${sessionId}` : ''
+			const url = httpRequest ? new URL(httpRequest.url) : null
+			const baseUrl = url ? `${url.protocol}//${url.host}` : 'https://lastfm-mcp-prod.rian-db8.workers.dev'
+			const loginUrl = sessionId ? `${baseUrl}/login?session_id=${sessionId}` : `${baseUrl}/login`
 
 			return {
 				content: [
 					{
 						type: 'text',
-						text: `🔐 **Authentication Status: Not Authenticated**${connectionInfo}
+						text: `🔐 **Authentication Status: Not Authenticated**${sessionInfo}
 
 You are not currently authenticated with Last.fm. To access your personal listening data, you need to authenticate first.
 
@@ -1460,7 +1508,7 @@ function isPromptsListParams(params: unknown): params is PromptsListParams {
 /**
  * Main method router
  */
-export async function handleMethod(request: JSONRPCRequest, httpRequest?: Request, jwtSecret?: string, env?: Env) {
+export async function handleMethod(request: JSONRPCRequest, httpRequest?: Request, jwtSecret?: string, env?: Env, sessionId?: string) {
 	// Validate JSON-RPC message structure
 	try {
 		validateJSONRPCMessage(request)
@@ -1518,7 +1566,7 @@ export async function handleMethod(request: JSONRPCRequest, httpRequest?: Reques
 
 			if (dualHandlerTools.includes(toolName) && httpRequest && jwtSecret) {
 				// Check if user is authenticated first
-				const session = await getConnectionSession(httpRequest, jwtSecret, env)
+				const session = await getConnectionSession(httpRequest, jwtSecret, env, sessionId)
 
 				if (session) {
 					// User is authenticated, use authenticated handler
@@ -1535,7 +1583,7 @@ export async function handleMethod(request: JSONRPCRequest, httpRequest?: Reques
 
 			try {
 				// Try non-authenticated tools
-				const result = await handleToolsCall(params, httpRequest, env)
+				const result = await handleToolsCall(params, httpRequest, env, sessionId)
 				return hasId(request) ? createResponse(id!, result) : null
 			} catch (error) {
 				// If it's an unknown tool error, it might be an authenticated tool
@@ -1549,11 +1597,11 @@ export async function handleMethod(request: JSONRPCRequest, httpRequest?: Reques
 					}
 
 					console.log('Verifying authentication...')
-					const session = await getConnectionSession(httpRequest, jwtSecret, env)
+					const session = await getConnectionSession(httpRequest, jwtSecret, env, sessionId)
 					console.log('Session verification result:', session ? 'SUCCESS' : 'FAILED')
 
 					if (!session) {
-						const authInstructions = generateAuthInstructions(httpRequest)
+						const authInstructions = generateAuthInstructions(httpRequest, sessionId)
 						return hasId(request)
 							? createError(
 									id!,
@@ -1606,11 +1654,11 @@ export async function handleMethod(request: JSONRPCRequest, httpRequest?: Reques
 		return null
 	}
 
-	const session = await getConnectionSession(httpRequest, jwtSecret, env)
+	const session = await getConnectionSession(httpRequest, jwtSecret, env, sessionId)
 
 	if (!session) {
 		if (hasId(request)) {
-			const authInstructions = generateAuthInstructions(httpRequest)
+			const authInstructions = generateAuthInstructions(httpRequest, sessionId)
 			return createError(
 				id!,
 				MCPErrorCode.Unauthorized,

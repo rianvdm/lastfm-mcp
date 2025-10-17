@@ -27,7 +27,8 @@ function addCorsHeaders(headers: HeadersInit = {}): Headers {
 	const corsHeaders = new Headers(headers)
 	corsHeaders.set('Access-Control-Allow-Origin', '*')
 	corsHeaders.set('Access-Control-Allow-Methods', 'GET, POST, OPTIONS')
-	corsHeaders.set('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Connection-ID, Cookie')
+	corsHeaders.set('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Connection-ID, Mcp-Session-Id, Cookie')
+	corsHeaders.set('Access-Control-Expose-Headers', 'Mcp-Session-Id')
 	return corsHeaders
 }
 
@@ -42,7 +43,8 @@ export default {
 				headers: {
 					'Access-Control-Allow-Origin': '*',
 					'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
-					'Access-Control-Allow-Headers': 'Content-Type, Authorization, X-Connection-ID, Cookie',
+					'Access-Control-Allow-Headers': 'Content-Type, Authorization, X-Connection-ID, Mcp-Session-Id, Cookie',
+					'Access-Control-Expose-Headers': 'Mcp-Session-Id',
 					'Access-Control-Max-Age': '86400',
 				},
 			})
@@ -239,17 +241,17 @@ async function handleLogin(request: Request, env: Env): Promise<Response> {
 
 		// Get callback URL based on the current request URL
 		const url = new URL(request.url)
-		const connectionId = url.searchParams.get('connection_id')
-		const callbackUrl = `${url.protocol}//${url.host}/callback${connectionId ? `?connection_id=${connectionId}` : ''}`
+		const sessionId = url.searchParams.get('session_id')
+		const callbackUrl = `${url.protocol}//${url.host}/callback${sessionId ? `?session_id=${sessionId}` : ''}`
 
-		console.log('Redirecting to Last.fm authentication...', { connectionId })
+		console.log('Redirecting to Last.fm authentication...', { sessionId })
 
-		// Store connection ID temporarily for callback
-		if (connectionId) {
+		// Store session ID temporarily for callback
+		if (sessionId) {
 			await env.MCP_SESSIONS.put(
-				`auth-connection:${connectionId}`,
+				`auth-pending:${sessionId}`,
 				JSON.stringify({
-					connectionId: connectionId,
+					sessionId: sessionId,
 					timestamp: Date.now(),
 				}),
 				{
@@ -283,7 +285,7 @@ async function handleCallback(request: Request, env: Env): Promise<Response> {
 	try {
 		const url = new URL(request.url)
 		const token = url.searchParams.get('token')
-		const connectionId = url.searchParams.get('connection_id')
+		const sessionId = url.searchParams.get('session_id')
 
 		if (!token) {
 			return new Response('Missing authentication token from Last.fm', { status: 400 })
@@ -309,22 +311,8 @@ async function handleCallback(request: Request, env: Env): Promise<Response> {
 			168, // expires in 7 days (168 hours)
 		)
 
-		// Determine final connection ID
-		let finalConnectionId = connectionId || 'unknown'
-
-		// Try to retrieve stored connection ID if not provided
-		if (!connectionId) {
-			// Look for any stored connection for this session
-			// This is a fallback for cases where connection ID isn't preserved
-			const storedConnectionData = await env.MCP_SESSIONS.get(`auth-connection:last`)
-			if (storedConnectionData) {
-				const data = JSON.parse(storedConnectionData)
-				finalConnectionId = data.connectionId || 'unknown'
-			}
-		}
-
-		// Store session in KV with connection-specific key
-		if (env.MCP_SESSIONS && finalConnectionId !== 'unknown') {
+		// Store session in KV with session-specific key
+		if (env.MCP_SESSIONS && sessionId) {
 			try {
 				const sessionData = {
 					token: sessionToken,
@@ -333,11 +321,11 @@ async function handleCallback(request: Request, env: Env): Promise<Response> {
 					username,
 					timestamp: Date.now(),
 					expiresAt: Date.now() + 7 * 24 * 60 * 60 * 1000, // 7 days
-					connectionId: finalConnectionId,
+					sessionId: sessionId,
 				}
 
 				// Debug log what we're storing
-				console.log('Storing session data for connection:', finalConnectionId, {
+				console.log('Storing session data for session ID:', sessionId, {
 					hasUserId: !!sessionData.userId,
 					hasUsername: !!sessionData.username,
 					hasSessionKey: !!sessionData.sessionKey,
@@ -346,18 +334,12 @@ async function handleCallback(request: Request, env: Env): Promise<Response> {
 					sessionKey: sessionData.sessionKey ? 'present' : 'missing',
 				})
 
-				// Store with connection-specific key
-				await env.MCP_SESSIONS.put(`session:${finalConnectionId}`, JSON.stringify(sessionData), {
+				// Store with session-specific key
+				await env.MCP_SESSIONS.put(`session:${sessionId}`, JSON.stringify(sessionData), {
 					expirationTtl: 7 * 24 * 60 * 60, // 7 days to match JWT expiration
 				})
 
-				// Mark the SSE connection as authenticated (only for non-mcp-remote connections)
-				// mcp-remote connections don't have SSE connections, they use HTTP POST
-				if (!finalConnectionId.startsWith('mcp-remote-')) {
-					authenticateConnection(finalConnectionId, username)
-				}
-
-				console.log(`Last.fm session stored for connection ${finalConnectionId}, user: ${username}`)
+				console.log(`Last.fm session stored for session ${sessionId}, user: ${username}`)
 			} catch (error) {
 				console.warn('Could not save session to KV:', error)
 			}
@@ -372,10 +354,9 @@ async function handleCallback(request: Request, env: Env): Promise<Response> {
 			'Max-Age=604800', // 7 days in seconds (7 * 24 * 60 * 60)
 		].join('; ')
 
-		const responseMessage =
-			finalConnectionId !== 'unknown'
-				? `Authentication successful! Your Last.fm account (${username}) is now connected to your MCP session.`
-				: `Authentication successful! You can now use the MCP server to access your Last.fm listening data for ${username}.`
+		const responseMessage = sessionId
+			? `Authentication successful! Your Last.fm account (${username}) is now connected to your MCP session.`
+			: `Authentication successful! You can now use the MCP server to access your Last.fm listening data for ${username}.`
 
 		return new Response(responseMessage, {
 			status: 200,
@@ -466,12 +447,16 @@ async function handleMCPRequest(request: Request, env?: Env): Promise<Response> 
 		: null
 
 	try {
-		// Check for connection ID header (for SSE-connected clients)
-		const connectionId = request.headers.get('X-Connection-ID')
-		if (connectionId) {
-			const connection = getConnection(connectionId)
+		// Get session ID from Mcp-Session-Id header (primary) or X-Connection-ID (legacy)
+		let sessionId = request.headers.get('Mcp-Session-Id')
+		const legacyConnectionId = request.headers.get('X-Connection-ID')
+
+		// Use connection ID as fallback for backwards compatibility
+		if (!sessionId && legacyConnectionId) {
+			sessionId = legacyConnectionId
+			const connection = getConnection(legacyConnectionId)
 			if (!connection) {
-				console.warn(`Invalid connection ID: ${connectionId}`)
+				console.warn(`Invalid connection ID: ${legacyConnectionId}`)
 			}
 		}
 
@@ -565,8 +550,14 @@ async function handleMCPRequest(request: Request, env?: Env): Promise<Response> 
 			}
 		}
 
+		// Generate new session ID for initialize requests if none exists
+		if (method === 'initialize' && !sessionId) {
+			sessionId = crypto.randomUUID()
+			console.log(`Generated new session ID for initialize: ${sessionId}`)
+		}
+
 		// Handle the method
-		const response = await handleMethod(jsonrpcRequest, request, env?.JWT_SECRET, env)
+		const response = await handleMethod(jsonrpcRequest, request, env?.JWT_SECRET, env, sessionId)
 
 		// Calculate latency
 		const latency = Date.now() - startTime
@@ -579,17 +570,23 @@ async function handleMCPRequest(request: Request, env?: Env): Promise<Response> 
 			})
 		}
 
+		// Prepare response headers with session ID
+		const responseHeaders: HeadersInit = { 'Content-Type': 'application/json' }
+		if (sessionId) {
+			responseHeaders['Mcp-Session-Id'] = sessionId
+		}
+
 		// If no response (notification), return 204 No Content
 		if (!response) {
 			return new Response(null, {
 				status: 204,
-				headers: addCorsHeaders(),
+				headers: addCorsHeaders(sessionId ? { 'Mcp-Session-Id': sessionId } : {}),
 			})
 		}
 
-		// Return JSON-RPC response
+		// Return JSON-RPC response with session ID header
 		return new Response(serializeResponse(response), {
-			headers: addCorsHeaders({ 'Content-Type': 'application/json' }),
+			headers: addCorsHeaders(responseHeaders),
 		})
 	} catch (error) {
 		// Internal server error
