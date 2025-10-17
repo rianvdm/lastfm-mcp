@@ -465,15 +465,18 @@ describe('MCP Client Integration Tests', () => {
 			// Try to access protected resource without authentication
 			const result = await client.readResource('lastfm://user/testuser/profile')
 
+			// Verify error structure and message components (URL will be dynamic based on environment)
 			expect(result).toMatchObject({
 				jsonrpc: '2.0',
 				id: 2,
 				error: {
 					code: -32001, // Unauthorized
-					message:
-						'Authentication required. Please use the "lastfm_auth_status" tool for detailed authentication instructions, or visit https://lastfm-mcp-prod.rian-db8.workers.dev/login to authenticate with Last.fm',
 				},
 			})
+			// Check that error message contains the required components
+			expect(result.error.message).toContain('Authentication required')
+			expect(result.error.message).toContain('lastfm_auth_status')
+			expect(result.error.message).toContain('/login')
 		})
 
 		it('should allow authenticated access to all features', async () => {
