@@ -24,9 +24,36 @@ A powerful, production-ready server that bridges AI assistants with Last.fm's co
 
 ## 🚀 Quick Start
 
+### Using with Claude Code (Recommended)
+
+The easiest way to get started:
+
+```bash
+claude mcp add --transport http lastfm https://lastfm-mcp-prod.rian-db8.workers.dev
+```
+
+That's it! Claude Code now supports HTTP transport natively, no additional tools needed.
+
 ### Using with Claude Desktop
 
+**Modern Method (HTTP Transport):**
+
 Add this configuration to your Claude Desktop settings (Settings / Developer / Edit config):
+
+```json
+{
+	"mcpServers": {
+		"lastfm": {
+			"command": "npx",
+			"args": ["-y", "@modelcontextprotocol/server-everything", "https://lastfm-mcp-prod.rian-db8.workers.dev"]
+		}
+	}
+}
+```
+
+**Legacy Method (via mcp-remote):**
+
+If you prefer the older approach or encounter issues:
 
 ```json
 {
@@ -39,7 +66,7 @@ Add this configuration to your Claude Desktop settings (Settings / Developer / E
 }
 ```
 
-> **💡 Tip**: This uses the hosted server via `mcp-remote`, which works reliably across all platforms and doesn't require local Node.js setup.
+> **💡 Note**: The HTTP transport method is recommended as it's simpler and works directly without proxying.
 
 #### 🐛 Platform-Specific Troubleshooting
 
@@ -189,7 +216,19 @@ These prompts generate contextual messages that guide AI assistants to provide m
    npm run dev
    ```
 
-4. **Test locally**:
+4. **Connect with Claude Code** (for interactive testing):
+
+   ```bash
+   claude mcp add --transport http lastfm-local http://localhost:8787
+   ```
+
+   Or **test with MCP Inspector**:
+
+   ```bash
+   npx @modelcontextprotocol/inspector http://localhost:8787
+   ```
+
+5. **Test with curl** (for basic API testing):
    ```bash
    curl -X POST http://localhost:8787 \
      -H "Content-Type: application/json" \
