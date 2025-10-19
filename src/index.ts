@@ -74,26 +74,15 @@ export default {
 				})
 
 					if (acceptHeader.includes('text/event-stream') && sessionId) {
-						// MCP client opening SSE stream - return event stream that stays open
+						// MCP client opening SSE stream - return passive event stream for notifications
 						const { readable, writable } = new TransformStream()
 						const writer = writable.getWriter()
 						const encoder = new TextEncoder()
 
-						// Provide reconnection hint to clients
-						writer.write(encoder.encode('retry: 10000\n\n')).catch(() => {})
+						console.log('SSE: Opening stream for session', sessionId)
 
-						const endpointPayload = {
-							endpoint: '/',
-							sessionId,
-							connectionId: sessionId,
-							requiresAuth: true,
-							authUrl: `/login?session_id=${sessionId}`,
-						}
-						const endpointEvent = `event: endpoint\ndata: ${JSON.stringify(endpointPayload)}\n\n`
-						writer.write(encoder.encode(endpointEvent)).catch(() => {})
-						console.log('SSE: sent endpoint event', endpointPayload)
-
-						writer.write(encoder.encode(': MCP SSE stream connected\n\n')).catch(() => {})
+						// Send initial comment to establish connection
+						writer.write(encoder.encode(': SSE stream established\n\n')).catch(() => {})
 
 						// Keep the stream alive with periodic heartbeats
 						const heartbeatInterval = setInterval(() => {
@@ -110,7 +99,6 @@ export default {
 								'Cache-Control': 'no-cache, no-transform',
 								'Connection': 'keep-alive',
 								'X-Accel-Buffering': 'no',
-								'Vary': 'Accept',
 								'Access-Control-Allow-Origin': '*',
 								'Mcp-Session-Id': sessionId,
 								...(protocolHeader ? { 'Mcp-Protocol-Version': protocolHeader } : {}),
