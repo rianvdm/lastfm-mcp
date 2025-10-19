@@ -53,67 +53,37 @@ export default {
 		// Handle different endpoints
 		switch (url.pathname) {
 			case '/':
-				// Main endpoint - serves marketing page for GET, JSON-RPC for POST, SSE stream for MCP clients
+				// Main endpoint - Streamable HTTP transport
 				if (request.method === 'POST') {
+					// Handle all JSON-RPC messages via POST
 					return handleMCPRequest(request, env)
 				} else if (request.method === 'DELETE') {
+					// Session termination
 					return new Response(null, { status: 204, headers: addCorsHeaders() })
 				} else if (request.method === 'GET') {
-					// Check if this is an MCP client requesting an SSE stream (Streamable HTTP transport)
+					// Check if this is an MCP client requesting SSE or regular browser
 					const acceptHeader = request.headers.get('Accept') || ''
 					const sessionId = request.headers.get('Mcp-Session-Id')
 
-
-				// Debug logging for GET requests
-				console.log("GET / request:", {
-					acceptHeader,
-					sessionId,
-					hasTextEventStream: acceptHeader.includes("text/event-stream"),
-					hasSessionId: !!sessionId,
-					allHeaders: Object.fromEntries(request.headers.entries()),
-				})
-
+					// MCP clients with session ID requesting SSE get 405 - we don't need server-initiated messages
 					if (acceptHeader.includes('text/event-stream') && sessionId) {
-						// MCP client opening SSE stream - return passive event stream for notifications
-						const { readable, writable } = new TransformStream()
-						const writer = writable.getWriter()
-						const encoder = new TextEncoder()
-
-						console.log('SSE: Opening stream for session', sessionId)
-
-						// Send initial comment to establish connection
-						writer.write(encoder.encode(': SSE stream established\n\n')).catch(() => {})
-
-						// Keep the stream alive with periodic heartbeats
-						const heartbeatInterval = setInterval(() => {
-							writer.write(encoder.encode(': heartbeat\n\n')).catch(() => {
-								clearInterval(heartbeatInterval)
-							})
-						}, 30000) // Every 30 seconds
-
-						const protocolHeader = request.headers.get('Mcp-Protocol-Version') || undefined
-						return new Response(readable, {
-							status: 200,
-							headers: {
-								'Content-Type': 'text/event-stream',
-								'Cache-Control': 'no-cache, no-transform',
-								'Connection': 'keep-alive',
-								'X-Accel-Buffering': 'no',
-								'Access-Control-Allow-Origin': '*',
-								'Mcp-Session-Id': sessionId,
-								...(protocolHeader ? { 'Mcp-Protocol-Version': protocolHeader } : {}),
-							},
-						})
-					} else {
-						// Regular browser request - return marketing page
-						return new Response(MARKETING_PAGE_HTML, {
-							status: 200,
-							headers: {
-								'Content-Type': 'text/html',
-								'Cache-Control': 'public, max-age=3600', // Cache for 1 hour
-							},
+						console.log('GET / with SSE Accept - returning 405 (not supported for this server)')
+						return new Response('SSE not required for this server', {
+							status: 405,
+							headers: addCorsHeaders({
+								'Allow': 'POST, DELETE',
+							}),
 						})
 					}
+					
+					// Regular browser GET request - return marketing page
+					return new Response(MARKETING_PAGE_HTML, {
+						status: 200,
+						headers: {
+							'Content-Type': 'text/html',
+							'Cache-Control': 'public, max-age=3600',
+						},
+					})
 				} else {
 					return new Response('Method not allowed', { status: 405 })
 				}
