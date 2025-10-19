@@ -224,9 +224,14 @@ export function handleInitialize(params: unknown): InitializeResult {
 	// Validate params using comprehensive validation
 	validateInitializeParams(params)
 
-	// Check protocol version compatibility
-	// For now, we accept any version but return our version
-	console.log(`Client protocol version: ${params.protocolVersion}`)
+	// Version negotiation: support both 2024-11-05 and 2025-06-18
+	// Per MCP spec: if we support the client's version, we MUST respond with that version
+	const clientVersion = params.protocolVersion
+	const supportedVersions = ['2024-11-05', '2025-06-18']
+	const negotiatedVersion = supportedVersions.includes(clientVersion) ? clientVersion : PROTOCOL_VERSION
+
+	console.log(`Client protocol version: ${clientVersion}`)
+	console.log(`Negotiated protocol version: ${negotiatedVersion}`)
 	console.log(`Client info: ${params.clientInfo.name} v${params.clientInfo.version}`)
 
 	// Mark as initialized in both places (idempotent operation)
@@ -234,7 +239,7 @@ export function handleInitialize(params: unknown): InitializeResult {
 
 	// Return server capabilities
 	const result = {
-		protocolVersion: PROTOCOL_VERSION,
+		protocolVersion: negotiatedVersion,
 		capabilities: DEFAULT_CAPABILITIES,
 		serverInfo: SERVER_INFO,
 	}
