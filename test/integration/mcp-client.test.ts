@@ -4,6 +4,7 @@ import type { Env } from '../../src/types/env'
 import { createSessionToken } from '../../src/auth/jwt'
 import { resetProtocolState } from '../../src/protocol/validation'
 import { resetInitialization } from '../../src/protocol/handlers'
+import { PROTOCOL_VERSION } from '../../src/types/mcp'
 
 // Mock KV namespaces
 const mockMCP_LOGS = {
@@ -183,17 +184,15 @@ class MockMCPClient {
 	}
 
 	async authenticate(): Promise<void> {
-		// Create a mock session token
-		const sessionPayload = {
-			userId: 'test-user-123',
-			username: 'testuser',
-			accessToken: 'test-access-token',
-			accessTokenSecret: 'test-access-secret',
-			iat: Math.floor(Date.now() / 1000),
-			exp: Math.floor(Date.now() / 1000) + 3600,
-		}
-
-		const sessionToken = await createSessionToken(sessionPayload, mockEnv.JWT_SECRET)
+		// Create a mock session token matching SessionPayload requirements
+		const sessionToken = await createSessionToken(
+			{
+				userId: 'test-user-123',
+				sessionKey: 'test-session-key',
+				username: 'testuser',
+			},
+			mockEnv.JWT_SECRET,
+		)
 		this.sessionCookie = `session=${sessionToken}`
 	}
 
@@ -438,7 +437,7 @@ describe('MCP Client Integration Tests', () => {
 				jsonrpc: '2.0',
 				id: 1,
 				result: {
-					protocolVersion: '2024-11-05',
+					protocolVersion: PROTOCOL_VERSION,
 					capabilities: {
 						resources: { subscribe: false, listChanged: true },
 						tools: { listChanged: true },

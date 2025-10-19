@@ -1,6 +1,7 @@
 import { env, createExecutionContext, waitOnExecutionContext } from 'cloudflare:test'
 import { describe, it, expect } from 'vitest'
 import worker from '../src'
+import { PROTOCOL_VERSION } from '../src/types/mcp'
 
 describe('Last.fm MCP Server', () => {
 	it('should handle initialize request', async () => {
@@ -38,7 +39,7 @@ describe('Last.fm MCP Server', () => {
 			jsonrpc: '2.0',
 			id: 1,
 			result: {
-				protocolVersion: '2024-11-05',
+				protocolVersion: PROTOCOL_VERSION,
 				capabilities: {
 					prompts: { listChanged: true },
 					resources: { subscribe: false, listChanged: true },
@@ -187,7 +188,7 @@ describe('Last.fm MCP Server', () => {
 			// If it's a success response, it should have the expected structure
 			if (result.result) {
 				expect(result.result).toMatchObject({
-					protocolVersion: '2024-11-05',
+					protocolVersion: PROTOCOL_VERSION,
 					capabilities: expect.any(Object),
 					serverInfo: expect.any(Object),
 				})
