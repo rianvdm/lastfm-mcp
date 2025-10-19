@@ -124,7 +124,7 @@ export default {
 							documentationUrl: 'https://github.com/rianvdm/lastfm-mcp#readme',
 							transport: {
 								type: 'streamable-http',
-								endpoint: '/',
+								endpoint: '/sse',
 							},
 							capabilities: {
 								tools: { listChanged: true },
