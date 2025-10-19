@@ -658,6 +658,9 @@ async function handleMCPRequest(request: Request, env?: Env): Promise<Response> 
 			console.log(`Generated new session ID for initialize: ${sessionId}`)
 		}
 
+		// Debug log all methods
+		console.log(`MCP Request: ${method}`, { sessionId, hasParams: !!params })
+
 		// Handle the method
 		const response = await handleMethod(jsonrpcRequest, request, env?.JWT_SECRET, env, sessionId)
 
