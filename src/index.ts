@@ -192,13 +192,46 @@ export default {
 				}
 
 			case '/sse':
-				// SSE endpoint for bidirectional communication
+				// SSE endpoint for bidirectional communication (supports both Streamable HTTP and legacy SSE)
 				if (request.method === 'GET') {
-					return handleSSEConnection()
+					// Check if this is Streamable HTTP (has Mcp-Session-Id) or legacy SSE transport
+					const sessionId = request.headers.get('Mcp-Session-Id')
+					const acceptHeader = request.headers.get('Accept') || ''
+
+					if (sessionId && acceptHeader.includes('text/event-stream')) {
+						// Streamable HTTP - return persistent SSE stream
+						const { readable, writable } = new TransformStream()
+						const writer = writable.getWriter()
+						const encoder = new TextEncoder()
+
+						// Send initial comment and keep stream open
+						writer.write(encoder.encode(': MCP SSE stream connected\n\n')).catch(() => {
+							// Client disconnected
+						})
+
+						// Keep the stream alive with periodic heartbeats
+						const heartbeatInterval = setInterval(() => {
+							writer.write(encoder.encode(': heartbeat\n\n')).catch(() => {
+								clearInterval(heartbeatInterval)
+							})
+						}, 30000) // Every 30 seconds
+
+						return new Response(readable, {
+							status: 200,
+							headers: {
+								'Content-Type': 'text/event-stream',
+								'Cache-Control': 'no-cache',
+								'Connection': 'keep-alive',
+								'Access-Control-Allow-Origin': '*',
+								'Mcp-Session-Id': sessionId,
+							},
+						})
+					} else {
+						// Legacy SSE transport
+						return handleSSEConnection()
+					}
 				} else if (request.method === 'POST') {
-					// Handle JSON-RPC requests on SSE endpoint for mcp-remote compatibility
-					// For mcp-remote, we need to infer the connection ID from the request context
-					// since it doesn't always include the X-Connection-ID header properly
+					// Handle JSON-RPC requests - works for both Streamable HTTP and mcp-remote
 					return handleMCPRequestWithSSEContext(request, env)
 				} else {
 					return new Response('Method not allowed', { status: 405 })
