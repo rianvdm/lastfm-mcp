@@ -123,8 +123,8 @@ export default {
 							iconUrl: 'https://www.last.fm/static/images/lastfm_avatar_twitter.52a5d69a85ac.png',
 							documentationUrl: 'https://github.com/rianvdm/lastfm-mcp#readme',
 							transport: {
-								type: 'sse',
-								endpoint: '/sse',
+								type: 'streamable-http',
+								endpoint: '/mcp',
 							},
 							capabilities: {
 								tools: { listChanged: true },
@@ -191,42 +191,21 @@ export default {
 					return new Response('Method not allowed', { status: 405 })
 				}
 
+			case '/mcp':
+				// Streamable HTTP endpoint (POST only) - modern MCP transport
+				if (request.method === 'POST') {
+					return handleMCPRequest(request, env)
+				} else {
+					return new Response('Method not allowed. Streamable HTTP uses POST only.', { status: 405 })
+				}
+
 			case '/sse':
-				// SSE endpoint for bidirectional communication (supports both Streamable HTTP and legacy SSE)
+				// Legacy SSE endpoint (GET + POST) - deprecated but kept for backward compatibility
 				if (request.method === 'GET') {
-					// Check if this is Streamable HTTP (has Mcp-Session-Id) or legacy SSE transport
-					const sessionId = request.headers.get('Mcp-Session-Id')
-					const acceptHeader = request.headers.get('Accept') || ''
-					const protocolVersion = request.headers.get('mcp-protocol-version') || ''
-
-					console.log('GET /sse request received:', {
-						hasSessionId: !!sessionId,
-						sessionId: sessionId || 'none',
-						acceptHeader,
-						protocolVersion,
-					})
-
-					// Legacy SSE transport (protocol 2024-11-05 or earlier)
-					// Check if connection already exists, if not create it with the provided session ID
-					if (sessionId) {
-						const existingConnection = getConnection(sessionId)
-						if (existingConnection) {
-							console.log('Reusing existing SSE connection:', sessionId)
-							// Connection already exists, this shouldn't happen in normal flow
-							// But return a new stream anyway
-						} else {
-							console.log('Creating new legacy SSE connection with provided session ID:', sessionId)
-						}
-						// Create SSE connection with the provided session ID
-						const { response } = createSSEResponse(sessionId)
-						return response as unknown as Response
-					} else {
-						console.log('Creating new legacy SSE connection with generated ID')
-						// No session ID provided, generate a new one
-						return handleSSEConnection()
-					}
+					// Legacy SSE transport
+					return handleSSEConnection()
 				} else if (request.method === 'POST') {
-					// Handle JSON-RPC requests - works for both Streamable HTTP and mcp-remote
+					// Handle JSON-RPC requests - works for mcp-remote compatibility
 					return handleMCPRequestWithSSEContext(request, env)
 				} else {
 					return new Response('Method not allowed', { status: 405 })
