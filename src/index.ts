@@ -12,6 +12,7 @@ import { LastfmAuth } from './auth/lastfm'
 import { KVLogger } from './utils/kvLogger'
 import { RateLimiter } from './utils/rateLimit'
 import { MARKETING_PAGE_HTML } from './marketing-page'
+import { PROTOCOL_VERSION } from './types/mcp'
 import type { Env } from './types/env'
 import type { ExecutionContext } from '@cloudflare/workers-types'
 
@@ -65,14 +66,36 @@ export default {
 					const acceptHeader = request.headers.get('Accept') || ''
 					const sessionId = request.headers.get('Mcp-Session-Id')
 
-					// MCP clients with session ID requesting SSE get 405 - we don't need server-initiated messages
+					// MCP client requesting SSE - return minimal stream (no server-initiated messages)
 					if (acceptHeader.includes('text/event-stream') && sessionId) {
-						console.log('GET / with SSE Accept - returning 405 (not supported for this server)')
-						return new Response('SSE not required for this server', {
-							status: 405,
-							headers: addCorsHeaders({
-								'Allow': 'POST, DELETE',
-							}),
+						console.log('GET / with SSE - opening minimal stream for session', sessionId)
+						
+						// Return minimal SSE stream that stays open but sends no events
+						const stream = new ReadableStream({
+							start(controller) {
+								// Send initial comment to establish connection
+								controller.enqueue(new TextEncoder().encode(': connected\n\n'))
+								
+								// Keep alive with periodic comments (not events)
+								const interval = setInterval(() => {
+									try {
+										controller.enqueue(new TextEncoder().encode(': ping\n\n'))
+									} catch {
+										clearInterval(interval)
+									}
+								}, 30000)
+							}
+						})
+						
+						return new Response(stream, {
+							status: 200,
+							headers: {
+								'Content-Type': 'text/event-stream',
+								'Cache-Control': 'no-cache',
+								'Connection': 'keep-alive',
+								'Access-Control-Allow-Origin': '*',
+								'Mcp-Session-Id': sessionId,
+							},
 						})
 					}
 					
@@ -97,7 +120,7 @@ export default {
 						JSON.stringify({
 							$schema: 'https://static.modelcontextprotocol.io/schemas/mcp-server-card/v1.json',
 							version: '1.0',
-							protocolVersion: '2025-06-18',
+							protocolVersion: PROTOCOL_VERSION,
 							serverInfo: {
 								name: 'lastfm-mcp',
 								title: 'Last.fm MCP Server',

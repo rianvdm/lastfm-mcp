@@ -4,7 +4,9 @@
  */
 
 // Protocol version
-export const PROTOCOL_VERSION = '2025-06-18'
+// Note: Using 2024-11-05 for Claude Desktop compatibility
+// Claude Desktop uses Streamable HTTP transport but expects 2024-11-05 protocol version
+export const PROTOCOL_VERSION = '2024-11-05'
 
 // Client capabilities
 export interface ClientCapabilities {
