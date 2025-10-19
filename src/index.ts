@@ -53,17 +53,44 @@ export default {
 		// Handle different endpoints
 		switch (url.pathname) {
 			case '/':
-				// Main endpoint - serves marketing page for GET, JSON-RPC for POST
+				// Main endpoint - serves marketing page for GET, JSON-RPC for POST, SSE stream for MCP clients
 				if (request.method === 'POST') {
 					return handleMCPRequest(request, env)
 				} else if (request.method === 'GET') {
-					return new Response(MARKETING_PAGE_HTML, {
-						status: 200,
-						headers: {
-							'Content-Type': 'text/html',
-							'Cache-Control': 'public, max-age=3600', // Cache for 1 hour
-						},
-					})
+					// Check if this is an MCP client requesting an SSE stream (Streamable HTTP transport)
+					const acceptHeader = request.headers.get('Accept') || ''
+					const sessionId = request.headers.get('Mcp-Session-Id')
+
+					if (acceptHeader.includes('text/event-stream') && sessionId) {
+						// MCP client opening SSE stream - return event stream
+						const { readable, writable } = new TransformStream()
+						const writer = writable.getWriter()
+						const encoder = new TextEncoder()
+
+						// Send initial comment to establish connection
+						writer.write(encoder.encode(': MCP SSE stream connected\n\n'))
+						writer.close()
+
+						return new Response(readable, {
+							status: 200,
+							headers: {
+								'Content-Type': 'text/event-stream',
+								'Cache-Control': 'no-cache',
+								'Connection': 'keep-alive',
+								'Access-Control-Allow-Origin': '*',
+								'Mcp-Session-Id': sessionId,
+							},
+						})
+					} else {
+						// Regular browser request - return marketing page
+						return new Response(MARKETING_PAGE_HTML, {
+							status: 200,
+							headers: {
+								'Content-Type': 'text/html',
+								'Cache-Control': 'public, max-age=3600', // Cache for 1 hour
+							},
+						})
+					}
 				} else {
 					return new Response('Method not allowed', { status: 405 })
 				}
@@ -87,7 +114,7 @@ export default {
 							iconUrl: 'https://www.last.fm/static/images/lastfm_avatar_twitter.52a5d69a85ac.png',
 							documentationUrl: 'https://github.com/rianvdm/lastfm-mcp#readme',
 							transport: {
-								type: 'http',
+								type: 'streamable-http',
 								endpoint: '/',
 							},
 							capabilities: {
