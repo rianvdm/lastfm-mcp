@@ -68,6 +68,55 @@ export default {
 					return new Response('Method not allowed', { status: 405 })
 				}
 
+			case '/.well-known/mcp.json':
+			case '/.well-known/mcp':
+				// MCP server discovery endpoint for Claude Desktop Connectors
+				if (request.method === 'GET') {
+					const baseUrl = `${url.protocol}//${url.host}`
+					return new Response(
+						JSON.stringify({
+							$schema: 'https://static.modelcontextprotocol.io/schemas/mcp-server-card/v1.json',
+							version: '1.0',
+							protocolVersion: '2024-11-05',
+							serverInfo: {
+								name: 'lastfm-mcp',
+								title: 'Last.fm MCP Server',
+								version: '1.0.0',
+							},
+							description: 'Model Context Protocol server for Last.fm listening data access. Provides tools for accessing Last.fm listening history, charts, recommendations, and music data.',
+							iconUrl: 'https://www.last.fm/static/images/lastfm_avatar_twitter.52a5d69a85ac.png',
+							documentationUrl: 'https://github.com/rianvdm/lastfm-mcp#readme',
+							transport: {
+								type: 'http',
+								endpoint: '/',
+							},
+							capabilities: {
+								tools: { listChanged: true },
+								prompts: { listChanged: true },
+								resources: { subscribe: false, listChanged: true },
+							},
+							authentication: {
+								required: false,
+								instructions: 'Some tools work without authentication. For personalized data (recent tracks, top artists, etc.), you will be prompted to authenticate with Last.fm when needed. The server uses Last.fm Web Authentication Flow with session management.',
+							},
+							instructions: `To use authenticated tools, you'll be provided with a URL to authenticate with Last.fm. Visit: ${baseUrl}/login?session_id=YOUR_SESSION_ID`,
+							tools: ['dynamic'],
+							prompts: ['dynamic'],
+							resources: ['dynamic'],
+						}),
+						{
+							status: 200,
+							headers: {
+								'Content-Type': 'application/json',
+								'Access-Control-Allow-Origin': '*',
+								'Cache-Control': 'public, max-age=3600', // Cache for 1 hour
+							},
+						},
+					)
+				} else {
+					return new Response('Method not allowed', { status: 405 })
+				}
+
 			case '/api':
 				// API info endpoint for programmatic access
 				if (request.method === 'GET') {
