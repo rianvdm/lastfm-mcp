@@ -77,7 +77,7 @@ export default {
 						JSON.stringify({
 							$schema: 'https://static.modelcontextprotocol.io/schemas/mcp-server-card/v1.json',
 							version: '1.0',
-							protocolVersion: '2024-11-05',
+							protocolVersion: '2025-06-18',
 							serverInfo: {
 								name: 'lastfm-mcp',
 								title: 'Last.fm MCP Server',
