@@ -79,6 +79,9 @@ export default {
 						const writer = writable.getWriter()
 						const encoder = new TextEncoder()
 
+						// Provide reconnection hint to clients
+						writer.write(encoder.encode('retry: 10000\n\n')).catch(() => {})
+
 						const endpointPayload = {
 							endpoint: '/',
 							sessionId,
@@ -88,6 +91,7 @@ export default {
 						}
 						const endpointEvent = `event: endpoint\ndata: ${JSON.stringify(endpointPayload)}\n\n`
 						writer.write(encoder.encode(endpointEvent)).catch(() => {})
+						console.log('SSE: sent endpoint event', endpointPayload)
 
 						writer.write(encoder.encode(': MCP SSE stream connected\n\n')).catch(() => {})
 
@@ -98,14 +102,18 @@ export default {
 							})
 						}, 30000) // Every 30 seconds
 
+						const protocolHeader = request.headers.get('Mcp-Protocol-Version') || undefined
 						return new Response(readable, {
 							status: 200,
 							headers: {
 								'Content-Type': 'text/event-stream',
-								'Cache-Control': 'no-cache',
+								'Cache-Control': 'no-cache, no-transform',
 								'Connection': 'keep-alive',
+								'X-Accel-Buffering': 'no',
+								'Vary': 'Accept',
 								'Access-Control-Allow-Origin': '*',
 								'Mcp-Session-Id': sessionId,
+								...(protocolHeader ? { 'Mcp-Protocol-Version': protocolHeader } : {}),
 							},
 						})
 					} else {
