@@ -62,14 +62,23 @@ export default {
 					const sessionId = request.headers.get('Mcp-Session-Id')
 
 					if (acceptHeader.includes('text/event-stream') && sessionId) {
-						// MCP client opening SSE stream - return event stream
+						// MCP client opening SSE stream - return event stream that stays open
 						const { readable, writable } = new TransformStream()
 						const writer = writable.getWriter()
 						const encoder = new TextEncoder()
 
-						// Send initial comment to establish connection
-						writer.write(encoder.encode(': MCP SSE stream connected\n\n'))
-						writer.close()
+						// Send initial comment to establish connection and keep stream open
+						// Don't close the writer - stream must stay open for server-initiated messages
+						writer.write(encoder.encode(': MCP SSE stream connected\n\n')).catch(() => {
+							// Client disconnected
+						})
+
+						// Keep the stream alive with periodic heartbeats
+						const heartbeatInterval = setInterval(() => {
+							writer.write(encoder.encode(': heartbeat\n\n')).catch(() => {
+								clearInterval(heartbeatInterval)
+							})
+						}, 30000) // Every 30 seconds
 
 						return new Response(readable, {
 							status: 200,
