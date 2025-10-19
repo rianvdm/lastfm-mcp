@@ -94,11 +94,11 @@ This is a **Last.fm MCP (Model Context Protocol) Server** built as a Cloudflare 
 - Cached wrapper: `src/clients/cachedLastfm.ts`
 - Rate limiting and retry logic built-in
 
-**Transport Layer**: Dual protocol support
+**Transport Layer**: Multiple transport options for MCP clients
 
-- HTTP JSON-RPC: Standard MCP over HTTP POST
-- Server-Sent Events: `src/transport/sse.ts` for persistent connections
-- mcp-remote compatibility with connection ID handling
+- **HTTP Transport** (Recommended): Standard MCP over HTTP POST with `Mcp-Session-Id` header for session management
+- **Server-Sent Events**: `src/transport/sse.ts` for legacy persistent connections
+- Backward compatibility with mcp-remote via deterministic connection ID generation
 
 **Storage & Performance**:
 
@@ -140,8 +140,23 @@ Development uses `.dev.vars`, production uses Wrangler secrets:
 
 ### Connection Management
 
-The system handles both standard MCP clients and mcp-remote:
+The server supports multiple connection strategies to accommodate different MCP clients:
 
-- Standard clients use SSE connections with explicit connection IDs
-- mcp-remote clients get deterministic connection IDs based on client fingerprinting
-- Session data is stored per-connection to support multiple concurrent users
+**Modern HTTP Transport (Claude Code, MCP Inspector)**:
+- Uses `Mcp-Session-Id` header for session identification
+- Session ID generated on `initialize` request and returned in response header
+- Clients include the session ID in subsequent requests
+- Session data stored in KV with `session:{sessionId}` key pattern
+- Auth state persists across requests via session-specific storage
+
+**Legacy SSE Transport (mcp-remote)**:
+- Deterministic connection IDs based on client fingerprinting (IP + User-Agent)
+- Connection IDs stable for 7-day windows to maintain session continuity
+- Backward compatible with X-Connection-ID header
+- Automatic fallback for clients without explicit session management
+
+**Session Storage**:
+- All session data stored in Cloudflare KV namespace `MCP_SESSIONS`
+- Authentication tokens linked to session/connection IDs
+- 7-day TTL matching JWT token expiration
+- Supports multiple concurrent users with isolated sessions

@@ -541,8 +541,23 @@ export const MARKETING_PAGE_HTML = `<!DOCTYPE html>
                 </div>
             </div>
             
-            <p style="text-align: center; margin-bottom: 2rem;"><strong>Add this to your Claude Desktop settings (Settings → Developer → Edit config):</strong></p>
-            
+            <p style="text-align: center; margin-bottom: 1rem;"><strong>Recommended: HTTP Transport (Claude Code, MCP Inspector)</strong></p>
+            <p style="text-align: center; color: #666; margin-bottom: 1rem;">Modern connection method with native HTTP support</p>
+
+            <div class="code-block">
+                <pre>{
+  "mcpServers": {
+    "lastfm": {
+      "command": "claude",
+      "args": ["mcp", "add", "--transport", "http", "lastfm", "https://lastfm-mcp-prod.rian-db8.workers.dev"]
+    }
+  }
+}</pre>
+            </div>
+
+            <p style="text-align: center; margin-bottom: 1rem; margin-top: 3rem;"><strong>Legacy: mcp-remote Method</strong></p>
+            <p style="text-align: center; color: #666; margin-bottom: 1rem;">For older Claude Desktop versions that don't support HTTP transport</p>
+
             <div class="code-block">
                 <pre>{
   "mcpServers": {
