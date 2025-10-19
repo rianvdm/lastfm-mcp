@@ -56,6 +56,8 @@ export default {
 				// Main endpoint - serves marketing page for GET, JSON-RPC for POST, SSE stream for MCP clients
 				if (request.method === 'POST') {
 					return handleMCPRequest(request, env)
+				} else if (request.method === 'DELETE') {
+					return new Response(null, { status: 204, headers: addCorsHeaders() })
 				} else if (request.method === 'GET') {
 					// Check if this is an MCP client requesting an SSE stream (Streamable HTTP transport)
 					const acceptHeader = request.headers.get('Accept') || ''
@@ -77,11 +79,17 @@ export default {
 						const writer = writable.getWriter()
 						const encoder = new TextEncoder()
 
-						// Send initial comment to establish connection and keep stream open
-						// Don't close the writer - stream must stay open for server-initiated messages
-						writer.write(encoder.encode(': MCP SSE stream connected\n\n')).catch(() => {
-							// Client disconnected
-						})
+						const endpointPayload = {
+							endpoint: '/',
+							sessionId,
+							connectionId: sessionId,
+							requiresAuth: true,
+							authUrl: `/login?session_id=${sessionId}`,
+						}
+						const endpointEvent = `event: endpoint\ndata: ${JSON.stringify(endpointPayload)}\n\n`
+						writer.write(encoder.encode(endpointEvent)).catch(() => {})
+
+						writer.write(encoder.encode(': MCP SSE stream connected\n\n')).catch(() => {})
 
 						// Keep the stream alive with periodic heartbeats
 						const heartbeatInterval = setInterval(() => {
@@ -662,7 +670,7 @@ async function handleMCPRequest(request: Request, env?: Env): Promise<Response> 
 		console.log(`MCP Request: ${method}`, { sessionId, hasParams: !!params })
 
 		// Handle the method
-		const response = await handleMethod(jsonrpcRequest, request, env?.JWT_SECRET, env, sessionId)
+		const response = await handleMethod(jsonrpcRequest, request, env?.JWT_SECRET, env, sessionId ?? undefined)
 
 		// Calculate latency
 		const latency = Date.now() - startTime

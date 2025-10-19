@@ -4,7 +4,7 @@
  */
 
 // Protocol version
-export const PROTOCOL_VERSION = '2024-11-05'
+export const PROTOCOL_VERSION = '2025-06-18'
 
 // Client capabilities
 export interface ClientCapabilities {
