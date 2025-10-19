@@ -61,6 +61,16 @@ export default {
 					const acceptHeader = request.headers.get('Accept') || ''
 					const sessionId = request.headers.get('Mcp-Session-Id')
 
+
+				// Debug logging for GET requests
+				console.log("GET / request:", {
+					acceptHeader,
+					sessionId,
+					hasTextEventStream: acceptHeader.includes("text/event-stream"),
+					hasSessionId: !!sessionId,
+					allHeaders: Object.fromEntries(request.headers.entries()),
+				})
+
 					if (acceptHeader.includes('text/event-stream') && sessionId) {
 						// MCP client opening SSE stream - return event stream that stays open
 						const { readable, writable } = new TransformStream()
