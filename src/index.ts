@@ -113,7 +113,7 @@ export default {
 						JSON.stringify({
 							$schema: 'https://static.modelcontextprotocol.io/schemas/mcp-server-card/v1.json',
 							version: '1.0',
-							protocolVersion: '2025-06-18',
+							protocolVersion: '2024-11-05',
 							serverInfo: {
 								name: 'lastfm-mcp',
 								title: 'Last.fm MCP Server',
@@ -123,7 +123,7 @@ export default {
 							iconUrl: 'https://www.last.fm/static/images/lastfm_avatar_twitter.52a5d69a85ac.png',
 							documentationUrl: 'https://github.com/rianvdm/lastfm-mcp#readme',
 							transport: {
-								type: 'streamable-http',
+								type: 'sse',
 								endpoint: '/sse',
 							},
 							capabilities: {
@@ -197,37 +197,32 @@ export default {
 					// Check if this is Streamable HTTP (has Mcp-Session-Id) or legacy SSE transport
 					const sessionId = request.headers.get('Mcp-Session-Id')
 					const acceptHeader = request.headers.get('Accept') || ''
+					const protocolVersion = request.headers.get('mcp-protocol-version') || ''
 
-					if (sessionId && acceptHeader.includes('text/event-stream')) {
-						// Streamable HTTP - return persistent SSE stream
-						const { readable, writable } = new TransformStream()
-						const writer = writable.getWriter()
-						const encoder = new TextEncoder()
+					console.log('GET /sse request received:', {
+						hasSessionId: !!sessionId,
+						sessionId: sessionId || 'none',
+						acceptHeader,
+						protocolVersion,
+					})
 
-						// Send initial comment and keep stream open
-						writer.write(encoder.encode(': MCP SSE stream connected\n\n')).catch(() => {
-							// Client disconnected
-						})
-
-						// Keep the stream alive with periodic heartbeats
-						const heartbeatInterval = setInterval(() => {
-							writer.write(encoder.encode(': heartbeat\n\n')).catch(() => {
-								clearInterval(heartbeatInterval)
-							})
-						}, 30000) // Every 30 seconds
-
-						return new Response(readable, {
-							status: 200,
-							headers: {
-								'Content-Type': 'text/event-stream',
-								'Cache-Control': 'no-cache',
-								'Connection': 'keep-alive',
-								'Access-Control-Allow-Origin': '*',
-								'Mcp-Session-Id': sessionId,
-							},
-						})
+					// Legacy SSE transport (protocol 2024-11-05 or earlier)
+					// Check if connection already exists, if not create it with the provided session ID
+					if (sessionId) {
+						const existingConnection = getConnection(sessionId)
+						if (existingConnection) {
+							console.log('Reusing existing SSE connection:', sessionId)
+							// Connection already exists, this shouldn't happen in normal flow
+							// But return a new stream anyway
+						} else {
+							console.log('Creating new legacy SSE connection with provided session ID:', sessionId)
+						}
+						// Create SSE connection with the provided session ID
+						const { response } = createSSEResponse(sessionId)
+						return response as unknown as Response
 					} else {
-						// Legacy SSE transport
+						console.log('Creating new legacy SSE connection with generated ID')
+						// No session ID provided, generate a new one
 						return handleSSEConnection()
 					}
 				} else if (request.method === 'POST') {

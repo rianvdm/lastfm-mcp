@@ -19,10 +19,10 @@ interface SSEConnection {
 }
 
 /**
- * Create an SSE response for a client
+ * Create an SSE response for a client with optional connection ID
  */
-export function createSSEResponse(): { response: Response; connectionId: string } {
-	const connectionId = crypto.randomUUID()
+export function createSSEResponse(providedConnectionId?: string): { response: Response; connectionId: string } {
+	const connectionId = providedConnectionId || crypto.randomUUID()
 	const encoder = new TextEncoder()
 
 	// Create a TransformStream for SSE
