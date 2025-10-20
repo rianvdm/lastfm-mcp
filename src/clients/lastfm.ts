@@ -391,7 +391,7 @@ export class LastfmClient {
 	/**
 	 * Make a request to the Last.fm API
 	 */
-	private async makeRequest<T>(params: Record<string, string>): Promise<T> {
+	private async makeRequest<T extends object>(params: Record<string, string>): Promise<T> {
 		const searchParams = new URLSearchParams({
 			api_key: this.apiKey,
 			format: 'json',

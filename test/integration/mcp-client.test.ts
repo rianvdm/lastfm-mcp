@@ -787,8 +787,8 @@ describe('MCP Client Integration Tests', () => {
 
 			const response = await worker.fetch(request, mockEnv, {} as any)
 
-			// Notifications should return 204 with no body
-			expect(response.status).toBe(204)
+			// Notifications should return 202 Accepted per MCP spec
+			expect(response.status).toBe(202)
 			const text = await response.text()
 			expect(text).toBe('') // Empty response for notifications
 		})

@@ -696,7 +696,7 @@ Your authentication will be secure and connection-specific - only you will have 
 						text: `🎵 **Track Information**
 
 **Track:** ${data.track.name}
-**Artist:** ${data.track.artist.name}
+**Artist:** ${data.track.artist['#text'] || (data.track.artist as any).name}
 **Album:** ${data.track.album?.['#text'] || 'Unknown'}
 
 **Stats:**
@@ -867,7 +867,7 @@ ${artistList}`,
 			const trackList = tracks
 				.map((t) => {
 					const album = t.album?.['#text'] ? ` [${t.album['#text']}]` : ''
-					return `• ${t.artist.name} - ${t.name}${album} (${Math.round(parseFloat(t.match) * 100)}% match)`
+					return `• ${t.artist['#text'] || (t.artist as any).name} - ${t.name}${album} (${Math.round(parseFloat(t.match) * 100)}% match)`
 				})
 				.join('\n')
 
@@ -1084,7 +1084,7 @@ Total albums: ${data.topalbums['@attr'].total}`,
 			const trackList = tracks
 				.map((track) => {
 					const album = track.album?.['#text'] ? ` [${track.album['#text']}]` : ''
-					return `• ${track.artist.name} - ${track.name}${album}`
+					return `• ${track.artist['#text'] || (track.artist as any).name} - ${track.name}${album}`
 				})
 				.join('\n')
 
@@ -1128,7 +1128,7 @@ Total loved tracks: ${data.lovedtracks['@attr'].total}`,
 						text: `🎵 **Track Information**
 
 **Track:** ${data.track.name}${loved}
-**Artist:** ${data.track.artist.name}
+**Artist:** ${data.track.artist['#text'] || (data.track.artist as any).name}
 **Album:** ${data.track.album?.['#text'] || 'Unknown'}
 
 **Stats:**
@@ -1305,7 +1305,7 @@ ${artistList}`,
 			const trackList = tracks
 				.map((t) => {
 					const album = t.album?.['#text'] ? ` [${t.album['#text']}]` : ''
-					return `• ${t.artist.name} - ${t.name}${album} (${Math.round(parseFloat(t.match) * 100)}% match)`
+					return `• ${t.artist['#text'] || (t.artist as any).name} - ${t.name}${album} (${Math.round(parseFloat(t.match) * 100)}% match)`
 				})
 				.join('\n')
 

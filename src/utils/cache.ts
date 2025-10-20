@@ -355,25 +355,25 @@ export function createLastfmCache(kv?: KVNamespace): SmartCache {
 			async get() {
 				return null
 			},
-			async set() {
+			async set(): Promise<void> {
 				return
 			},
-			async getOrFetch(_type, _key, fetcher) {
+			async getOrFetch<T>(_type: keyof CacheConfig, _key: string, fetcher: () => Promise<T>): Promise<T> {
 				return fetcher()
 			},
-			async invalidate() {
+			async invalidate(): Promise<void> {
 				return
 			},
-			async invalidatePattern() {
+			async invalidatePattern(): Promise<void> {
 				return
 			},
-			async getStats() {
+			getStats: async () => {
 				return { totalEntries: 0, entriesByType: {}, pendingRequests: 0 }
 			},
 			cleanupPendingRequests() {
 				return
 			},
-		} as SmartCache
+		} as unknown as SmartCache
 	}
 
 	return new SmartCache(kv, {
