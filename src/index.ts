@@ -678,10 +678,10 @@ async function handleMCPRequest(request: Request, env?: Env): Promise<Response> 
 			responseHeaders['Mcp-Session-Id'] = sessionId
 		}
 
-		// If no response (notification), return 204 No Content
+		// If no response (notification), return 202 Accepted with no body per MCP spec
 		if (!response) {
 			return new Response(null, {
-				status: 204,
+				status: 202,
 				headers: addCorsHeaders(sessionId ? { 'Mcp-Session-Id': sessionId } : {}),
 			})
 		}
