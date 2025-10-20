@@ -172,8 +172,8 @@ class MockMCPClient {
 		})
 
 		const response = await worker.fetch(request, mockEnv, {} as any)
-		// Notifications return 204 with no body
-		if (response.status === 204) {
+		// Notifications return 202 Accepted with no body (per MCP spec)
+		if (response.status === 202) {
 			return null
 		}
 		// If there's an error, it will have a JSON body
