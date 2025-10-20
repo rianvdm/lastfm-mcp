@@ -71,19 +71,29 @@ export default {
 						console.log('GET / with SSE - opening minimal stream for session', sessionId)
 						
 						// Return minimal SSE stream that stays open but sends no events
+						let keepaliveInterval: number | undefined
 						const stream = new ReadableStream({
 							start(controller) {
 								// Send initial comment to establish connection
 								controller.enqueue(new TextEncoder().encode(': connected\n\n'))
 								
 								// Keep alive with periodic comments (not events)
-								const interval = setInterval(() => {
+								keepaliveInterval = setInterval(() => {
 									try {
 										controller.enqueue(new TextEncoder().encode(': ping\n\n'))
 									} catch {
-										clearInterval(interval)
+										if (keepaliveInterval) {
+											clearInterval(keepaliveInterval)
+										}
 									}
-								}, 30000)
+								}, 30000) as unknown as number
+							},
+							cancel() {
+								// Clean up interval when stream is closed
+								if (keepaliveInterval) {
+									clearInterval(keepaliveInterval)
+								}
+								console.log('SSE stream cancelled for session', sessionId)
 							}
 						})
 						
