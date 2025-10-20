@@ -62,30 +62,14 @@ export default {
 					// Session termination
 					return new Response(null, { status: 204, headers: addCorsHeaders() })
 				} else if (request.method === 'GET') {
-					// Check if this is an MCP client requesting SSE or regular browser
-					const acceptHeader = request.headers.get('Accept') || ''
-					const sessionId = request.headers.get('Mcp-Session-Id')
-
-					// MCP client requesting SSE - SSE is optional in Streamable HTTP protocol
-					// Return 204 No Content to indicate no SSE endpoint available
-					// This forces pure request/response mode which avoids stream handling issues
-					if (acceptHeader.includes('text/event-stream') && sessionId) {
-						console.log('GET / with SSE request - returning 204 (SSE not supported)', sessionId)
-						return new Response(null, {
-							status: 204,
-							headers: {
-								'Access-Control-Allow-Origin': '*',
-								'Mcp-Session-Id': sessionId,
-							},
-						})
-					}
-					
-					// Regular browser GET request - return marketing page
+					// Always return marketing page for GET requests
+					// SSE endpoint is not supported - clients should use POST for all requests
 					return new Response(MARKETING_PAGE_HTML, {
 						status: 200,
 						headers: {
 							'Content-Type': 'text/html',
 							'Cache-Control': 'public, max-age=3600',
+							'Access-Control-Allow-Origin': '*',
 						},
 					})
 				} else {
