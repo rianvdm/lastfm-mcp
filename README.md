@@ -36,37 +36,84 @@ That's it! Claude Code now supports HTTP transport natively, no additional tools
 
 ### Using with Claude Desktop
 
-**Modern Method (HTTP Transport):**
+**Recommended Method (Connectors UI):**
 
-Add this configuration to your Claude Desktop settings (Settings / Developer / Edit config):
+Claude Desktop now supports remote MCP servers natively:
 
-```json
-{
-	"mcpServers": {
-		"lastfm": {
-			"command": "npx",
-			"args": ["-y", "@modelcontextprotocol/server-everything", "https://lastfm-mcp-prod.rian-db8.workers.dev"]
-		}
-	}
-}
-```
+1. Open Claude Desktop
+2. Go to **Settings** → **Connectors**
+3. Click **Add Connector**
+4. Enter the server URL: `https://lastfm-mcp-prod.rian-db8.workers.dev`
+5. Click **Add**
 
-**Legacy Method (via mcp-remote):**
+That's it! No configuration files or command-line tools needed. The server will appear in your Connectors list and be ready to use.
 
-If you prefer the older approach or encounter issues:
+**Alternative Method (Configuration File):**
+
+For advanced users who prefer config files, add to your Claude Desktop config (`~/Library/Application Support/Claude/claude_desktop_config.json` on macOS):
 
 ```json
 {
 	"mcpServers": {
 		"lastfm": {
 			"command": "npx",
-			"args": ["mcp-remote", "https://lastfm-mcp-prod.rian-db8.workers.dev/sse"]
+			"args": ["-y", "mcp-remote", "https://lastfm-mcp-prod.rian-db8.workers.dev"]
 		}
 	}
 }
 ```
 
-> **💡 Note**: The HTTP transport method is recommended as it's simpler and works directly without proxying.
+> **💡 Note**: The Connectors UI method is recommended as it's simpler and doesn't require any command-line tools.
+
+### Using with Other MCP Clients
+
+This server works with any MCP client that supports Streamable HTTP transport:
+
+**Continue.dev (VS Code/JetBrains):**
+
+Add to your Continue config (`~/.continue/config.json`):
+
+```json
+{
+	"mcpServers": {
+		"lastfm": {
+			"command": "npx",
+			"args": ["-y", "mcp-remote", "https://lastfm-mcp-prod.rian-db8.workers.dev"]
+		}
+	}
+}
+```
+
+**Zed Editor:**
+
+Add to your Zed settings:
+
+```json
+{
+	"context_servers": {
+		"lastfm": {
+			"command": "npx",
+			"args": ["-y", "mcp-remote", "https://lastfm-mcp-prod.rian-db8.workers.dev"]
+		}
+	}
+}
+```
+
+**MCP Inspector (Testing):**
+
+Test the server directly:
+
+```bash
+npx @modelcontextprotocol/inspector https://lastfm-mcp-prod.rian-db8.workers.dev
+```
+
+**Custom Implementation:**
+
+Use the MCP client SDK for your language:
+- **TypeScript/JavaScript**: `@modelcontextprotocol/sdk`
+- **Python**: `mcp` package
+- Server endpoint: `https://lastfm-mcp-prod.rian-db8.workers.dev`
+- Transport: Streamable HTTP (protocol version 2024-11-05 or 2025-06-18)
 
 #### 🐛 Platform-Specific Troubleshooting
 

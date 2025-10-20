@@ -524,8 +524,8 @@ export const MARKETING_PAGE_HTML = `<!DOCTYPE html>
             <div class="setup-steps">
                 <div class="step">
                     <div class="step-number">1</div>
-                    <h3>Add to Claude Desktop</h3>
-                    <p>Configure the MCP server in your Claude Desktop settings</p>
+                    <h3>Add Server</h3>
+                    <p>Connect via Claude Desktop Connectors UI or your preferred MCP client</p>
                 </div>
                 
                 <div class="step">
@@ -541,32 +541,42 @@ export const MARKETING_PAGE_HTML = `<!DOCTYPE html>
                 </div>
             </div>
             
-            <p style="text-align: center; margin-bottom: 1rem;"><strong>Recommended: HTTP Transport (Claude Code, MCP Inspector)</strong></p>
-            <p style="text-align: center; color: #666; margin-bottom: 1rem;">Modern connection method with native HTTP support</p>
-
-            <div class="code-block">
-                <pre>{
-  "mcpServers": {
-    "lastfm": {
-      "command": "claude",
-      "args": ["mcp", "add", "--transport", "http", "lastfm", "https://lastfm-mcp-prod.rian-db8.workers.dev"]
-    }
-  }
-}</pre>
+            <p style="text-align: center; margin-bottom: 1rem; margin-top: 3rem;"><strong>✨ Recommended: Claude Desktop Connectors UI</strong></p>
+            <p style="text-align: center; color: #666; margin-bottom: 1rem;">The easiest way to connect - no configuration files needed!</p>
+            <div style="text-align: center; margin: 2rem 0;">
+                <ol style="display: inline-block; text-align: left; color: #333; line-height: 2;">
+                    <li>Open Claude Desktop</li>
+                    <li>Go to <strong>Settings → Connectors</strong></li>
+                    <li>Click <strong>Add Connector</strong></li>
+                    <li>Enter URL: <code style="background: #f0f0f0; padding: 2px 8px; border-radius: 4px;">https://lastfm-mcp-prod.rian-db8.workers.dev</code></li>
+                    <li>Click <strong>Add</strong></li>
+                </ol>
             </div>
 
-            <p style="text-align: center; margin-bottom: 1rem; margin-top: 3rem;"><strong>Legacy: mcp-remote Method</strong></p>
-            <p style="text-align: center; color: #666; margin-bottom: 1rem;">For older Claude Desktop versions that don't support HTTP transport</p>
+            <p style="text-align: center; margin-bottom: 1rem; margin-top: 3rem;"><strong>💻 Claude Code (Terminal)</strong></p>
+            <p style="text-align: center; color: #666; margin-bottom: 1rem;">One command to add the server</p>
+
+            <div class="code-block">
+                <pre>claude mcp add --transport http lastfm https://lastfm-mcp-prod.rian-db8.workers.dev</pre>
+            </div>
+
+            <p style="text-align: center; margin-bottom: 1rem; margin-top: 3rem;"><strong>🔧 Other MCP Clients</strong></p>
+            <p style="text-align: center; color: #666; margin-bottom: 1rem;">Continue.dev, Zed, or custom implementations</p>
 
             <div class="code-block">
                 <pre>{
   "mcpServers": {
     "lastfm": {
       "command": "npx",
-      "args": ["mcp-remote", "https://lastfm-mcp-prod.rian-db8.workers.dev/sse"]
+      "args": ["-y", "mcp-remote", "https://lastfm-mcp-prod.rian-db8.workers.dev"]
     }
   }
 }</pre>
+            </div>
+
+            <p style="text-align: center; margin-bottom: 1rem; margin-top: 3rem;"><strong>🧪 Test with MCP Inspector</strong></p>
+            <div class="code-block">
+                <pre>npx @modelcontextprotocol/inspector https://lastfm-mcp-prod.rian-db8.workers.dev</pre>
             </div>
         </div>
     </section>
