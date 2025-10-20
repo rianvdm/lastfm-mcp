@@ -66,43 +66,14 @@ export default {
 					const acceptHeader = request.headers.get('Accept') || ''
 					const sessionId = request.headers.get('Mcp-Session-Id')
 
-					// MCP client requesting SSE - return minimal stream (no server-initiated messages)
+					// MCP client requesting SSE - SSE is optional in Streamable HTTP protocol
+					// Return 204 No Content to indicate no SSE endpoint available
+					// This forces pure request/response mode which avoids stream handling issues
 					if (acceptHeader.includes('text/event-stream') && sessionId) {
-						console.log('GET / with SSE - opening minimal stream for session', sessionId)
-						
-						// Return minimal SSE stream that stays open but sends no events
-						let keepaliveInterval: number | undefined
-						const stream = new ReadableStream({
-							start(controller) {
-								// Send initial comment to establish connection
-								controller.enqueue(new TextEncoder().encode(': connected\n\n'))
-								
-								// Keep alive with periodic comments (not events)
-								keepaliveInterval = setInterval(() => {
-									try {
-										controller.enqueue(new TextEncoder().encode(': ping\n\n'))
-									} catch {
-										if (keepaliveInterval) {
-											clearInterval(keepaliveInterval)
-										}
-									}
-								}, 30000) as unknown as number
-							},
-							cancel() {
-								// Clean up interval when stream is closed
-								if (keepaliveInterval) {
-									clearInterval(keepaliveInterval)
-								}
-								console.log('SSE stream cancelled for session', sessionId)
-							}
-						})
-						
-						return new Response(stream, {
-							status: 200,
+						console.log('GET / with SSE request - returning 204 (SSE not supported)', sessionId)
+						return new Response(null, {
+							status: 204,
 							headers: {
-								'Content-Type': 'text/event-stream',
-								'Cache-Control': 'no-cache',
-								'Connection': 'keep-alive',
 								'Access-Control-Allow-Origin': '*',
 								'Mcp-Session-Id': sessionId,
 							},
