@@ -1,0 +1,88 @@
+/**
+ * MCP Server configuration using the official SDK
+ *
+ * This module creates and configures the McpServer instance
+ * that will handle all MCP protocol operations.
+ */
+import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
+
+import { CachedLastfmClient } from '../clients/cachedLastfm'
+import { LastfmClient } from '../clients/lastfm'
+import type { Env } from '../types/env'
+
+import { registerPrompts } from './prompts/analysis'
+import { registerResources } from './resources/lastfm'
+import { registerAuthenticatedTools, registerPublicTools, type AuthSession } from './tools'
+
+// Server metadata
+const SERVER_NAME = 'lastfm-mcp'
+const SERVER_VERSION = '1.0.0'
+
+/**
+ * Request context that can be updated per-request.
+ * Tools access this via getter functions captured in closures.
+ */
+export interface McpRequestContext {
+	session: AuthSession | null
+	baseUrl: string
+}
+
+/**
+ * Result of createMcpServer - includes server and context setter.
+ */
+export interface McpServerWithContext {
+	server: McpServer
+	setContext: (ctx: Partial<McpRequestContext>) => void
+	getContext: () => McpRequestContext
+}
+
+/**
+ * Creates a configured MCP server instance with access to environment bindings.
+ *
+ * Uses a factory function pattern to provide env access to all tools via closure.
+ * Returns both the server and a context setter for per-request session management.
+ *
+ * @param env - Cloudflare Worker environment bindings
+ * @param initialBaseUrl - Base URL for the server (used for auth URLs)
+ */
+export function createMcpServer(env: Env, initialBaseUrl: string): McpServerWithContext {
+	const server = new McpServer({
+		name: SERVER_NAME,
+		version: SERVER_VERSION,
+	})
+
+	// Create Last.fm client with caching
+	const lastfmClient = new LastfmClient(env.LASTFM_API_KEY)
+	const cachedClient = new CachedLastfmClient(lastfmClient, env.MCP_SESSIONS)
+
+	// Mutable request context - updated per-request before handling
+	const context: McpRequestContext = {
+		session: null,
+		baseUrl: initialBaseUrl,
+	}
+
+	// Getters that tools use to access current context
+	const getSession = () => context.session
+	const getBaseUrl = () => context.baseUrl
+
+	// Register public tools (no auth required)
+	registerPublicTools(server, cachedClient, getBaseUrl)
+
+	// Register authenticated tools (use session from context)
+	registerAuthenticatedTools(server, cachedClient, getSession, getBaseUrl)
+
+	// Register resources
+	registerResources(server, cachedClient, getSession)
+
+	// Register prompts
+	registerPrompts(server)
+
+	return {
+		server,
+		setContext: (ctx: Partial<McpRequestContext>) => {
+			if (ctx.session !== undefined) context.session = ctx.session
+			if (ctx.baseUrl !== undefined) context.baseUrl = ctx.baseUrl
+		},
+		getContext: () => ({ ...context }),
+	}
+}

@@ -40,8 +40,11 @@
 		"wrangler": "^4.19.1"
 	},
 	"dependencies": {
+		"@modelcontextprotocol/sdk": "^1.24.3",
 		"@types/crypto-js": "^4.2.2",
+		"agents": "^0.2.31",
 		"crypto-js": "^4.2.0",
-		"oauth-1.0a": "^2.2.6"
+		"oauth-1.0a": "^2.2.6",
+		"zod": "^4.1.13"
 	}
 }

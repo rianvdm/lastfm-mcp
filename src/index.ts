@@ -1,20 +1,27 @@
 /**
  * Last.fm MCP Server - Cloudflare Worker
  * Implements Model Context Protocol for Last.fm listening data access
+ *
+ * This version uses the Cloudflare Agents SDK with createMcpHandler.
  */
 
-import { parseMessage, createError, serializeResponse } from './protocol/parser'
-import { handleMethod, verifyAuthentication } from './protocol/handlers'
-import { createSessionToken } from './auth/jwt'
-import { ErrorCode, JSONRPCError } from './types/jsonrpc'
-import { createSSEResponse, getConnection } from './transport/sse'
+import { createMcpHandler } from 'agents/mcp'
+
+import { createSessionToken, verifySessionToken, SessionPayload } from './auth/jwt'
 import { LastfmAuth } from './auth/lastfm'
+import { MARKETING_PAGE_HTML } from './marketing-page'
+import { createMcpServer } from './mcp/server'
 import { KVLogger } from './utils/kvLogger'
 import { RateLimiter } from './utils/rateLimit'
-import { MARKETING_PAGE_HTML } from './marketing-page'
-import { PROTOCOL_VERSION } from './types/mcp'
 import type { Env } from './types/env'
 import type { ExecutionContext } from '@cloudflare/workers-types'
+
+// Import legacy handlers for backward compatibility during migration
+import { parseMessage, createError, serializeResponse } from './protocol/parser'
+import { handleMethod, verifyAuthentication } from './protocol/handlers'
+import { ErrorCode, JSONRPCError } from './types/jsonrpc'
+import { createSSEResponse, getConnection } from './transport/sse'
+import { PROTOCOL_VERSION } from './types/mcp'
 
 // These types are available globally in Workers runtime
 /// <reference lib="dom" />
@@ -31,6 +38,89 @@ function addCorsHeaders(headers: HeadersInit = {}): Headers {
 	corsHeaders.set('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Connection-ID, Mcp-Session-Id, Cookie')
 	corsHeaders.set('Access-Control-Expose-Headers', 'Mcp-Session-Id')
 	return corsHeaders
+}
+
+/**
+ * Get session from KV storage by session ID or cookie
+ */
+async function getSessionFromRequest(request: Request, env: Env): Promise<SessionPayload | null> {
+	// Try session ID first (modern Streamable HTTP approach)
+	const sessionId = request.headers.get('Mcp-Session-Id') || request.headers.get('X-Connection-ID')
+	if (sessionId && env.MCP_SESSIONS) {
+		try {
+			const sessionDataStr = await env.MCP_SESSIONS.get(`session:${sessionId}`)
+			if (sessionDataStr) {
+				const sessionData = JSON.parse(sessionDataStr)
+				if (sessionData.expiresAt && new Date(sessionData.expiresAt) > new Date()) {
+					if (sessionData.username && sessionData.sessionKey) {
+						return {
+							userId: sessionData.userId,
+							sessionKey: sessionData.sessionKey,
+							username: sessionData.username,
+							iat: Math.floor(Date.now() / 1000),
+							exp: Math.floor(new Date(sessionData.expiresAt).getTime() / 1000),
+						}
+					}
+				}
+			}
+		} catch (error) {
+			console.error('Error retrieving session by session ID:', error)
+		}
+	}
+
+	// Try cookie-based auth
+	const cookieHeader = request.headers.get('Cookie')
+	if (cookieHeader && env.JWT_SECRET) {
+		const cookies = cookieHeader.split(';').reduce(
+			(acc, cookie) => {
+				const [key, value] = cookie.trim().split('=')
+				if (key && value) acc[key] = value
+				return acc
+			},
+			{} as Record<string, string>,
+		)
+		const sessionToken = cookies.session
+		if (sessionToken) {
+			try {
+				return await verifySessionToken(sessionToken, env.JWT_SECRET)
+			} catch {
+				// Invalid token
+			}
+		}
+	}
+
+	return null
+}
+
+/**
+ * Handle MCP request using the Cloudflare Agents SDK
+ */
+async function handleMCPRequestSDK(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
+	const url = new URL(request.url)
+	const baseUrl = `${url.protocol}//${url.host}`
+
+	// Get session from request
+	const sessionPayload = await getSessionFromRequest(request, env)
+
+	// Create MCP server with context
+	const { server, setContext } = createMcpServer(env, baseUrl)
+
+	// Set session context if authenticated
+	if (sessionPayload) {
+		setContext({
+			session: {
+				username: sessionPayload.username,
+				sessionKey: sessionPayload.sessionKey,
+			},
+		})
+	}
+
+	// Create handler for this request
+	// Note: The SDK handler handles CORS internally
+	const handler = createMcpHandler(server)
+
+	// Call the handler
+	return handler(request, env, ctx)
 }
 
 export default {
@@ -164,11 +254,14 @@ export default {
 				}
 
 			case '/mcp':
-				// Streamable HTTP endpoint (POST only) - modern MCP transport
+				// Streamable HTTP endpoint - modern MCP transport using SDK
 				if (request.method === 'POST') {
-					return handleMCPRequest(request, env)
+					return handleMCPRequestSDK(request, env, _ctx)
+				} else if (request.method === 'GET') {
+					// SDK also handles GET for SSE streams
+					return handleMCPRequestSDK(request, env, _ctx)
 				} else {
-					return new Response('Method not allowed. Streamable HTTP uses POST only.', { status: 405 })
+					return new Response('Method not allowed', { status: 405 })
 				}
 
 			case '/sse':
