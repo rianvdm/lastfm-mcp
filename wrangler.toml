@@ -1,5 +1,5 @@
 name = "lastfm-mcp"
-main = "src/index.ts"
+main = "src/index-oauth.ts"
 compatibility_date = "2024-12-01"
 compatibility_flags = ["global_fetch_strictly_public", "nodejs_compat"]
 
@@ -19,6 +19,10 @@ id = "b4caaaa688cc45d2a9a85fe67ba53bfc"
 binding = "MCP_SESSIONS"
 id = "a0bc40f523d54a6ab70fa947ac3daeaf"
 
+[[kv_namespaces]]
+binding = "OAUTH_KV"
+id = "e04a5ec5441949ebb6e84281bf6598c3"
+
 # Production environment
 [env.production]
 name = "lastfm-mcp-prod"
@@ -34,6 +38,31 @@ id = "bfc831cedceb4a08a6d997909c3899ce"
 [[env.production.kv_namespaces]]
 binding = "MCP_SESSIONS"
 id = "e45edcc5347e4b409169c1d0a9b2ed5d"
+
+[[env.production.kv_namespaces]]
+binding = "OAUTH_KV"
+id = "35c396a7d0924dd8a5527334cd4538d3"
+
+# Legacy environment (uses old session-based auth)
+[env.legacy]
+name = "lastfm-mcp-legacy"
+main = "src/index.ts"
+
+[[env.legacy.kv_namespaces]]
+binding = "MCP_LOGS"
+id = "b0c83f4b63a94c7490a609095e35b84f"
+
+[[env.legacy.kv_namespaces]]
+binding = "MCP_RL"
+id = "b4caaaa688cc45d2a9a85fe67ba53bfc"
+
+[[env.legacy.kv_namespaces]]
+binding = "MCP_SESSIONS"
+id = "a0bc40f523d54a6ab70fa947ac3daeaf"
+
+[[env.legacy.kv_namespaces]]
+binding = "OAUTH_KV"
+id = "e04a5ec5441949ebb6e84281bf6598c3"
 
 # Secrets (set via wrangler secret put):
 # - LASTFM_API_KEY

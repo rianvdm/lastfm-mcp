@@ -5,4 +5,4 @@
  */
 
 export { registerPublicTools } from './public'
-export { registerAuthenticatedTools, type AuthSession } from './authenticated'
+export { registerAuthenticatedTools, registerAuthenticatedToolsWithOAuth, type AuthSession, type LastfmOAuthProps } from './authenticated'

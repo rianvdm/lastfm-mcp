@@ -9,154 +9,160 @@
 
 A **Model Context Protocol (MCP) server** that provides seamless access to Last.fm listening data and music information via AI assistants like Claude.
 
-A powerful, production-ready server that bridges AI assistants with Last.fm's comprehensive music database.
-
 ## ✨ Features
 
 - 🎧 **Personal Listening Data**: Recent tracks, top artists, albums, loved tracks
 - 🎵 **Music Information**: Detailed track, artist, and album information
 - 🔍 **Music Discovery**: Similar artists/tracks, personalized recommendations
 - 📊 **Listening Statistics**: Comprehensive stats and listening habits analysis
-- 🔐 **Secure Authentication**: Last.fm Web Authentication with JWT sessions
+- 🔐 **OAuth 2.0 Authentication**: Industry-standard auth with session persistence
 - ⚡ **Smart Caching**: Intelligent caching with optimized TTLs for performance
 - 🛡️ **Rate Limiting**: Built-in rate limiting respecting Last.fm API limits
-- 🌐 **Production Ready**: Deployed on Cloudflare Workers with global edge and CI/CD
+- 🌐 **Production Ready**: Deployed on Cloudflare Workers with global edge
 
 ## 🚀 Quick Start
 
-### Using with Claude Code (Recommended)
+### Windsurf (OAuth - Recommended)
 
-The easiest way to get started:
+Windsurf supports OAuth 2.0, providing the smoothest authentication experience:
 
-```bash
-claude mcp add --transport http lastfm https://lastfm-mcp-prod.rian-db8.workers.dev
-```
-
-That's it! Claude Code now supports HTTP transport natively, no additional tools needed.
-
-### Using with Claude Desktop
-
-**Recommended Method (Connectors UI):**
-
-Claude Desktop now supports remote MCP servers natively:
-
-1. Open Claude Desktop
-2. Go to **Settings** → **Connectors**
-3. Click **Add Connector**
-4. Enter the server URL: `https://lastfm-mcp-prod.rian-db8.workers.dev`
-5. Click **Add**
-
-That's it! No configuration files or command-line tools needed. The server will appear in your Connectors list and be ready to use.
-
-**Alternative Method (Configuration File):**
-
-For advanced users who prefer config files, add to your Claude Desktop config (`~/Library/Application Support/Claude/claude_desktop_config.json` on macOS):
+1. Add to your Windsurf MCP config (`~/.codeium/windsurf/mcp_config.json`):
 
 ```json
 {
-	"mcpServers": {
-		"lastfm": {
-			"command": "npx",
-			"args": ["-y", "mcp-remote", "https://lastfm-mcp-prod.rian-db8.workers.dev"]
-		}
-	}
+  "mcpServers": {
+    "lastfm": {
+      "serverUrl": "https://lastfm-mcp-prod.rian-db8.workers.dev/mcp"
+    }
+  }
 }
 ```
 
-> **💡 Note**: The Connectors UI method is recommended as it's simpler and doesn't require any command-line tools.
+2. Restart Windsurf
+3. When you first use a Last.fm tool, you'll be prompted to authenticate
+4. Your browser will open to Last.fm - sign in and authorize
+5. Done! Your session persists across conversations.
 
-### Using with Other MCP Clients
+### Claude Desktop (Manual Login)
 
-This server works with any MCP client that supports Streamable HTTP transport:
+Claude Desktop doesn't yet support OAuth for MCP servers. Use the manual login flow:
 
-**Continue.dev (VS Code/JetBrains):**
+**Step 1: Authenticate with Last.fm**
 
-Add to your Continue config (`~/.continue/config.json`):
+Visit this URL in your browser:
+```
+https://lastfm-mcp-prod.rian-db8.workers.dev/login
+```
+
+After authenticating, you'll receive a **session ID**.
+
+**Step 2: Configure Claude Desktop**
+
+Add the connector with your session ID:
+
+1. Open Claude Desktop → **Settings** → **Connectors**
+2. Click **Add Connector**
+3. Enter the URL with your session ID:
+   ```
+   https://lastfm-mcp-prod.rian-db8.workers.dev/mcp?session_id=YOUR_SESSION_ID
+   ```
+4. Click **Add**
+
+Your session is valid for 30 days.
+
+**Alternative: Config File Method**
+
+Add to `~/Library/Application Support/Claude/claude_desktop_config.json`:
 
 ```json
 {
-	"mcpServers": {
-		"lastfm": {
-			"command": "npx",
-			"args": ["-y", "mcp-remote", "https://lastfm-mcp-prod.rian-db8.workers.dev"]
-		}
-	}
+  "mcpServers": {
+    "lastfm": {
+      "command": "npx",
+      "args": ["-y", "mcp-remote", "https://lastfm-mcp-prod.rian-db8.workers.dev/mcp?session_id=YOUR_SESSION_ID"]
+    }
+  }
+}
+```
+
+### Claude Code
+
+Claude Code supports HTTP transport but requires manual authentication (same as Claude Desktop):
+
+**Step 1:** Get a session ID by visiting:
+```
+https://lastfm-mcp-prod.rian-db8.workers.dev/login
+```
+
+**Step 2:** Add the server with your session ID:
+```bash
+claude mcp add --transport http lastfm "https://lastfm-mcp-prod.rian-db8.workers.dev/mcp?session_id=YOUR_SESSION_ID"
+```
+
+**Step 3:** Verify it's connected:
+```bash
+claude mcp list
+```
+
+### MCP Inspector (Testing)
+
+```bash
+npx @modelcontextprotocol/inspector https://lastfm-mcp-prod.rian-db8.workers.dev/mcp
+```
+
+### Other MCP Clients
+
+**Continue.dev (VS Code/JetBrains):**
+
+```json
+{
+  "mcpServers": {
+    "lastfm": {
+      "command": "npx",
+      "args": ["-y", "mcp-remote", "https://lastfm-mcp-prod.rian-db8.workers.dev/mcp"]
+    }
+  }
 }
 ```
 
 **Zed Editor:**
 
-Add to your Zed settings:
-
 ```json
 {
-	"context_servers": {
-		"lastfm": {
-			"command": "npx",
-			"args": ["-y", "mcp-remote", "https://lastfm-mcp-prod.rian-db8.workers.dev"]
-		}
-	}
+  "context_servers": {
+    "lastfm": {
+      "command": "npx",
+      "args": ["-y", "mcp-remote", "https://lastfm-mcp-prod.rian-db8.workers.dev/mcp"]
+    }
+  }
 }
 ```
 
-**MCP Inspector (Testing):**
+## 🔐 Authentication
 
-Test the server directly:
+This server supports two authentication methods:
 
-```bash
-npx @modelcontextprotocol/inspector https://lastfm-mcp-prod.rian-db8.workers.dev
-```
+| Method | Best For | How It Works |
+|--------|----------|--------------|
+| **OAuth 2.0** | Windsurf, OAuth-compliant clients | Automatic browser-based auth flow |
+| **Session ID** | Claude Desktop, Claude Code | Manual login, add `?session_id=` to URL |
 
-**Custom Implementation:**
+### OAuth 2.0 (Automatic)
 
-Use the MCP client SDK for your language:
-- **TypeScript/JavaScript**: `@modelcontextprotocol/sdk`
-- **Python**: `mcp` package
-- Server endpoint: `https://lastfm-mcp-prod.rian-db8.workers.dev`
-- Transport: Streamable HTTP (protocol version 2024-11-05 or 2025-06-18)
+For clients that support OAuth (like Windsurf):
+1. Connect to the server
+2. Client detects 401 response with OAuth metadata
+3. Browser opens for Last.fm authentication
+4. Token is stored client-side, persists across sessions
 
-#### 🐛 Platform-Specific Troubleshooting
+### Session ID (Manual)
 
-<details>
-<summary>If you get "spawn npx NOENT" error</summary>
-
-**For NixOS users:**
-
-```json
-{
-	"mcpServers": {
-		"lastfm": {
-			"command": "/run/current-system/sw/bin/npx",
-			"args": ["mcp-remote", "https://lastfm-mcp-prod.rian-db8.workers.dev/sse"],
-			"env": {
-				"PATH": "/run/current-system/sw/bin:$PATH"
-			}
-		}
-	}
-}
-```
-
-**For other systems:**
-
-1. Find your npx path: `which npx`
-2. Use the full path in your config:
-
-```json
-{
-	"command": "/usr/local/bin/npx", // Use your actual path
-	"args": ["mcp-remote", "https://lastfm-mcp-prod.rian-db8.workers.dev/sse"]
-}
-```
-
-</details>
-
-### 🔑 Authentication Flow
-
-1. Try any authenticated tool (like "Get my recent tracks")
-2. Claude will provide a Last.fm authentication URL
-3. Sign in with your Last.fm account and authorize the app
-4. Return to Claude - you're now authenticated!
-5. Enjoy access to your personal Last.fm data
+For Claude Desktop and clients without OAuth support:
+1. Visit `/login` in your browser
+2. Authenticate with Last.fm  
+3. Copy the session ID from the success page
+4. Add `?session_id=YOUR_ID` to your MCP server URL
+5. Session valid for 30 days
 
 ## 🛠️ Available Tools
 
@@ -263,24 +269,15 @@ These prompts generate contextual messages that guide AI assistants to provide m
    npm run dev
    ```
 
-4. **Connect with Claude Code** (for interactive testing):
+4. **Test with MCP Inspector**:
 
    ```bash
-   claude mcp add --transport http lastfm-local http://localhost:8787
+   npx @modelcontextprotocol/inspector http://localhost:8787/mcp
    ```
 
-   Or **test with MCP Inspector**:
-
-   ```bash
-   npx @modelcontextprotocol/inspector http://localhost:8787
-   ```
-
-5. **Test with curl** (for basic API testing):
-   ```bash
-   curl -X POST http://localhost:8787 \
-     -H "Content-Type: application/json" \
-     -d '{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"get_track_info","arguments":{"artist":"The Beatles","track":"Yesterday"}}}'
-   ```
+5. **Test authentication locally**:
+   - Visit `http://localhost:8787/login` to authenticate
+   - Use the session ID in your local testing
 
 ### 🚀 Deployment
 
@@ -295,12 +292,12 @@ These prompts generate contextual messages that guide AI assistants to provide m
 2. **Deploy**:
 
    ```bash
-   wrangler deploy --env production
+   npm run deploy:prod
    ```
 
-3. **Test production**:
+3. **Verify deployment**:
    ```bash
-   curl https://your-worker.workers.dev
+   curl https://lastfm-mcp-prod.rian-db8.workers.dev/
    ```
 
 ## 📋 Example Usage
@@ -310,7 +307,7 @@ These prompts generate contextual messages that guide AI assistants to provide m
 **Get track information:**
 
 ```bash
-curl -X POST https://lastfm-mcp-prod.rian-db8.workers.dev \
+curl -X POST https://lastfm-mcp-prod.rian-db8.workers.dev/mcp \
   -H "Content-Type: application/json" \
   -d '{
     "jsonrpc": "2.0",
@@ -329,7 +326,7 @@ curl -X POST https://lastfm-mcp-prod.rian-db8.workers.dev \
 **Find similar artists:**
 
 ```bash
-curl -X POST https://lastfm-mcp-prod.rian-db8.workers.dev \
+curl -X POST https://lastfm-mcp-prod.rian-db8.workers.dev/mcp \
   -H "Content-Type: application/json" \
   -d '{
     "jsonrpc": "2.0",
@@ -347,12 +344,11 @@ curl -X POST https://lastfm-mcp-prod.rian-db8.workers.dev \
 
 ### 🔐 Personal Data (Requires Authentication)
 
-**Get recent tracks with pagination:**
+For authenticated requests, use the session_id parameter:
 
 ```bash
-curl -X POST https://lastfm-mcp-prod.rian-db8.workers.dev \
+curl -X POST "https://lastfm-mcp-prod.rian-db8.workers.dev/mcp?session_id=YOUR_SESSION_ID" \
   -H "Content-Type: application/json" \
-  -H "Cookie: session=your_session_token" \
   -d '{
     "jsonrpc": "2.0",
     "id": 1,
@@ -360,51 +356,7 @@ curl -X POST https://lastfm-mcp-prod.rian-db8.workers.dev \
     "params": {
       "name": "get_recent_tracks",
       "arguments": {
-        "username": "your_username",
-        "limit": 500,
-        "page": 2
-      }
-    }
-  }'
-```
-
-### 🕰️ Temporal Queries
-
-**Get available historical periods:**
-
-```bash
-curl -X POST https://lastfm-mcp-prod.rian-db8.workers.dev \
-  -H "Content-Type: application/json" \
-  -H "Cookie: session=your_session_token" \
-  -d '{
-    "jsonrpc": "2.0",
-    "id": 1,
-    "method": "tools/call",
-    "params": {
-      "name": "get_weekly_chart_list",
-      "arguments": {
-        "username": "your_username"
-      }
-    }
-  }'
-```
-
-**Discover what you were listening to in a specific time period:**
-
-```bash
-curl -X POST https://lastfm-mcp-prod.rian-db8.workers.dev \
-  -H "Content-Type: application/json" \
-  -H "Cookie: session=your_session_token" \
-  -d '{
-    "jsonrpc": "2.0",
-    "id": 1,
-    "method": "tools/call",
-    "params": {
-      "name": "get_weekly_artist_chart",
-      "arguments": {
-        "username": "your_username",
-        "from": 1577836800,
-        "to": 1578441600
+        "limit": 10
       }
     }
   }'
@@ -423,11 +375,21 @@ With Claude or other AI assistants, you can now ask natural language questions l
 ## 🏗️ Architecture
 
 - **🌐 Runtime**: Cloudflare Workers (global edge deployment)
-- **📡 Protocol**: Model Context Protocol (MCP) 2024-11-05
-- **🔐 Authentication**: Last.fm Web Auth + JWT sessions
-- **💾 Storage**: Cloudflare KV (sessions, caching, rate limiting)
+- **📡 Protocol**: Model Context Protocol (MCP) 2024-11-05 / 2025-06-18
+- **🔐 Authentication**: OAuth 2.0 (RFC 9728) + Session ID fallback
+- **💾 Storage**: Cloudflare KV (sessions, OAuth tokens, caching)
 - **🎵 API**: Last.fm Web API v2.0
 - **⚡ Performance**: Smart caching, rate limiting, retry logic
+
+### API Endpoints
+
+| Endpoint | Purpose |
+|----------|---------|
+| `/mcp` | MCP JSON-RPC endpoint |
+| `/login` | Manual authentication for Claude Desktop |
+| `/authorize` | OAuth 2.0 authorization |
+| `/.well-known/oauth-authorization-server` | OAuth server metadata |
+| `/.well-known/oauth-protected-resource` | OAuth resource metadata |
 
 ## 🧪 Testing
 

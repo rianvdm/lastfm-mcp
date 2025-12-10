@@ -13,4 +13,7 @@ export interface Env {
 	MCP_LOGS: KVNamespace
 	MCP_RL: KVNamespace
 	MCP_SESSIONS: KVNamespace
+
+	// OAuth provider KV namespace (required by @cloudflare/workers-oauth-provider)
+	OAUTH_KV: KVNamespace
 }

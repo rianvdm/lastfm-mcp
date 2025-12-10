@@ -436,15 +436,15 @@ Use this section to track progress across sessions:
 | 3. Authenticated Tools | ✅ Complete | 2024-12-10 | 12 authenticated tools with session context |
 | 4. Resources & Prompts | ✅ Complete | 2024-12-10 | 10 resources, 6 prompts migrated |
 | 5. Entry Point & Routing | ✅ Complete | 2024-12-10 | /mcp uses createMcpHandler, backward compat kept |
-| 6. Authentication | ❌ Blocked | 2024-12-10 | See "Multi-User Auth Challenge" below |
-| 7. Testing | ⬜ Not Started | | |
-| 8. Cleanup & Deploy | ⬜ Not Started | | |
+| 6. Authentication | ✅ Complete | 2024-12-10 | OAuth 2.0 + session_id fallback for Claude Desktop |
+| 7. Testing | ✅ Complete | 2024-12-10 | Tested with Windsurf (OAuth) and Claude Desktop (session_id) |
+| 8. Cleanup & Deploy | ✅ Complete | 2024-12-10 | Deployed to production |
 
 Legend: ⬜ Not Started | 🟡 In Progress | ✅ Complete | ❌ Blocked
 
 ---
 
-## Multi-User Auth Challenge (BLOCKING)
+## Multi-User Auth Challenge (RESOLVED)
 
 ### Problem Statement
 
@@ -455,99 +455,132 @@ Claude Desktop's MCP connector does not persist session IDs across conversations
 
 This means auth stored under `session:{uuid1}` is lost when the next conversation uses `session:{uuid2}`.
 
+### Solution: Hybrid Authentication (Completed 2024-12-10)
+
+We implemented **two authentication methods** to support different MCP clients:
+
+1. **OAuth 2.0** - For clients that support it (Windsurf, future Claude updates)
+2. **Session ID URL parameter** - For clients that don't support OAuth (Claude Desktop)
+
+**New Files Created:**
+- `src/index-oauth.ts` - Hybrid auth entry point (OAuth + session_id fallback)
+- `src/auth/oauth-handler.ts` - Last.fm OAuth integration + manual login flow
+- `src/mcp/tools/authenticated.ts` - Added `registerAuthenticatedToolsWithOAuth()` function
+
+**Key Changes:**
+- Added `@cloudflare/workers-oauth-provider` dependency
+- Added `OAUTH_KV` namespace binding to `wrangler.toml`
+- OAuth tools use `getMcpAuthContext()` for auth from OAuth tokens
+- Session-based tools use KV lookup via `session_id` query parameter
+- Manual `/login` endpoint for Claude Desktop users
+
 ### Current State (as of 2024-12-10)
 
-- ✅ SDK integration working (`/mcp` endpoint uses `createMcpHandler`)
-- ✅ Session ID extraction from headers and URL params
-- ✅ Auth stored in KV per session ID
-- ✅ Login flow works and stores auth correctly
-- ❌ Auth does not persist across Claude Desktop conversations
-- ⚠️ Temporary global fallback implemented (NOT safe for multi-user)
+**OAuth 2.0 (RFC 9728 compliant):**
+- ✅ OAuth discovery (`/.well-known/oauth-authorization-server`)
+- ✅ Protected resource metadata (`/.well-known/oauth-protected-resource`)
+- ✅ Client registration endpoint (`/oauth/register`)
+- ✅ Authorization endpoint (`/authorize` → Last.fm)
+- ✅ Token exchange endpoint (`/oauth/token`)
+- ✅ Last.fm callback (`/lastfm-callback`)
+- ✅ Proper `WWW-Authenticate` header with `resource_metadata` URL
+- ✅ Works with Windsurf and OAuth-compliant MCP clients
 
-### Options for Multi-User Production
+**Session ID Fallback (for Claude Desktop):**
+- ✅ Manual login endpoint (`/login`)
+- ✅ Session stored in KV with 30-day TTL
+- ✅ Session ID passed via URL query parameter
+- ✅ Works with Claude Desktop via `?session_id=` parameter
 
-#### Option 1: OAuth 2.0 with PKCE (Recommended)
-**Status**: Not implemented  
-**Effort**: High  
-**Pros**: MCP spec compliant, industry standard, secure  
-**Cons**: Complex implementation, requires OAuth provider setup
+### Production Architecture
 
-The MCP spec recommends OAuth 2.0 for remote server authentication. Cloudflare Agents SDK supports this via:
-- `@cloudflare/workers-oauth-provider` package
-- `OAuthProvider` class with `createMcpHandler`
-- Tokens stored client-side, persist across sessions
+**Entry Point:** `src/index-oauth.ts` (hybrid auth)  
+**Deploy Command:** `npm run deploy:prod`
 
-Implementation steps:
-1. Set up OAuth provider (Cloudflare Access or custom)
-2. Implement authorization endpoint
-3. Implement token endpoint
-4. Use `getMcpAuthContext()` in tools
-5. Map OAuth identity to Last.fm session
+#### Authentication Flow Diagram
 
-References:
-- [MCP Authorization Spec](https://modelcontextprotocol.io/specification/2025-06-18/basic/authorization)
-- [Cloudflare MCP Authorization](https://developers.cloudflare.com/agents/model-context-protocol/authorization/)
-
-#### Option 2: Cloudflare Access Integration
-**Status**: Not implemented  
-**Effort**: Medium  
-**Pros**: Handles auth at edge, enterprise-grade  
-**Cons**: Requires Cloudflare Access subscription, adds dependency
-
-Use Cloudflare Access as OAuth provider:
-1. Configure Access application for the MCP server
-2. Access handles authentication before request reaches worker
-3. Worker receives authenticated user identity in headers
-4. Map Access identity to Last.fm session
-
-Reference: [Secure MCP with Access](https://developers.cloudflare.com/cloudflare-one/access-controls/ai-controls/saas-mcp/)
-
-#### Option 3: User-Configured Session IDs
-**Status**: Implemented (workaround)  
-**Effort**: Low  
-**Pros**: Works now, no server changes needed  
-**Cons**: Poor UX, requires user to configure URL
-
-Users add a fixed session ID to their connector URL:
 ```
-https://lastfm-mcp-prod.rian-db8.workers.dev/mcp?session_id=USER-SPECIFIC-UUID
-```
-
-This is a valid workaround but not ideal for a public service.
-
-#### Option 4: Cookie-Based Auth with SameSite=None
-**Status**: Partially implemented  
-**Effort**: Low  
-**Pros**: Standard web auth pattern  
-**Cons**: MCP clients may not support cookies, CORS complexity
-
-Cookies are set on auth callback but Claude's connector likely doesn't persist them.
-
-### Recommended Path Forward
-
-For a **public multi-user service**, implement **Option 1 (OAuth 2.0)** with this approach:
-
-1. **Phase 1**: Keep current implementation for local/personal use
-2. **Phase 2**: Add OAuth 2.0 support alongside current auth
-3. **Phase 3**: Deprecate session-based auth, require OAuth
-
-OAuth implementation outline:
-```typescript
-import { OAuthProvider } from "@cloudflare/workers-oauth-provider";
-import { createMcpHandler, getMcpAuthContext } from "agents/mcp";
-
-// In tool handler:
-const authContext = getMcpAuthContext();
-const userId = authContext.props.sub; // From OAuth token
-const lastfmSession = await lookupLastfmSession(userId);
+┌─────────────────────────────────────────────────────────────────┐
+│                     MCP Client Request                          │
+│                    POST /mcp                                    │
+└─────────────────────────────┬───────────────────────────────────┘
+                              │
+                              ▼
+                   ┌──────────────────────┐
+                   │ Has session_id param? │
+                   └──────────────────────┘
+                      │              │
+                     YES            NO
+                      │              │
+                      ▼              ▼
+           ┌─────────────────┐  ┌─────────────────────┐
+           │ Lookup session  │  │ OAuthProvider       │
+           │ from KV         │  │ checks Bearer token │
+           └────────┬────────┘  └──────────┬──────────┘
+                    │                      │
+              ┌─────┴─────┐          ┌─────┴─────┐
+              │  Valid?   │          │  Valid?   │
+              └───────────┘          └───────────┘
+               │        │             │        │
+              YES      NO           YES       NO
+               │        │             │        │
+               ▼        ▼             ▼        ▼
+           ┌──────┐ ┌──────────┐  ┌──────┐ ┌──────────────┐
+           │ MCP  │ │ 401 +    │  │ MCP  │ │ 401 +        │
+           │Server│ │ login URL│  │Server│ │ WWW-Auth     │
+           └──────┘ └──────────┘  └──────┘ │ resource_    │
+                                           │ metadata     │
+                                           └──────────────┘
 ```
 
-### Temporary Workaround (Current)
+#### Client Compatibility
 
-Global auth fallback is implemented but **NOT SAFE for multi-user**:
-- Last authenticated user becomes the "default" for everyone
-- Acceptable for single-user testing only
-- Must be replaced with proper OAuth before public launch
+| Client | Auth Method | Status |
+|--------|-------------|--------|
+| Windsurf | OAuth 2.0 | ✅ Working |
+| Claude Desktop | session_id URL param | ✅ Working (manual setup) |
+| Claude Code | session_id URL param | ✅ Working (manual setup) |
+| MCP Inspector | OAuth 2.0 | ✅ Should work |
+| Custom clients | Either | ✅ Both supported |
+
+#### OAuth 2.0 Flow (Windsurf, etc.)
+
+1. Client requests `/mcp` → gets 401 with `WWW-Authenticate: Bearer resource_metadata="..."` 
+2. Client fetches `/.well-known/oauth-protected-resource`
+3. Client fetches `/.well-known/oauth-authorization-server`
+4. Client registers via `/oauth/register`
+5. Client redirects user to `/authorize`
+6. Server redirects to Last.fm auth
+7. Last.fm redirects to `/lastfm-callback`
+8. Server completes OAuth, issues token
+9. Client accesses `/mcp` with Bearer token
+
+#### Session ID Flow (Claude Desktop)
+
+1. User visits `https://lastfm-mcp-prod.rian-db8.workers.dev/login`
+2. Redirects to Last.fm authentication
+3. Last.fm redirects to `/callback`
+4. Server stores session in KV, shows session ID
+5. User adds `?session_id=XXX` to their MCP config URL
+6. All requests to `/mcp?session_id=XXX` use stored session
+
+#### Endpoint Reference
+
+| Endpoint | Method | Purpose |
+|----------|--------|--------|
+| `/` | GET | API info JSON |
+| `/mcp` | POST | MCP JSON-RPC endpoint |
+| `/mcp?session_id=XXX` | POST | MCP with session auth |
+| `/login` | GET | Manual login (Claude Desktop) |
+| `/callback` | GET | Manual login callback |
+| `/authorize` | GET | OAuth authorization |
+| `/oauth/token` | POST | OAuth token exchange |
+| `/oauth/register` | POST | OAuth client registration |
+| `/lastfm-callback` | GET | OAuth Last.fm callback |
+| `/.well-known/oauth-authorization-server` | GET | OAuth server metadata |
+| `/.well-known/oauth-protected-resource` | GET | OAuth resource metadata |
+| `/.well-known/mcp.json` | GET | MCP server discovery |
+| `/health` | GET | Health check |
 
 ---
 
