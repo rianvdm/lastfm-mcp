@@ -436,11 +436,118 @@ Use this section to track progress across sessions:
 | 3. Authenticated Tools | ✅ Complete | 2024-12-10 | 12 authenticated tools with session context |
 | 4. Resources & Prompts | ✅ Complete | 2024-12-10 | 10 resources, 6 prompts migrated |
 | 5. Entry Point & Routing | ✅ Complete | 2024-12-10 | /mcp uses createMcpHandler, backward compat kept |
-| 6. Authentication | 🟡 In Progress | | Session context integration done, need testing |
+| 6. Authentication | ❌ Blocked | 2024-12-10 | See "Multi-User Auth Challenge" below |
 | 7. Testing | ⬜ Not Started | | |
 | 8. Cleanup & Deploy | ⬜ Not Started | | |
 
 Legend: ⬜ Not Started | 🟡 In Progress | ✅ Complete | ❌ Blocked
+
+---
+
+## Multi-User Auth Challenge (BLOCKING)
+
+### Problem Statement
+
+Claude Desktop's MCP connector does not persist session IDs across conversations:
+- First request in conversation: No `Mcp-Session-Id` header → server generates new UUID
+- Within conversation: Header is sent back correctly
+- New conversation: Fresh start → completely new session ID
+
+This means auth stored under `session:{uuid1}` is lost when the next conversation uses `session:{uuid2}`.
+
+### Current State (as of 2024-12-10)
+
+- ✅ SDK integration working (`/mcp` endpoint uses `createMcpHandler`)
+- ✅ Session ID extraction from headers and URL params
+- ✅ Auth stored in KV per session ID
+- ✅ Login flow works and stores auth correctly
+- ❌ Auth does not persist across Claude Desktop conversations
+- ⚠️ Temporary global fallback implemented (NOT safe for multi-user)
+
+### Options for Multi-User Production
+
+#### Option 1: OAuth 2.0 with PKCE (Recommended)
+**Status**: Not implemented  
+**Effort**: High  
+**Pros**: MCP spec compliant, industry standard, secure  
+**Cons**: Complex implementation, requires OAuth provider setup
+
+The MCP spec recommends OAuth 2.0 for remote server authentication. Cloudflare Agents SDK supports this via:
+- `@cloudflare/workers-oauth-provider` package
+- `OAuthProvider` class with `createMcpHandler`
+- Tokens stored client-side, persist across sessions
+
+Implementation steps:
+1. Set up OAuth provider (Cloudflare Access or custom)
+2. Implement authorization endpoint
+3. Implement token endpoint
+4. Use `getMcpAuthContext()` in tools
+5. Map OAuth identity to Last.fm session
+
+References:
+- [MCP Authorization Spec](https://modelcontextprotocol.io/specification/2025-06-18/basic/authorization)
+- [Cloudflare MCP Authorization](https://developers.cloudflare.com/agents/model-context-protocol/authorization/)
+
+#### Option 2: Cloudflare Access Integration
+**Status**: Not implemented  
+**Effort**: Medium  
+**Pros**: Handles auth at edge, enterprise-grade  
+**Cons**: Requires Cloudflare Access subscription, adds dependency
+
+Use Cloudflare Access as OAuth provider:
+1. Configure Access application for the MCP server
+2. Access handles authentication before request reaches worker
+3. Worker receives authenticated user identity in headers
+4. Map Access identity to Last.fm session
+
+Reference: [Secure MCP with Access](https://developers.cloudflare.com/cloudflare-one/access-controls/ai-controls/saas-mcp/)
+
+#### Option 3: User-Configured Session IDs
+**Status**: Implemented (workaround)  
+**Effort**: Low  
+**Pros**: Works now, no server changes needed  
+**Cons**: Poor UX, requires user to configure URL
+
+Users add a fixed session ID to their connector URL:
+```
+https://lastfm-mcp-prod.rian-db8.workers.dev/mcp?session_id=USER-SPECIFIC-UUID
+```
+
+This is a valid workaround but not ideal for a public service.
+
+#### Option 4: Cookie-Based Auth with SameSite=None
+**Status**: Partially implemented  
+**Effort**: Low  
+**Pros**: Standard web auth pattern  
+**Cons**: MCP clients may not support cookies, CORS complexity
+
+Cookies are set on auth callback but Claude's connector likely doesn't persist them.
+
+### Recommended Path Forward
+
+For a **public multi-user service**, implement **Option 1 (OAuth 2.0)** with this approach:
+
+1. **Phase 1**: Keep current implementation for local/personal use
+2. **Phase 2**: Add OAuth 2.0 support alongside current auth
+3. **Phase 3**: Deprecate session-based auth, require OAuth
+
+OAuth implementation outline:
+```typescript
+import { OAuthProvider } from "@cloudflare/workers-oauth-provider";
+import { createMcpHandler, getMcpAuthContext } from "agents/mcp";
+
+// In tool handler:
+const authContext = getMcpAuthContext();
+const userId = authContext.props.sub; // From OAuth token
+const lastfmSession = await lookupLastfmSession(userId);
+```
+
+### Temporary Workaround (Current)
+
+Global auth fallback is implemented but **NOT SAFE for multi-user**:
+- Last authenticated user becomes the "default" for everyone
+- Acceptable for single-user testing only
+- Must be replaced with proper OAuth before public launch
 
 ---
 

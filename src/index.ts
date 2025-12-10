@@ -41,31 +41,53 @@ function addCorsHeaders(headers: HeadersInit = {}): Headers {
 }
 
 /**
- * Get session from KV storage by session ID or cookie
+ * Get session from KV storage by session ID, global fallback, or cookie
  */
 async function getSessionFromRequest(request: Request, env: Env): Promise<SessionPayload | null> {
-	// Try session ID first (modern Streamable HTTP approach)
-	const sessionId = request.headers.get('Mcp-Session-Id') || request.headers.get('X-Connection-ID')
-	if (sessionId && env.MCP_SESSIONS) {
-		try {
-			const sessionDataStr = await env.MCP_SESSIONS.get(`session:${sessionId}`)
-			if (sessionDataStr) {
-				const sessionData = JSON.parse(sessionDataStr)
-				if (sessionData.expiresAt && new Date(sessionData.expiresAt) > new Date()) {
-					if (sessionData.username && sessionData.sessionKey) {
-						return {
-							userId: sessionData.userId,
-							sessionKey: sessionData.sessionKey,
-							username: sessionData.username,
-							iat: Math.floor(Date.now() / 1000),
-							exp: Math.floor(new Date(sessionData.expiresAt).getTime() / 1000),
+	const url = new URL(request.url)
+
+	// Try session ID from multiple sources (URL param, headers)
+	const sessionId =
+		url.searchParams.get('session_id') ||
+		request.headers.get('Mcp-Session-Id') ||
+		request.headers.get('X-Connection-ID')
+
+	if (env.MCP_SESSIONS) {
+		// 1. First try session-specific auth if we have a session ID
+		if (sessionId) {
+			const kvKey = `session:${sessionId}`
+			console.log(`[SESSION-LOOKUP] Looking up KV key: ${kvKey}`)
+			try {
+				const sessionDataStr = await env.MCP_SESSIONS.get(kvKey)
+				if (sessionDataStr) {
+					const sessionData = JSON.parse(sessionDataStr)
+					console.log(`[SESSION-LOOKUP] ✅ Found session-specific auth for ${sessionData.username}`)
+					if (sessionData.expiresAt && new Date(sessionData.expiresAt) > new Date()) {
+						if (sessionData.username && sessionData.sessionKey) {
+							return {
+								userId: sessionData.userId,
+								sessionKey: sessionData.sessionKey,
+								username: sessionData.username,
+								iat: Math.floor(Date.now() / 1000),
+								exp: Math.floor(new Date(sessionData.expiresAt).getTime() / 1000),
+							}
 						}
+					} else {
+						console.log(`[SESSION-LOOKUP] ⚠️ Session expired`)
 					}
+				} else {
+					console.log(`[SESSION-LOOKUP] No session-specific auth for: ${kvKey}`)
 				}
+			} catch (error) {
+				console.error('[SESSION-LOOKUP] Error retrieving session:', error)
 			}
-		} catch (error) {
-			console.error('Error retrieving session by session ID:', error)
 		}
+
+		// Note: Global auth fallback removed - not safe for multi-user deployments
+		// For multi-user, users must use URL-based session IDs until OAuth is implemented
+		// See MCP-MODERNIZATION-PLAN.md "Multi-User Auth Challenge" section
+	} else {
+		console.log(`[SESSION-LOOKUP] No KV storage available`)
 	}
 
 	// Try cookie-based auth
@@ -99,11 +121,28 @@ async function handleMCPRequestSDK(request: Request, env: Env, ctx: ExecutionCon
 	const url = new URL(request.url)
 	const baseUrl = `${url.protocol}//${url.host}`
 
-	// Get session ID from headers
-	const sessionId = request.headers.get('Mcp-Session-Id') || request.headers.get('X-Connection-ID')
+	// Get session ID from multiple sources (in priority order):
+	// 1. URL query param (for clients that can't persist headers)
+	// 2. Mcp-Session-Id header (MCP standard)
+	// 3. X-Connection-ID header (legacy)
+	// 4. Generate new UUID if none provided
+	const urlSessionId = url.searchParams.get('session_id')
+	const headerSessionId = request.headers.get('Mcp-Session-Id')
+	const connectionId = request.headers.get('X-Connection-ID')
 
-	// Get session from request
+	let sessionId = urlSessionId || headerSessionId || connectionId
+	const sessionSource = urlSessionId ? 'url' : headerSessionId ? 'header' : connectionId ? 'x-connection' : 'generated'
+
+	if (!sessionId) {
+		sessionId = crypto.randomUUID()
+	}
+
+	console.log(`[MCP-SDK] Session ID: ${sessionId} (source: ${sessionSource})`)
+	console.log(`[MCP-SDK] Headers: Mcp-Session-Id=${headerSessionId}, X-Connection-ID=${connectionId}`)
+
+	// Get session from request (checks KV for auth data)
 	const sessionPayload = await getSessionFromRequest(request, env)
+	console.log(`[MCP-SDK] Auth status: ${sessionPayload ? `authenticated as ${sessionPayload.username}` : 'not authenticated'}`)
 
 	// Create MCP server with context
 	const { server, setContext } = createMcpServer(env, baseUrl)
@@ -120,11 +159,22 @@ async function handleMCPRequestSDK(request: Request, env: Env, ctx: ExecutionCon
 	})
 
 	// Create handler for this request
-	// Note: The SDK handler handles CORS internally
 	const handler = createMcpHandler(server)
 
-	// Call the handler
-	return handler(request, env, ctx)
+	// Call the handler and add our session ID to response headers
+	const response = await handler(request, env, ctx)
+
+	// Clone the response to add the session ID header
+	// This ensures clients can persist the session ID
+	const newHeaders = new Headers(response.headers)
+	newHeaders.set('Mcp-Session-Id', sessionId)
+	newHeaders.set('Access-Control-Expose-Headers', 'Mcp-Session-Id')
+
+	return new Response(response.body, {
+		status: response.status,
+		statusText: response.statusText,
+		headers: newHeaders,
+	})
 }
 
 export default {
@@ -472,38 +522,33 @@ async function handleCallback(request: Request, env: Env): Promise<Response> {
 			168, // expires in 7 days (168 hours)
 		)
 
-		// Store session in KV with session-specific key
+		// Store session in KV (session-specific only for multi-user safety)
+		console.log(`[AUTH-CALLBACK] Token exchange successful for user: ${username}`)
+		console.log(`[AUTH-CALLBACK] Session ID from URL: ${sessionId || 'NONE'}`)
+
 		if (env.MCP_SESSIONS && sessionId) {
-			try {
-				const sessionData = {
-					token: sessionToken,
-					userId: username,
-					sessionKey,
-					username,
-					timestamp: Date.now(),
-					expiresAt: Date.now() + 7 * 24 * 60 * 60 * 1000, // 7 days
-					sessionId: sessionId,
-				}
-
-				// Debug log what we're storing
-				console.log('Storing session data for session ID:', sessionId, {
-					hasUserId: !!sessionData.userId,
-					hasUsername: !!sessionData.username,
-					hasSessionKey: !!sessionData.sessionKey,
-					userId: sessionData.userId,
-					username: sessionData.username,
-					sessionKey: sessionData.sessionKey ? 'present' : 'missing',
-				})
-
-				// Store with session-specific key
-				await env.MCP_SESSIONS.put(`session:${sessionId}`, JSON.stringify(sessionData), {
-					expirationTtl: 7 * 24 * 60 * 60, // 7 days to match JWT expiration
-				})
-
-				console.log(`Last.fm session stored for session ${sessionId}, user: ${username}`)
-			} catch (error) {
-				console.warn('Could not save session to KV:', error)
+			const sessionData = {
+				token: sessionToken,
+				userId: username,
+				sessionKey,
+				username,
+				timestamp: Date.now(),
+				expiresAt: Date.now() + 7 * 24 * 60 * 60 * 1000, // 7 days
+				sessionId: sessionId,
 			}
+
+			try {
+				// Store with session-specific key only (multi-user safe)
+				const kvKey = `session:${sessionId}`
+				await env.MCP_SESSIONS.put(kvKey, JSON.stringify(sessionData), {
+					expirationTtl: 7 * 24 * 60 * 60, // 7 days
+				})
+				console.log(`[AUTH-CALLBACK] ✅ Session auth stored: key=${kvKey}, user=${username}`)
+			} catch (error) {
+				console.error('[AUTH-CALLBACK] ❌ Failed to save auth to KV:', error)
+			}
+		} else {
+			console.warn(`[AUTH-CALLBACK] ⚠️ Cannot store auth: MCP_SESSIONS=${!!env.MCP_SESSIONS}, sessionId=${sessionId}`)
 		}
 
 		// Set secure HTTP-only cookie
