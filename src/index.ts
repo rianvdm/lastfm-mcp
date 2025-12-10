@@ -99,21 +99,25 @@ async function handleMCPRequestSDK(request: Request, env: Env, ctx: ExecutionCon
 	const url = new URL(request.url)
 	const baseUrl = `${url.protocol}//${url.host}`
 
+	// Get session ID from headers
+	const sessionId = request.headers.get('Mcp-Session-Id') || request.headers.get('X-Connection-ID')
+
 	// Get session from request
 	const sessionPayload = await getSessionFromRequest(request, env)
 
 	// Create MCP server with context
 	const { server, setContext } = createMcpServer(env, baseUrl)
 
-	// Set session context if authenticated
-	if (sessionPayload) {
-		setContext({
-			session: {
-				username: sessionPayload.username,
-				sessionKey: sessionPayload.sessionKey,
-			},
-		})
-	}
+	// Set session context (including session ID for auth URL generation)
+	setContext({
+		sessionId,
+		session: sessionPayload
+			? {
+					username: sessionPayload.username,
+					sessionKey: sessionPayload.sessionKey,
+				}
+			: null,
+	})
 
 	// Create handler for this request
 	// Note: The SDK handler handles CORS internally

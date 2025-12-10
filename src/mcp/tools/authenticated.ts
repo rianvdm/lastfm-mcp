@@ -33,6 +33,7 @@ export function registerAuthenticatedTools(
 	client: CachedLastfmClient,
 	getSession: () => AuthSession | null,
 	getBaseUrl: () => string,
+	getSessionId: () => string | null,
 ): void {
 	// lastfm_auth_status - Check authentication status
 	server.tool(
@@ -42,9 +43,10 @@ export function registerAuthenticatedTools(
 		async () => {
 			const session = getSession()
 			const baseUrl = getBaseUrl()
+			const sessionId = getSessionId()
 
 			if (!session) {
-				const loginUrl = `${baseUrl}/login`
+				const loginUrl = sessionId ? `${baseUrl}/login?session_id=${sessionId}` : `${baseUrl}/login`
 				return {
 					content: [
 						{
@@ -134,7 +136,7 @@ You are not currently authenticated with Last.fm. To access your personal listen
 		async ({ username, limit, page, from, to }) => {
 			const session = getSession()
 			if (!session) {
-				return { content: [{ type: 'text', text: requiresAuthMessage(getBaseUrl()) }] }
+				return { content: [{ type: 'text', text: requiresAuthMessage(getBaseUrl(), getSessionId()) }] }
 			}
 
 			const effectiveUsername = username || session.username
@@ -187,7 +189,7 @@ ${currentPage > 1 ? `\n⬅️ **Previous page:** Use \`page: ${currentPage - 1}\
 		async ({ username, period, limit }) => {
 			const session = getSession()
 			if (!session) {
-				return { content: [{ type: 'text', text: requiresAuthMessage(getBaseUrl()) }] }
+				return { content: [{ type: 'text', text: requiresAuthMessage(getBaseUrl(), getSessionId()) }] }
 			}
 
 			const effectiveUsername = username || session.username
@@ -223,7 +225,7 @@ Total artists: ${data.topartists['@attr'].total}`,
 		async ({ username, period, limit }) => {
 			const session = getSession()
 			if (!session) {
-				return { content: [{ type: 'text', text: requiresAuthMessage(getBaseUrl()) }] }
+				return { content: [{ type: 'text', text: requiresAuthMessage(getBaseUrl(), getSessionId()) }] }
 			}
 
 			const effectiveUsername = username || session.username
@@ -263,7 +265,7 @@ Total albums: ${data.topalbums['@attr'].total}`,
 		async ({ username, limit }) => {
 			const session = getSession()
 			if (!session) {
-				return { content: [{ type: 'text', text: requiresAuthMessage(getBaseUrl()) }] }
+				return { content: [{ type: 'text', text: requiresAuthMessage(getBaseUrl(), getSessionId()) }] }
 			}
 
 			const effectiveUsername = username || session.username
@@ -302,7 +304,7 @@ Total loved tracks: ${data.lovedtracks['@attr'].total}`,
 		async ({ username }) => {
 			const session = getSession()
 			if (!session) {
-				return { content: [{ type: 'text', text: requiresAuthMessage(getBaseUrl()) }] }
+				return { content: [{ type: 'text', text: requiresAuthMessage(getBaseUrl(), getSessionId()) }] }
 			}
 
 			const effectiveUsername = username || session.username
@@ -344,7 +346,7 @@ Total loved tracks: ${data.lovedtracks['@attr'].total}`,
 		async ({ username, period }) => {
 			const session = getSession()
 			if (!session) {
-				return { content: [{ type: 'text', text: requiresAuthMessage(getBaseUrl()) }] }
+				return { content: [{ type: 'text', text: requiresAuthMessage(getBaseUrl(), getSessionId()) }] }
 			}
 
 			const effectiveUsername = username || session.username
@@ -382,7 +384,7 @@ Total loved tracks: ${data.lovedtracks['@attr'].total}`,
 		async ({ username, limit, genre }) => {
 			const session = getSession()
 			if (!session) {
-				return { content: [{ type: 'text', text: requiresAuthMessage(getBaseUrl()) }] }
+				return { content: [{ type: 'text', text: requiresAuthMessage(getBaseUrl(), getSessionId()) }] }
 			}
 
 			const effectiveUsername = username || session.username
@@ -418,7 +420,7 @@ ${artistList}
 		async ({ username }) => {
 			const session = getSession()
 			if (!session) {
-				return { content: [{ type: 'text', text: requiresAuthMessage(getBaseUrl()) }] }
+				return { content: [{ type: 'text', text: requiresAuthMessage(getBaseUrl(), getSessionId()) }] }
 			}
 
 			const effectiveUsername = username || session.username
@@ -469,7 +471,7 @@ ${chartList}
 		async ({ username, from, to }) => {
 			const session = getSession()
 			if (!session) {
-				return { content: [{ type: 'text', text: requiresAuthMessage(getBaseUrl()) }] }
+				return { content: [{ type: 'text', text: requiresAuthMessage(getBaseUrl(), getSessionId()) }] }
 			}
 
 			const effectiveUsername = username || session.username
@@ -515,7 +517,7 @@ ${artists.length > 30 ? '\n📝 **Note:** Showing top 30 artists only' : ''}
 		async ({ username, from, to }) => {
 			const session = getSession()
 			if (!session) {
-				return { content: [{ type: 'text', text: requiresAuthMessage(getBaseUrl()) }] }
+				return { content: [{ type: 'text', text: requiresAuthMessage(getBaseUrl(), getSessionId()) }] }
 			}
 
 			const effectiveUsername = username || session.username
@@ -553,12 +555,13 @@ ${tracks.length > 30 ? '\n📝 **Note:** Showing top 30 tracks only' : ''}
 /**
  * Helper to generate authentication required message.
  */
-function requiresAuthMessage(baseUrl: string): string {
+function requiresAuthMessage(baseUrl: string, sessionId: string | null): string {
+	const loginUrl = sessionId ? `${baseUrl}/login?session_id=${sessionId}` : `${baseUrl}/login`
 	return `🔐 **Authentication Required**
 
 This tool requires authentication with Last.fm. Please authenticate first:
 
-1. Visit: ${baseUrl}/login
+1. Visit: ${loginUrl}
 2. Sign in with your Last.fm account
 3. Return here and try again
 

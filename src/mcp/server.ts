@@ -25,6 +25,7 @@ const SERVER_VERSION = '1.0.0'
 export interface McpRequestContext {
 	session: AuthSession | null
 	baseUrl: string
+	sessionId: string | null
 }
 
 /**
@@ -59,17 +60,19 @@ export function createMcpServer(env: Env, initialBaseUrl: string): McpServerWith
 	const context: McpRequestContext = {
 		session: null,
 		baseUrl: initialBaseUrl,
+		sessionId: null,
 	}
 
 	// Getters that tools use to access current context
 	const getSession = () => context.session
 	const getBaseUrl = () => context.baseUrl
+	const getSessionId = () => context.sessionId
 
 	// Register public tools (no auth required)
 	registerPublicTools(server, cachedClient, getBaseUrl)
 
 	// Register authenticated tools (use session from context)
-	registerAuthenticatedTools(server, cachedClient, getSession, getBaseUrl)
+	registerAuthenticatedTools(server, cachedClient, getSession, getBaseUrl, getSessionId)
 
 	// Register resources
 	registerResources(server, cachedClient, getSession)
@@ -82,6 +85,7 @@ export function createMcpServer(env: Env, initialBaseUrl: string): McpServerWith
 		setContext: (ctx: Partial<McpRequestContext>) => {
 			if (ctx.session !== undefined) context.session = ctx.session
 			if (ctx.baseUrl !== undefined) context.baseUrl = ctx.baseUrl
+			if (ctx.sessionId !== undefined) context.sessionId = ctx.sessionId
 		},
 		getContext: () => ({ ...context }),
 	}
