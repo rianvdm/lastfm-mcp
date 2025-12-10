@@ -620,7 +620,7 @@ function getOAuthSession(): AuthSession | null {
  * This version uses getMcpAuthContext() to get the session from OAuth tokens
  * instead of closure-based session passing. Use this with OAuthProvider.
  */
-export function registerAuthenticatedToolsWithOAuth(server: McpServer, client: CachedLastfmClient, getBaseUrl: () => string): void {
+export function registerAuthenticatedToolsWithOAuth(server: McpServer, client: CachedLastfmClient, _getBaseUrl: () => string): void {
 	// lastfm_auth_status - Check authentication status
 	server.tool('lastfm_auth_status', 'Check if user is authenticated with Last.fm - Use this to verify login status before accessing personal music data', {}, async () => {
 		const session = getOAuthSession()

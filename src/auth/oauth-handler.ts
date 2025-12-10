@@ -31,7 +31,7 @@ export interface LastfmUserProps {
  * OAuth handler for the Last.fm MCP server
  */
 export const LastfmOAuthHandler = {
-	async fetch(request: Request, env: OAuthEnv, ctx: ExecutionContext): Promise<Response> {
+	async fetch(request: Request, env: OAuthEnv, _ctx: ExecutionContext): Promise<Response> {
 		const url = new URL(request.url)
 
 		// Route requests
