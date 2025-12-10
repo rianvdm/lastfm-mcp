@@ -27,7 +27,7 @@ A **Model Context Protocol (MCP) server** that provides seamless access to Last.
 1. Go to **Settings** → **Integrations** → **Add Integration**
 2. Enter the MCP server URL:
    ```
-   https://lastfm-mcp-prod.rian-db8.workers.dev/mcp
+   https://lastfm-mcp.com/mcp
    ```
 3. Click **Connect** - your browser will open to Last.fm
 4. Sign in and authorize the app
@@ -39,14 +39,14 @@ A **Model Context Protocol (MCP) server** that provides seamless access to Last.
 2. Click **Add Integration**
 3. Enter the URL:
    ```
-   https://lastfm-mcp-prod.rian-db8.workers.dev/mcp
+   https://lastfm-mcp.com/mcp
    ```
 4. Click **Add** - authenticate with Last.fm when prompted
 
 ### Claude Code
 
 ```bash
-claude mcp add --transport http lastfm "https://lastfm-mcp-prod.rian-db8.workers.dev/mcp"
+claude mcp add --transport http lastfm "https://lastfm-mcp.com/mcp"
 ```
 
 When you first use a Last.fm tool, you'll be prompted to authenticate.
@@ -59,7 +59,7 @@ Add to your Windsurf MCP config (`~/.codeium/windsurf/mcp_config.json`):
 {
   "mcpServers": {
     "lastfm": {
-      "serverUrl": "https://lastfm-mcp-prod.rian-db8.workers.dev/mcp"
+      "serverUrl": "https://lastfm-mcp.com/mcp"
     }
   }
 }
@@ -68,7 +68,7 @@ Add to your Windsurf MCP config (`~/.codeium/windsurf/mcp_config.json`):
 ### MCP Inspector (Testing)
 
 ```bash
-npx @modelcontextprotocol/inspector https://lastfm-mcp-prod.rian-db8.workers.dev/mcp
+npx @modelcontextprotocol/inspector https://lastfm-mcp.com/mcp
 ```
 
 ### Other MCP Clients
@@ -80,7 +80,7 @@ npx @modelcontextprotocol/inspector https://lastfm-mcp-prod.rian-db8.workers.dev
   "mcpServers": {
     "lastfm": {
       "command": "npx",
-      "args": ["-y", "mcp-remote", "https://lastfm-mcp-prod.rian-db8.workers.dev/mcp"]
+      "args": ["-y", "mcp-remote", "https://lastfm-mcp.com/mcp"]
     }
   }
 }
@@ -93,7 +93,7 @@ npx @modelcontextprotocol/inspector https://lastfm-mcp-prod.rian-db8.workers.dev
   "context_servers": {
     "lastfm": {
       "command": "npx",
-      "args": ["-y", "mcp-remote", "https://lastfm-mcp-prod.rian-db8.workers.dev/mcp"]
+      "args": ["-y", "mcp-remote", "https://lastfm-mcp.com/mcp"]
     }
   }
 }
@@ -242,7 +242,7 @@ These prompts generate contextual messages that guide AI assistants to provide m
 
 3. **Verify deployment**:
    ```bash
-   curl https://lastfm-mcp-prod.rian-db8.workers.dev/
+   curl https://lastfm-mcp.com/
    ```
 
 ## 📋 Example Usage
@@ -252,7 +252,7 @@ These prompts generate contextual messages that guide AI assistants to provide m
 **Get track information:**
 
 ```bash
-curl -X POST https://lastfm-mcp-prod.rian-db8.workers.dev/mcp \
+curl -X POST https://lastfm-mcp.com/mcp \
   -H "Content-Type: application/json" \
   -d '{
     "jsonrpc": "2.0",
@@ -271,7 +271,7 @@ curl -X POST https://lastfm-mcp-prod.rian-db8.workers.dev/mcp \
 **Find similar artists:**
 
 ```bash
-curl -X POST https://lastfm-mcp-prod.rian-db8.workers.dev/mcp \
+curl -X POST https://lastfm-mcp.com/mcp \
   -H "Content-Type: application/json" \
   -d '{
     "jsonrpc": "2.0",
@@ -292,7 +292,7 @@ curl -X POST https://lastfm-mcp-prod.rian-db8.workers.dev/mcp \
 For authenticated requests, use the session_id parameter:
 
 ```bash
-curl -X POST "https://lastfm-mcp-prod.rian-db8.workers.dev/mcp?session_id=YOUR_SESSION_ID" \
+curl -X POST "https://lastfm-mcp.com/mcp?session_id=YOUR_SESSION_ID" \
   -H "Content-Type: application/json" \
   -d '{
     "jsonrpc": "2.0",
