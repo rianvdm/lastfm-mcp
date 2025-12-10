@@ -22,11 +22,38 @@ A **Model Context Protocol (MCP) server** that provides seamless access to Last.
 
 ## 🚀 Quick Start
 
-### Windsurf (OAuth - Recommended)
+### Claude.ai
 
-Windsurf supports OAuth 2.0, providing the smoothest authentication experience:
+1. Go to **Settings** → **Integrations** → **Add Integration**
+2. Enter the MCP server URL:
+   ```
+   https://lastfm-mcp-prod.rian-db8.workers.dev/mcp
+   ```
+3. Click **Connect** - your browser will open to Last.fm
+4. Sign in and authorize the app
+5. Done! Your session persists across conversations.
 
-1. Add to your Windsurf MCP config (`~/.codeium/windsurf/mcp_config.json`):
+### Claude Desktop
+
+1. Open Claude Desktop → **Settings** → **Integrations**
+2. Click **Add Integration**
+3. Enter the URL:
+   ```
+   https://lastfm-mcp-prod.rian-db8.workers.dev/mcp
+   ```
+4. Click **Add** - authenticate with Last.fm when prompted
+
+### Claude Code
+
+```bash
+claude mcp add --transport http lastfm "https://lastfm-mcp-prod.rian-db8.workers.dev/mcp"
+```
+
+When you first use a Last.fm tool, you'll be prompted to authenticate.
+
+### Windsurf
+
+Add to your Windsurf MCP config (`~/.codeium/windsurf/mcp_config.json`):
 
 ```json
 {
@@ -36,72 +63,6 @@ Windsurf supports OAuth 2.0, providing the smoothest authentication experience:
     }
   }
 }
-```
-
-2. Restart Windsurf
-3. When you first use a Last.fm tool, you'll be prompted to authenticate
-4. Your browser will open to Last.fm - sign in and authorize
-5. Done! Your session persists across conversations.
-
-### Claude Desktop (Manual Login)
-
-Claude Desktop doesn't yet support OAuth for MCP servers. Use the manual login flow:
-
-**Step 1: Authenticate with Last.fm**
-
-Visit this URL in your browser:
-```
-https://lastfm-mcp-prod.rian-db8.workers.dev/login
-```
-
-After authenticating, you'll receive a **session ID**.
-
-**Step 2: Configure Claude Desktop**
-
-Add the connector with your session ID:
-
-1. Open Claude Desktop → **Settings** → **Connectors**
-2. Click **Add Connector**
-3. Enter the URL with your session ID:
-   ```
-   https://lastfm-mcp-prod.rian-db8.workers.dev/mcp?session_id=YOUR_SESSION_ID
-   ```
-4. Click **Add**
-
-Your session is valid for 30 days.
-
-**Alternative: Config File Method**
-
-Add to `~/Library/Application Support/Claude/claude_desktop_config.json`:
-
-```json
-{
-  "mcpServers": {
-    "lastfm": {
-      "command": "npx",
-      "args": ["-y", "mcp-remote", "https://lastfm-mcp-prod.rian-db8.workers.dev/mcp?session_id=YOUR_SESSION_ID"]
-    }
-  }
-}
-```
-
-### Claude Code
-
-Claude Code supports HTTP transport but requires manual authentication (same as Claude Desktop):
-
-**Step 1:** Get a session ID by visiting:
-```
-https://lastfm-mcp-prod.rian-db8.workers.dev/login
-```
-
-**Step 2:** Add the server with your session ID:
-```bash
-claude mcp add --transport http lastfm "https://lastfm-mcp-prod.rian-db8.workers.dev/mcp?session_id=YOUR_SESSION_ID"
-```
-
-**Step 3:** Verify it's connected:
-```bash
-claude mcp list
 ```
 
 ### MCP Inspector (Testing)
@@ -140,29 +101,13 @@ npx @modelcontextprotocol/inspector https://lastfm-mcp-prod.rian-db8.workers.dev
 
 ## 🔐 Authentication
 
-This server supports two authentication methods:
+This server uses **OAuth 2.0** for authentication. When you connect from any supported client:
 
-| Method | Best For | How It Works |
-|--------|----------|--------------|
-| **OAuth 2.0** | Windsurf, OAuth-compliant clients | Automatic browser-based auth flow |
-| **Session ID** | Claude Desktop, Claude Code | Manual login, add `?session_id=` to URL |
+1. The client detects the 401 response with OAuth metadata
+2. Your browser opens to Last.fm for authentication
+3. After authorizing, tokens are stored and persist across sessions
 
-### OAuth 2.0 (Automatic)
-
-For clients that support OAuth (like Windsurf):
-1. Connect to the server
-2. Client detects 401 response with OAuth metadata
-3. Browser opens for Last.fm authentication
-4. Token is stored client-side, persists across sessions
-
-### Session ID (Manual)
-
-For Claude Desktop and clients without OAuth support:
-1. Visit `/login` in your browser
-2. Authenticate with Last.fm  
-3. Copy the session ID from the success page
-4. Add `?session_id=YOUR_ID` to your MCP server URL
-5. Session valid for 30 days
+All major MCP clients (Claude.ai, Claude Desktop, Claude Code, Windsurf) support OAuth.
 
 ## 🛠️ Available Tools
 
@@ -386,7 +331,7 @@ With Claude or other AI assistants, you can now ask natural language questions l
 | Endpoint | Purpose |
 |----------|---------|
 | `/mcp` | MCP JSON-RPC endpoint |
-| `/login` | Manual authentication for Claude Desktop |
+| `/login` | Manual authentication (legacy) |
 | `/authorize` | OAuth 2.0 authorization |
 | `/.well-known/oauth-authorization-server` | OAuth server metadata |
 | `/.well-known/oauth-protected-resource` | OAuth resource metadata |

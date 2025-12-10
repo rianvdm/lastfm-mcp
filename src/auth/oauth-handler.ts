@@ -139,6 +139,15 @@ async function handleAuthorize(request: Request, env: OAuthEnv): Promise<Respons
 		// Parse the OAuth request from the MCP client
 		const oauthReqInfo: AuthRequest = await env.OAUTH_PROVIDER.parseAuthRequest(request)
 
+		// Log the resource parameter Claude is sending
+		console.log(`[OAUTH] Auth request - client: ${oauthReqInfo.clientId}, resource: ${JSON.stringify((oauthReqInfo as any).resource)}`)
+
+		// IMPORTANT: Clear the resource parameter to prevent audience mismatch
+		// workers-oauth-provider validates audience against ${protocol}//${host} only (no path)
+		// but Claude.ai sends the full MCP endpoint URL as resource
+		// By clearing it, no audience will be set on the token, avoiding the mismatch
+		;(oauthReqInfo as any).resource = undefined
+
 		// Look up client info
 		const clientInfo = await env.OAUTH_PROVIDER.lookupClient(oauthReqInfo.clientId)
 
@@ -390,9 +399,12 @@ function handleProtectedResourceMetadata(request: Request): Response {
 	const url = new URL(request.url)
 	const baseUrl = `${url.protocol}//${url.host}`
 
+	// NOTE: The resource MUST be just the base URL (no path) because
+	// workers-oauth-provider validates audience against `${protocol}//${host}` only.
+	// If we include /mcp, tokens will fail with "Token audience does not match resource server"
 	return new Response(
 		JSON.stringify({
-			resource: `${baseUrl}/mcp`,
+			resource: baseUrl,
 			authorization_servers: [baseUrl],
 			bearer_methods_supported: ['header'],
 			scopes_supported: [],

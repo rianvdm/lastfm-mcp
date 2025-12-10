@@ -41,7 +41,7 @@ id = "e45edcc5347e4b409169c1d0a9b2ed5d"
 
 [[env.production.kv_namespaces]]
 binding = "OAUTH_KV"
-id = "35c396a7d0924dd8a5527334cd4538d3"
+id = "8c3a19a93165452b9ab0215bdb3daa71"
 
 # Legacy environment (uses old session-based auth)
 [env.legacy]

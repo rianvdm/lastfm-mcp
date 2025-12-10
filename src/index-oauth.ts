@@ -147,6 +147,39 @@ const oauthProvider = new OAuthProvider({
 })
 
 /**
+ * Strip the 'resource' parameter from a request body to prevent audience mismatch.
+ * workers-oauth-provider validates audience against ${protocol}//${host} (no path),
+ * but Claude.ai sends the full MCP endpoint URL as resource (with /mcp path).
+ */
+async function stripResourceFromRequest(request: Request): Promise<Request> {
+	if (request.method !== 'POST') return request
+
+	const contentType = request.headers.get('content-type') || ''
+	if (!contentType.includes('application/x-www-form-urlencoded')) return request
+
+	const body = await request.text()
+	const params = new URLSearchParams(body)
+
+	if (params.has('resource')) {
+		console.log(`[OAUTH] Stripping resource param from token request: ${params.get('resource')}`)
+		params.delete('resource')
+
+		return new Request(request.url, {
+			method: request.method,
+			headers: request.headers,
+			body: params.toString(),
+		})
+	}
+
+	// Re-create request with same body (since we consumed it)
+	return new Request(request.url, {
+		method: request.method,
+		headers: request.headers,
+		body: body,
+	})
+}
+
+/**
  * Main entry point - checks for session_id before deferring to OAuth
  */
 export default {
@@ -162,6 +195,11 @@ export default {
 				// Use session-based auth for Claude Desktop
 				return handleSessionBasedMcp(request, env, ctx, sessionId)
 			}
+		}
+
+		// Strip resource parameter from token requests to prevent audience mismatch
+		if (url.pathname === '/oauth/token') {
+			request = await stripResourceFromRequest(request)
 		}
 
 		// Use OAuth provider for everything else
