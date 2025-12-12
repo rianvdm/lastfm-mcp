@@ -176,7 +176,12 @@ export const MARKETING_PAGE_HTML = `<!DOCTYPE html>
         
         .query-grid {
             display: grid;
-            gap: 12px;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 16px;
+        }
+        
+        @media (max-width: 640px) {
+            .query-grid { grid-template-columns: 1fr; }
         }
         
         .query {
