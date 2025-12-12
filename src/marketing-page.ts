@@ -8,30 +8,24 @@ export const MARKETING_PAGE_HTML = `<!DOCTYPE html>
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Last.fm MCP Server - Model Context Protocol for Last.fm API | Claude AI Integration</title>
-    <meta name="description" content="Official Last.fm MCP Server for Claude Desktop. Connect AI assistants to Last.fm listening data. Get music insights, temporal queries, recommendations. Open source Model Context Protocol implementation.">
-    <meta name="keywords" content="Last.fm MCP server, Model Context Protocol, Last.fm API, Claude Desktop, Claude AI, MCP tools, music data API, Last.fm integration, AI music assistant, listening history API, temporal music queries, mcp-remote, Anthropic MCP">
+    <title>Last.fm MCP Server - Connect AI to Your Music</title>
+    <meta name="description" content="Connect Claude and other AI assistants to your Last.fm listening data. Ask questions about your music history, discover new artists, analyze your taste.">
+    <meta name="keywords" content="Last.fm, MCP, Model Context Protocol, Claude, AI, music, listening history">
     <link rel="canonical" href="https://lastfm-mcp.com">
     
-    <!-- Open Graph for social sharing -->
-    <meta property="og:title" content="Last.fm MCP Server - Official Model Context Protocol Implementation">
-    <meta property="og:description" content="Connect Claude AI to your Last.fm data. Temporal queries, music insights, recommendations. Open source MCP server with 18+ tools.">
+    <meta property="og:title" content="Last.fm MCP Server">
+    <meta property="og:description" content="Connect AI to your Last.fm listening data. Ask questions about your music history.">
     <meta property="og:type" content="website">
     <meta property="og:url" content="https://lastfm-mcp.com">
     <meta property="og:image" content="https://file.elezea.com/lastfm-img.jpg">
     
-    <!-- Twitter Card -->
     <meta name="twitter:card" content="summary_large_image">
-    <meta name="twitter:title" content="Last.fm MCP Server - Model Context Protocol for Music Data">
-    <meta name="twitter:description" content="Connect AI assistants to Last.fm. Temporal queries like 'When did I start listening to X?' Open source.">
+    <meta name="twitter:title" content="Last.fm MCP Server">
+    <meta name="twitter:description" content="Connect AI to your Last.fm listening data.">
     <meta name="twitter:image" content="https://file.elezea.com/lastfm-img.jpg">
     
-    <!-- Additional SEO -->
     <meta name="robots" content="index, follow">
-    <meta name="author" content="Last.fm MCP Server Contributors">
-    <link rel="alternate" type="application/json" href="https://lastfm-mcp-prod.rian-db8.workers.dev/api">
     
-    <!-- Schema.org structured data -->
     <script type="application/ld+json">
     {
       "@context": "https://schema.org",
@@ -39,612 +33,491 @@ export const MARKETING_PAGE_HTML = `<!DOCTYPE html>
       "name": "Last.fm MCP Server",
       "applicationCategory": "DeveloperApplication",
       "operatingSystem": "Cross-platform",
-      "description": "Model Context Protocol server that bridges AI assistants with Last.fm music data. Features temporal queries, listening insights, and music recommendations.",
+      "description": "Model Context Protocol server connecting AI assistants to Last.fm music data.",
       "url": "https://lastfm-mcp.com",
-      "author": {
-        "@type": "Organization",
-        "name": "Last.fm MCP Contributors",
-        "url": "https://github.com/rianvdm/lastfm-mcp"
-      },
-      "offers": {
-        "@type": "Offer",
-        "price": "0",
-        "priceCurrency": "USD"
-      },
-      "softwareVersion": "1.0.0",
-      "softwareHelp": "https://github.com/rianvdm/lastfm-mcp#readme",
-      "downloadUrl": "https://github.com/rianvdm/lastfm-mcp",
-      "keywords": "Last.fm, MCP, Model Context Protocol, Claude AI, API, music data, temporal queries",
-      "license": "https://opensource.org/licenses/MIT",
-      "isAccessibleForFree": true,
-      "aggregateRating": {
-        "@type": "AggregateRating",
-        "ratingValue": "5",
-        "ratingCount": "1"
-      }
+      "offers": { "@type": "Offer", "price": "0", "priceCurrency": "USD" },
+      "license": "https://opensource.org/licenses/MIT"
     }
     </script>
     
     <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
+        :root {
+            --lastfm-red: #d51007;
+            --lastfm-red-dark: #b30d06;
+            --bg-dark: #0a0a0b;
+            --bg-card: #141416;
+            --bg-card-hover: #1a1a1d;
+            --border: #2a2a2d;
+            --text: #e4e4e7;
+            --text-muted: #8b8b8f;
+            --text-dim: #5a5a5d;
         }
         
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        
         body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
-            line-height: 1.6;
-            color: #333;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: var(--bg-dark);
+            color: var(--text);
+            line-height: 1.5;
             min-height: 100vh;
         }
         
-        .container {
-            max-width: 1200px;
-            margin: 0 auto;
-            padding: 0 20px;
-        }
+        .container { max-width: 900px; margin: 0 auto; padding: 0 24px; }
         
         header {
-            background: rgba(255, 255, 255, 0.1);
-            backdrop-filter: blur(10px);
-            padding: 1rem 0;
-            position: sticky;
-            top: 0;
-            z-index: 100;
+            border-bottom: 1px solid var(--border);
+            padding: 16px 0;
         }
         
-        .header-content {
+        .header-inner {
             display: flex;
             justify-content: space-between;
             align-items: center;
         }
         
         .logo {
-            font-size: 1.5rem;
-            font-weight: bold;
-            color: white;
+            font-size: 1.1rem;
+            font-weight: 600;
+            color: var(--text);
             text-decoration: none;
-        }
-        
-        .nav-links {
             display: flex;
-            gap: 2rem;
+            align-items: center;
+            gap: 8px;
         }
         
-        .nav-links a {
-            color: white;
+        .logo-dot {
+            width: 8px;
+            height: 8px;
+            background: var(--lastfm-red);
+            border-radius: 50%;
+        }
+        
+        nav { display: flex; gap: 24px; }
+        
+        nav a {
+            color: var(--text-muted);
             text-decoration: none;
-            opacity: 0.9;
-            transition: opacity 0.3s;
+            font-size: 0.9rem;
+            transition: color 0.2s;
         }
         
-        .nav-links a:hover {
-            opacity: 1;
-        }
+        nav a:hover { color: var(--text); }
         
         .hero {
+            padding: 80px 0 60px;
             text-align: center;
-            padding: 4rem 0 6rem;
-            color: white;
         }
         
         .hero h1 {
-            font-size: 3.5rem;
-            margin-bottom: 1rem;
-            font-weight: 700;
+            font-size: 2.5rem;
+            font-weight: 600;
+            margin-bottom: 16px;
+            letter-spacing: -0.02em;
         }
         
-        .hero .subtitle {
-            font-size: 1.3rem;
-            margin-bottom: 2rem;
-            opacity: 0.9;
-            max-width: 600px;
-            margin-left: auto;
-            margin-right: auto;
+        .hero h1 span { color: var(--lastfm-red); }
+        
+        .hero p {
+            color: var(--text-muted);
+            font-size: 1.1rem;
+            max-width: 540px;
+            margin: 0 auto 32px;
         }
         
-        .badges {
+        .cta-row {
             display: flex;
+            gap: 12px;
             justify-content: center;
-            gap: 0.5rem;
-            margin-bottom: 3rem;
-            flex-wrap: wrap;
-        }
-        
-        .badge {
-            background: rgba(255, 255, 255, 0.2);
-            padding: 0.3rem 0.8rem;
-            border-radius: 20px;
-            font-size: 0.85rem;
-            backdrop-filter: blur(10px);
-        }
-        
-        .cta-buttons {
-            display: flex;
-            gap: 1rem;
-            justify-content: center;
-            margin-bottom: 3rem;
             flex-wrap: wrap;
         }
         
         .btn {
-            padding: 1rem 2rem;
-            border-radius: 8px;
+            padding: 12px 24px;
+            border-radius: 6px;
+            font-size: 0.9rem;
+            font-weight: 500;
             text-decoration: none;
-            font-weight: 600;
-            transition: all 0.3s;
+            transition: all 0.2s;
             border: none;
             cursor: pointer;
-            font-size: 1rem;
         }
         
         .btn-primary {
-            background: #ff6b6b;
+            background: var(--lastfm-red);
             color: white;
-            box-shadow: 0 4px 15px rgba(255, 107, 107, 0.4);
         }
         
-        .btn-primary:hover {
-            background: #ff5252;
-            transform: translateY(-2px);
-            box-shadow: 0 6px 20px rgba(255, 107, 107, 0.6);
-        }
+        .btn-primary:hover { background: var(--lastfm-red-dark); }
         
         .btn-secondary {
-            background: rgba(255, 255, 255, 0.2);
-            color: white;
-            border: 1px solid rgba(255, 255, 255, 0.3);
-            backdrop-filter: blur(10px);
+            background: transparent;
+            color: var(--text);
+            border: 1px solid var(--border);
         }
         
         .btn-secondary:hover {
-            background: rgba(255, 255, 255, 0.3);
-            transform: translateY(-2px);
+            background: var(--bg-card);
+            border-color: var(--text-dim);
         }
         
-        .demo-video {
-            background: rgba(255, 255, 255, 0.1);
-            border-radius: 12px;
-            padding: 2rem;
-            backdrop-filter: blur(10px);
-            margin-bottom: 2rem;
+        section { padding: 60px 0; }
+        
+        section h2 {
+            font-size: 1.5rem;
+            font-weight: 600;
+            margin-bottom: 32px;
+            letter-spacing: -0.01em;
         }
         
-        .demo-video h3 {
-            margin-bottom: 1rem;
-            font-size: 1.2rem;
+        .queries {
+            border-top: 1px solid var(--border);
         }
         
-        .demo-video p {
-            opacity: 0.9;
-            margin-bottom: 1rem;
-        }
-        
-        .features {
-            background: white;
-            padding: 5rem 0;
-        }
-        
-        .features h2 {
-            text-align: center;
-            font-size: 2.5rem;
-            margin-bottom: 3rem;
-            color: #333;
-        }
-        
-        .feature-grid {
+        .query-grid {
             display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
-            gap: 2rem;
-            margin-bottom: 3rem;
+            gap: 12px;
         }
         
-        .feature-card {
-            background: #f8f9fa;
-            padding: 2rem;
-            border-radius: 12px;
-            text-align: center;
-            border: 1px solid #e9ecef;
-            transition: transform 0.3s, box-shadow 0.3s;
+        .query {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 20px 24px;
+            transition: all 0.2s;
         }
         
-        .feature-card:hover {
-            transform: translateY(-5px);
-            box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+        .query:hover {
+            background: var(--bg-card-hover);
+            border-color: var(--text-dim);
         }
         
-        .feature-icon {
-            font-size: 3rem;
-            margin-bottom: 1rem;
+        .query q {
+            color: var(--text);
+            font-size: 1rem;
+            font-style: normal;
+            display: block;
+            margin-bottom: 8px;
         }
         
-        .feature-card h3 {
-            font-size: 1.3rem;
-            margin-bottom: 1rem;
-            color: #333;
-        }
+        .query q::before { content: '"'; color: var(--lastfm-red); }
+        .query q::after { content: '"'; color: var(--lastfm-red); }
         
-        .feature-card p {
-            color: #666;
-            line-height: 1.6;
+        .query span {
+            color: var(--text-muted);
+            font-size: 0.85rem;
         }
         
         .setup {
-            background: #f8f9fa;
-            padding: 5rem 0;
+            border-top: 1px solid var(--border);
         }
         
-        .setup h2 {
-            text-align: center;
-            font-size: 2.5rem;
-            margin-bottom: 3rem;
-            color: #333;
-        }
-        
-        .setup-steps {
+        .setup-grid {
             display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
-            gap: 2rem;
-            margin-bottom: 3rem;
+            grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+            gap: 16px;
         }
         
-        .step {
-            text-align: center;
-        }
-        
-        .step-number {
-            width: 60px;
-            height: 60px;
-            background: #667eea;
-            color: white;
-            border-radius: 50%;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 1.5rem;
-            font-weight: bold;
-            margin: 0 auto 1rem;
-        }
-        
-        .step h3 {
-            margin-bottom: 1rem;
-            color: #333;
-        }
-        
-        .step p {
-            color: #666;
-        }
-        
-        .code-block {
-            background: #2d3748;
-            color: #e2e8f0;
-            padding: 1.5rem;
+        .setup-card {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
             border-radius: 8px;
-            margin: 2rem 0;
+            padding: 24px;
+        }
+        
+        .setup-card h3 {
+            font-size: 0.95rem;
+            font-weight: 600;
+            margin-bottom: 12px;
+            color: var(--text);
+        }
+        
+        .setup-card p {
+            color: var(--text-muted);
+            font-size: 0.85rem;
+            margin-bottom: 16px;
+        }
+        
+        .code-wrap {
+            position: relative;
+            margin-top: 16px;
+        }
+        
+        .setup-card code {
+            display: block;
+            background: var(--bg-dark);
+            border: 1px solid var(--border);
+            border-radius: 4px;
+            padding: 12px 40px 12px 12px;
+            font-family: 'SF Mono', Monaco, monospace;
+            font-size: 0.8rem;
+            color: var(--text);
             overflow-x: auto;
-            font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+            white-space: pre-wrap;
+            word-break: break-all;
+            min-height: 44px;
         }
         
-        .code-block pre {
-            margin: 0;
+        .copy-btn {
+            position: absolute;
+            top: 8px;
+            right: 8px;
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 4px;
+            padding: 4px 8px;
+            font-size: 0.7rem;
+            color: var(--text-muted);
+            cursor: pointer;
+            transition: all 0.2s;
         }
         
-        .examples {
-            background: white;
-            padding: 5rem 0;
+        .copy-btn:hover {
+            background: var(--bg-card-hover);
+            color: var(--text);
         }
         
-        .examples h2 {
-            text-align: center;
-            font-size: 2.5rem;
-            margin-bottom: 3rem;
-            color: #333;
+        .copy-btn.copied {
+            color: var(--lastfm-red);
         }
         
-        .example-grid {
+        .setup-card ol {
+            color: var(--text-muted);
+            font-size: 0.85rem;
+            padding-left: 20px;
+        }
+        
+        .setup-card ol li { margin-bottom: 4px; }
+        .setup-card ol li strong { color: var(--text); font-weight: 500; }
+        
+        .tools {
+            border-top: 1px solid var(--border);
+        }
+        
+        .tool-cols {
             display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
-            gap: 2rem;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 32px;
         }
         
-        .example-card {
-            background: #f8f9fa;
-            padding: 2rem;
-            border-radius: 12px;
-            border-left: 4px solid #667eea;
+        .tool-col h3 {
+            font-size: 0.8rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            color: var(--text-dim);
+            margin-bottom: 16px;
         }
         
-        .example-card h4 {
-            color: #667eea;
-            margin-bottom: 0.5rem;
-            font-size: 1.1rem;
+        .tool-col ul {
+            list-style: none;
         }
         
-        .example-card p {
-            color: #666;
-            font-style: italic;
-            margin-bottom: 1rem;
-        }
-        
-        .example-card .result {
-            background: white;
-            padding: 1rem;
-            border-radius: 6px;
-            border: 1px solid #e9ecef;
-            color: #333;
+        .tool-col li {
+            color: var(--text-muted);
             font-size: 0.9rem;
+            padding: 6px 0;
+            border-bottom: 1px solid var(--border);
         }
+        
+        .tool-col li:last-child { border-bottom: none; }
         
         footer {
-            background: #2d3748;
-            color: white;
-            padding: 3rem 0;
+            border-top: 1px solid var(--border);
+            padding: 40px 0;
             text-align: center;
         }
         
-        .footer-content {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
-            gap: 2rem;
-            margin-bottom: 2rem;
+        .footer-links {
+            display: flex;
+            justify-content: center;
+            gap: 32px;
+            margin-bottom: 24px;
+            flex-wrap: wrap;
         }
         
-        .footer-section h4 {
-            margin-bottom: 1rem;
-            color: #667eea;
-        }
-        
-        .footer-section a {
-            color: #cbd5e0;
+        .footer-links a {
+            color: var(--text-muted);
             text-decoration: none;
-            display: block;
-            margin-bottom: 0.5rem;
+            font-size: 0.9rem;
+            transition: color 0.2s;
         }
         
-        .footer-section a:hover {
-            color: white;
+        .footer-links a:hover { color: var(--text); }
+        
+        .footer-note {
+            color: var(--text-dim);
+            font-size: 0.85rem;
         }
         
-        .footer-bottom {
-            border-top: 1px solid #4a5568;
-            padding-top: 2rem;
-            color: #a0aec0;
+        .footer-note a {
+            color: var(--lastfm-red);
+            text-decoration: none;
         }
         
-        @media (max-width: 768px) {
-            .hero h1 {
-                font-size: 2.5rem;
-            }
-            
-            .hero .subtitle {
-                font-size: 1.1rem;
-            }
-            
-            .cta-buttons {
-                flex-direction: column;
-                align-items: center;
-            }
-            
-            .nav-links {
-                display: none;
-            }
+        @media (max-width: 640px) {
+            .hero { padding: 48px 0 40px; }
+            .hero h1 { font-size: 1.8rem; }
+            .hero p { font-size: 1rem; }
+            section { padding: 40px 0; }
+            nav { gap: 16px; }
+            .cta-row { flex-direction: column; align-items: center; }
+            .btn { width: 100%; max-width: 280px; text-align: center; }
         }
     </style>
 </head>
 <body>
     <header>
         <div class="container">
-            <div class="header-content">
-                <a href="#" class="logo">🎵 Last.fm MCP</a>
-                <nav class="nav-links">
-                    <a href="#features">Features</a>
+            <div class="header-inner">
+                <a href="/" class="logo">
+                    <span class="logo-dot"></span>
+                    Last.fm MCP
+                </a>
+                <nav>
                     <a href="#setup">Setup</a>
-                    <a href="#examples">Examples</a>
+                    <a href="#tools">Tools</a>
                     <a href="https://github.com/rianvdm/lastfm-mcp">GitHub</a>
                 </nav>
             </div>
         </div>
     </header>
     
-    <section class="hero">
-        <div class="container">
-            <h1>Last.fm MCP Server - Model Context Protocol for Claude AI</h1>
-            <p class="subtitle">
-                A robust MCP implementation for Last.fm API integration. Connect Claude Desktop and other AI assistants to your Last.fm listening data. Features temporal queries ("When did I start listening to...?"), music insights, and 18+ specialized tools.
-            </p>
-            
-            <div class="badges">
-                <span class="badge">🤖 AI-Powered</span>
-                <span class="badge">🔐 Secure Auth</span>
-                <span class="badge">⚡ Global Edge</span>
-                <span class="badge">📊 Rich Analytics</span>
-                <span class="badge">🆓 Open Source</span>
-            </div>
-            
-            <div class="cta-buttons">
-                <a href="#setup" class="btn btn-primary">Get Started</a>
-                <a href="https://github.com/rianvdm/lastfm-mcp" class="btn btn-secondary">View on GitHub</a>
-            </div>
-            
-            <div class="demo-video">
-                <h3>✨ Ask Claude about your music</h3>
-                <p>"When did I start listening to Led Zeppelin?" • "What was I obsessed with in summer 2023?" • "Find artists similar to my favorites"</p>
-            </div>
-        </div>
-    </section>
-    
-    <section id="features" class="features">
-        <div class="container">
-            <h2>🌟 Features</h2>
-            <div class="feature-grid">
-                <div class="feature-card">
-                    <div class="feature-icon">🎧</div>
-                    <h3>Personal Music Data</h3>
-                    <p>Access your recent tracks, top artists, albums, and loved tracks with full pagination support.</p>
-                </div>
-                
-                <div class="feature-card">
-                    <div class="feature-icon">🕰️</div>
-                    <h3>Temporal Queries</h3>
-                    <p>Explore your musical journey over time. Ask when you started listening to artists or what you loved in any time period.</p>
-                </div>
-                
-                <div class="feature-card">
-                    <div class="feature-icon">🔍</div>
-                    <h3>Music Discovery</h3>
-                    <p>Find similar artists and tracks, get personalized recommendations, and discover new music based on your taste.</p>
-                </div>
-                
-                <div class="feature-card">
-                    <div class="feature-icon">📊</div>
-                    <h3>Rich Analytics</h3>
-                    <p>Comprehensive listening statistics, charts, and insights about your musical preferences and habits.</p>
-                </div>
-                
-                <div class="feature-card">
-                    <div class="feature-icon">🔐</div>
-                    <h3>Secure & Private</h3>
-                    <p>Last.fm Web Authentication with 7-day JWT sessions. Your data stays secure with proper session management.</p>
-                </div>
-                
-                <div class="feature-card">
-                    <div class="feature-icon">⚡</div>
-                    <h3>Production Ready</h3>
-                    <p>Smart caching, rate limiting, retry logic, and global edge deployment on Cloudflare Workers.</p>
+    <main>
+        <section class="hero">
+            <div class="container">
+                <h1>Connect <span>AI</span> to your music</h1>
+                <p>An MCP server that lets Claude and other AI assistants access your Last.fm listening history. Ask questions about your music taste, discover patterns, find new artists.</p>
+                <div class="cta-row">
+                    <a href="#setup" class="btn btn-primary">Get Started</a>
+                    <a href="https://github.com/rianvdm/lastfm-mcp" class="btn btn-secondary">View Source</a>
                 </div>
             </div>
-        </div>
-    </section>
-    
-    <section id="setup" class="setup">
-        <div class="container">
-            <h2>🚀 Quick Setup</h2>
-            <div class="setup-steps">
-                <div class="step">
-                    <div class="step-number">1</div>
-                    <h3>Add Server</h3>
-                    <p>Connect via Claude Desktop Connectors UI or your preferred MCP client</p>
-                </div>
-                
-                <div class="step">
-                    <div class="step-number">2</div>
-                    <h3>Authenticate</h3>
-                    <p>Connect your Last.fm account through secure web authentication</p>
-                </div>
-                
-                <div class="step">
-                    <div class="step-number">3</div>
-                    <h3>Start Exploring</h3>
-                    <p>Ask Claude about your music and get AI-powered insights</p>
-                </div>
-            </div>
-            
-            <p style="text-align: center; margin-bottom: 1rem; margin-top: 3rem;"><strong>✨ Recommended: Claude Desktop Connectors UI</strong></p>
-            <p style="text-align: center; color: #666; margin-bottom: 1rem;">The easiest way to connect - no configuration files needed!</p>
-            <div style="text-align: center; margin: 2rem 0;">
-                <ol style="display: inline-block; text-align: left; color: #333; line-height: 2;">
-                    <li>Open Claude Desktop</li>
-                    <li>Go to <strong>Settings → Connectors</strong></li>
-                    <li>Click <strong>Add Connector</strong></li>
-                    <li>Enter URL: <code style="background: #f0f0f0; padding: 2px 8px; border-radius: 4px;">https://lastfm-mcp-prod.rian-db8.workers.dev</code></li>
-                    <li>Click <strong>Add</strong></li>
-                </ol>
-            </div>
-
-            <p style="text-align: center; margin-bottom: 1rem; margin-top: 3rem;"><strong>💻 Claude Code (Terminal)</strong></p>
-            <p style="text-align: center; color: #666; margin-bottom: 1rem;">One command to add the server</p>
-
-            <div class="code-block">
-                <pre>claude mcp add --transport http lastfm https://lastfm-mcp-prod.rian-db8.workers.dev</pre>
-            </div>
-
-            <p style="text-align: center; margin-bottom: 1rem; margin-top: 3rem;"><strong>🔧 Other MCP Clients</strong></p>
-            <p style="text-align: center; color: #666; margin-bottom: 1rem;">Continue.dev, Zed, or custom implementations</p>
-
-            <div class="code-block">
-                <pre>{
-  "mcpServers": {
-    "lastfm": {
-      "command": "npx",
-      "args": ["-y", "mcp-remote", "https://lastfm-mcp-prod.rian-db8.workers.dev"]
-    }
-  }
-}</pre>
-            </div>
-
-            <p style="text-align: center; margin-bottom: 1rem; margin-top: 3rem;"><strong>🧪 Test with MCP Inspector</strong></p>
-            <div class="code-block">
-                <pre>npx @modelcontextprotocol/inspector https://lastfm-mcp-prod.rian-db8.workers.dev</pre>
-            </div>
-        </div>
-    </section>
-    
-    <section id="examples" class="examples">
-        <div class="container">
-            <h2>💬 Ask Claude</h2>
-            <div class="example-grid">
-                <div class="example-card">
-                    <h4>🕰️ Musical Timeline</h4>
-                    <p>"When did I start listening to Led Zeppelin?"</p>
-                    <div class="result">Claude analyzes your weekly charts and finds you first played "Stairway to Heaven" in March 2019, with your listening peak during summer 2020.</div>
-                </div>
-                
-                <div class="example-card">
-                    <h4>📊 Listening Insights</h4>
-                    <p>"What was I obsessed with in 2023?"</p>
-                    <div class="result">Based on your 2023 listening data, you were heavily into indie rock with Arctic Monkeys being your top artist (847 plays), followed by a Radiohead phase in fall.</div>
-                </div>
-                
-                <div class="example-card">
-                    <h4>🔍 Music Discovery</h4>
-                    <p>"Find artists similar to my current favorites"</p>
-                    <div class="result">Analyzing your top artists, I recommend Fontaines D.C., Dry Cleaning, and Black Midi - they share the post-punk revival sound you've been loving lately.</div>
-                </div>
-                
-                <div class="example-card">
-                    <h4>📈 Trend Analysis</h4>
-                    <p>"How has my music taste evolved over time?"</p>
-                    <div class="result">Your taste has shifted from mainstream pop (2018-2019) → indie rock (2020-2021) → experimental electronic (2022) → current indie/alternative focus. You're exploring more diverse genres each year!</div>
+        </section>
+        
+        <section class="queries">
+            <div class="container">
+                <h2>Things you can ask</h2>
+                <div class="query-grid">
+                    <div class="query">
+                        <q>When did I start listening to Radiohead?</q>
+                        <span>Searches your historical charts to find when an artist first appeared</span>
+                    </div>
+                    <div class="query">
+                        <q>What was I obsessed with last summer?</q>
+                        <span>Analyzes your listening data for any time period</span>
+                    </div>
+                    <div class="query">
+                        <q>Find artists similar to my top 5</q>
+                        <span>Discovers new music based on your actual listening habits</span>
+                    </div>
+                    <div class="query">
+                        <q>How has my music taste changed over the years?</q>
+                        <span>Tracks the evolution of your listening patterns</span>
+                    </div>
                 </div>
             </div>
-        </div>
-    </section>
+        </section>
+        
+        <section id="setup" class="setup">
+            <div class="container">
+                <h2>Setup</h2>
+                <div class="setup-grid">
+                    <div class="setup-card">
+                        <h3>Claude.ai / Claude Desktop</h3>
+                        <p>Add as an integration in settings</p>
+                        <ol>
+                            <li>Go to <strong>Settings</strong> → <strong>Integrations</strong></li>
+                            <li>Click <strong>Add Integration</strong></li>
+                            <li>Enter the URL below</li>
+                            <li>Authenticate with Last.fm when prompted</li>
+                        </ol>
+                        <div class="code-wrap">
+                            <code>https://lastfm-mcp.com/mcp</code>
+                            <button class="copy-btn" onclick="copyCode(this)">Copy</button>
+                        </div>
+                    </div>
+                    <div class="setup-card">
+                        <h3>Windsurf</h3>
+                        <p>Add to ~/.codeium/windsurf/mcp_config.json</p>
+                        <div class="code-wrap">
+                            <code>{ "mcpServers": { "lastfm": { "serverUrl": "https://lastfm-mcp.com/mcp" } } }</code>
+                            <button class="copy-btn" onclick="copyCode(this)">Copy</button>
+                        </div>
+                    </div>
+                    <div class="setup-card">
+                        <h3>Other Clients</h3>
+                        <p>Claude Code, Continue.dev, Zed, or any MCP client</p>
+                        <div class="code-wrap">
+                            <code>npx mcp-remote https://lastfm-mcp.com/mcp</code>
+                            <button class="copy-btn" onclick="copyCode(this)">Copy</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+        
+        <section id="tools" class="tools">
+            <div class="container">
+                <h2>Available Tools</h2>
+                <div class="tool-cols">
+                    <div class="tool-col">
+                        <h3>Public (no auth)</h3>
+                        <ul>
+                            <li>get_track_info</li>
+                            <li>get_artist_info</li>
+                            <li>get_album_info</li>
+                            <li>get_similar_artists</li>
+                            <li>get_similar_tracks</li>
+                        </ul>
+                    </div>
+                    <div class="tool-col">
+                        <h3>Personal (auth required)</h3>
+                        <ul>
+                            <li>get_recent_tracks</li>
+                            <li>get_top_artists</li>
+                            <li>get_top_albums</li>
+                            <li>get_loved_tracks</li>
+                            <li>get_listening_stats</li>
+                            <li>get_music_recommendations</li>
+                        </ul>
+                    </div>
+                    <div class="tool-col">
+                        <h3>Temporal</h3>
+                        <ul>
+                            <li>get_weekly_chart_list</li>
+                            <li>get_weekly_artist_chart</li>
+                            <li>get_weekly_track_chart</li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+        </section>
+    </main>
     
     <footer>
         <div class="container">
-            <div class="footer-content">
-                <div class="footer-section">
-                    <h4>🔗 Resources</h4>
-                    <a href="https://github.com/rianvdm/lastfm-mcp">GitHub Repository</a>
-                    <a href="https://github.com/rianvdm/lastfm-mcp/releases">Releases</a>
-                    <a href="https://github.com/rianvdm/lastfm-mcp#readme">Documentation</a>
-                    <a href="https://github.com/rianvdm/lastfm-mcp/issues">Report Issues</a>
-                </div>
-                
-                <div class="footer-section">
-                    <h4>🛠️ Technology</h4>
-                    <a href="https://github.com/modelcontextprotocol">Model Context Protocol</a>
-                    <a href="https://workers.cloudflare.com/">Cloudflare Workers</a>
-                    <a href="https://www.last.fm/api">Last.fm API</a>
-                    <a href="https://claude.ai">Claude AI</a>
-                </div>
-                
-                <div class="footer-section">
-                    <h4>📞 Connect</h4>
-                    <a href="/login">🔐 Authenticate with Last.fm</a>
-                    <a href="/health">📊 Service Status</a>
-                    <a href="https://github.com/rianvdm/lastfm-mcp/discussions">💬 Discussions</a>
-                    <a href="https://github.com/rianvdm">👨‍💻 Creator</a>
-                </div>
+            <div class="footer-links">
+                <a href="https://github.com/rianvdm/lastfm-mcp">Source Code</a>
+                <a href="https://github.com/rianvdm/lastfm-mcp#readme">Documentation</a>
+                <a href="https://github.com/rianvdm/lastfm-mcp/issues">Report a Bug</a>
+                <a href="https://github.com/rianvdm/lastfm-mcp/discussions">Discussions</a>
             </div>
-            
-            <div class="footer-bottom">
-                <p>🎵 Built with ❤️ for music lovers and AI enthusiasts</p>
-                <p>Open source under MIT License • <a href="https://github.com/rianvdm/lastfm-mcp">Star on GitHub</a></p>
-            </div>
+            <p class="footer-note">Open source under MIT. Built on <a href="https://www.last.fm/api">Last.fm API</a> and <a href="https://modelcontextprotocol.io">MCP</a>.</p>
         </div>
     </footer>
+    <script>
+        function copyCode(btn) {
+            const code = btn.previousElementSibling.textContent;
+            navigator.clipboard.writeText(code).then(() => {
+                btn.textContent = 'Copied!';
+                btn.classList.add('copied');
+                setTimeout(() => {
+                    btn.textContent = 'Copy';
+                    btn.classList.remove('copied');
+                }, 2000);
+            });
+        }
+    </script>
 </body>
 </html>`
