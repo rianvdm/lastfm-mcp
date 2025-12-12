@@ -13,7 +13,9 @@ import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { LastfmOAuthHandler } from './auth/oauth-handler'
 import { CachedLastfmClient } from './clients/cachedLastfm'
 import { LastfmClient } from './clients/lastfm'
+import { MARKETING_PAGE_HTML } from './marketing-page'
 import { createMcpServer } from './mcp/server'
+import { PROTOCOL_VERSION } from './types/mcp'
 import type { Env } from './types/env'
 
 // Server metadata
@@ -186,6 +188,140 @@ export default {
 	async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
 		const url = new URL(request.url)
 		const baseUrl = `${url.protocol}//${url.host}`
+
+		// Handle CORS preflight requests
+		if (request.method === 'OPTIONS') {
+			return new Response(null, {
+				status: 200,
+				headers: {
+					'Access-Control-Allow-Origin': '*',
+					'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+					'Access-Control-Allow-Headers': 'Content-Type, Authorization, X-Connection-ID, Mcp-Session-Id, Cookie',
+					'Access-Control-Expose-Headers': 'Mcp-Session-Id',
+					'Access-Control-Max-Age': '86400',
+				},
+			})
+		}
+
+		// Serve marketing page at root
+		if (url.pathname === '/' && request.method === 'GET') {
+			return new Response(MARKETING_PAGE_HTML, {
+				status: 200,
+				headers: {
+					'Content-Type': 'text/html',
+					'Cache-Control': 'public, max-age=3600',
+					'Access-Control-Allow-Origin': '*',
+				},
+			})
+		}
+
+		// MCP server discovery endpoint for Claude Desktop Connectors
+		if ((url.pathname === '/.well-known/mcp.json' || url.pathname === '/.well-known/mcp') && request.method === 'GET') {
+			return new Response(
+				JSON.stringify({
+					$schema: 'https://static.modelcontextprotocol.io/schemas/mcp-server-card/v1.json',
+					version: '1.0',
+					protocolVersion: PROTOCOL_VERSION,
+					serverInfo: {
+						name: 'lastfm-mcp',
+						title: 'Last.fm MCP Server',
+						version: SERVER_VERSION,
+					},
+					description: 'Model Context Protocol server for Last.fm listening data access. Provides tools for accessing Last.fm listening history, charts, recommendations, and music data.',
+					iconUrl: 'https://www.last.fm/static/images/lastfm_avatar_twitter.52a5d69a85ac.png',
+					documentationUrl: 'https://github.com/rianvdm/lastfm-mcp#readme',
+					transport: {
+						type: 'streamable-http',
+						endpoint: '/mcp',
+					},
+					capabilities: {
+						tools: { listChanged: true },
+						prompts: { listChanged: true },
+						resources: { subscribe: false, listChanged: true },
+					},
+					authentication: {
+						required: false,
+						instructions: 'Some tools work without authentication. For personalized data, authenticate via OAuth or visit the login URL.',
+					},
+					instructions: `To use authenticated tools, authenticate via OAuth or visit: ${baseUrl}/login?session_id=YOUR_SESSION_ID`,
+					tools: ['dynamic'],
+					prompts: ['dynamic'],
+					resources: ['dynamic'],
+				}),
+				{
+					status: 200,
+					headers: {
+						'Content-Type': 'application/json',
+						'Access-Control-Allow-Origin': '*',
+						'Cache-Control': 'public, max-age=3600',
+					},
+				},
+			)
+		}
+
+		// Health check endpoint
+		if (url.pathname === '/health' && request.method === 'GET') {
+			return new Response(
+				JSON.stringify({
+					status: 'ok',
+					timestamp: new Date().toISOString(),
+					version: SERVER_VERSION,
+					service: SERVER_NAME,
+				}),
+				{
+					status: 200,
+					headers: {
+						'Content-Type': 'application/json',
+						'Access-Control-Allow-Origin': '*',
+					},
+				},
+			)
+		}
+
+		// Sitemap for search engines
+		if (url.pathname === '/sitemap.xml' && request.method === 'GET') {
+			return new Response(
+				`<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+  <url>
+    <loc>https://lastfm-mcp.com/</loc>
+    <lastmod>${new Date().toISOString().split('T')[0]}</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>1.0</priority>
+  </url>
+</urlset>`,
+				{
+					status: 200,
+					headers: {
+						'Content-Type': 'application/xml',
+						'Cache-Control': 'public, max-age=86400',
+					},
+				},
+			)
+		}
+
+		// Robots.txt for search engines
+		if (url.pathname === '/robots.txt' && request.method === 'GET') {
+			return new Response(
+				`User-agent: *
+Allow: /
+Allow: /health
+Disallow: /login
+Disallow: /callback
+Disallow: /mcp
+Disallow: /authorize
+Disallow: /oauth
+
+Sitemap: https://lastfm-mcp.com/sitemap.xml`,
+				{
+					status: 200,
+					headers: {
+						'Content-Type': 'text/plain',
+						'Cache-Control': 'public, max-age=86400',
+					},
+				},
+			)
+		}
 
 		// Check if this is an MCP request with session_id (manual login flow)
 		if (url.pathname === '/mcp') {
