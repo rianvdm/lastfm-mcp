@@ -441,7 +441,9 @@ export const MARKETING_PAGE_HTML = `<!DOCTYPE html>
                         <h3>Windsurf</h3>
                         <p>Add to ~/.codeium/windsurf/mcp_config.json</p>
                         <div class="code-wrap">
-                            <code>{ "mcpServers": { "lastfm": { "serverUrl": "https://lastfm-mcp.com/mcp" } } }</code>
+                            <code>"lastfm": {
+    "serverUrl": "https://lastfm-mcp.com/mcp"
+}</code>
                             <button class="copy-btn" onclick="copyCode(this)">Copy</button>
                         </div>
                     </div>
