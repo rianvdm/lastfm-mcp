@@ -219,10 +219,10 @@ export const MARKETING_PAGE_HTML = `<!DOCTYPE html>
             border-top: 1px solid var(--border);
         }
         
-        .setup-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
-            gap: 16px;
+        .setup-list {
+            display: flex;
+            flex-direction: column;
+            gap: 24px;
         }
         
         .setup-card {
@@ -233,10 +233,17 @@ export const MARKETING_PAGE_HTML = `<!DOCTYPE html>
         }
         
         .setup-card h3 {
-            font-size: 0.95rem;
+            font-size: 1rem;
             font-weight: 600;
-            margin-bottom: 12px;
+            margin-bottom: 8px;
             color: var(--text);
+        }
+        
+        .setup-card .config-path {
+            color: var(--text-muted);
+            font-size: 0.85rem;
+            margin-bottom: 16px;
+            font-family: 'SF Mono', Monaco, monospace;
         }
         
         .setup-card p {
@@ -247,7 +254,6 @@ export const MARKETING_PAGE_HTML = `<!DOCTYPE html>
         
         .code-wrap {
             position: relative;
-            margin-top: 16px;
         }
         
         .setup-card code {
@@ -260,8 +266,7 @@ export const MARKETING_PAGE_HTML = `<!DOCTYPE html>
             font-size: 0.8rem;
             color: var(--text);
             overflow-x: auto;
-            white-space: pre-wrap;
-            word-break: break-all;
+            white-space: pre;
             min-height: 44px;
         }
         
@@ -292,6 +297,7 @@ export const MARKETING_PAGE_HTML = `<!DOCTYPE html>
             color: var(--text-muted);
             font-size: 0.85rem;
             padding-left: 20px;
+            margin-bottom: 16px;
         }
         
         .setup-card ol li { margin-bottom: 4px; }
@@ -429,14 +435,13 @@ export const MARKETING_PAGE_HTML = `<!DOCTYPE html>
         <section id="setup" class="setup">
             <div class="container">
                 <h2>Setup</h2>
-                <div class="setup-grid">
+                <div class="setup-list">
                     <div class="setup-card">
                         <h3>Claude.ai / Claude Desktop</h3>
-                        <p>Add as an integration in settings</p>
                         <ol>
                             <li>Go to <strong>Settings</strong> → <strong>Integrations</strong></li>
                             <li>Click <strong>Add Integration</strong></li>
-                            <li>Enter the URL below</li>
+                            <li>Enter the URL below and click <strong>Add</strong></li>
                             <li>Authenticate with Last.fm when prompted</li>
                         </ol>
                         <div class="code-wrap">
@@ -445,20 +450,53 @@ export const MARKETING_PAGE_HTML = `<!DOCTYPE html>
                         </div>
                     </div>
                     <div class="setup-card">
-                        <h3>Windsurf</h3>
-                        <p>Add to ~/.codeium/windsurf/mcp_config.json</p>
+                        <h3>Windsurf / Antigravity</h3>
+                        <p class="config-path">~/.codeium/windsurf/mcp_config.json</p>
                         <div class="code-wrap">
-                            <code>"lastfm": {
-    "serverUrl": "https://lastfm-mcp.com/mcp"
+                            <code>{
+  "mcpServers": {
+    "lastfm": {
+      "serverUrl": "https://lastfm-mcp.com/mcp"
+    }
+  }
 }</code>
                             <button class="copy-btn" onclick="copyCode(this)">Copy</button>
                         </div>
                     </div>
                     <div class="setup-card">
-                        <h3>Other Clients</h3>
-                        <p>Claude Code, Continue.dev, Zed, or any MCP client</p>
+                        <h3>Claude Code</h3>
+                        <p>Run this command in your terminal:</p>
                         <div class="code-wrap">
-                            <code>npx mcp-remote https://lastfm-mcp.com/mcp</code>
+                            <code>claude mcp add --transport http lastfm https://lastfm-mcp.com/mcp</code>
+                            <button class="copy-btn" onclick="copyCode(this)">Copy</button>
+                        </div>
+                    </div>
+                    <div class="setup-card">
+                        <h3>Cursor</h3>
+                        <p class="config-path">~/.cursor/mcp.json</p>
+                        <div class="code-wrap">
+                            <code>{
+  "mcpServers": {
+    "lastfm": {
+      "url": "https://lastfm-mcp.com/mcp"
+    }
+  }
+}</code>
+                            <button class="copy-btn" onclick="copyCode(this)">Copy</button>
+                        </div>
+                    </div>
+                    <div class="setup-card">
+                        <h3>Continue.dev / Zed / Other MCP Clients</h3>
+                        <p>Use mcp-remote for clients that don't support HTTP transport natively:</p>
+                        <div class="code-wrap">
+                            <code>{
+  "mcpServers": {
+    "lastfm": {
+      "command": "npx",
+      "args": ["-y", "mcp-remote", "https://lastfm-mcp.com/mcp"]
+    }
+  }
+}</code>
                             <button class="copy-btn" onclick="copyCode(this)">Copy</button>
                         </div>
                     </div>
