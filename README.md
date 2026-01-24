@@ -57,11 +57,11 @@ Add to your Windsurf MCP config (`~/.codeium/windsurf/mcp_config.json`):
 
 ```json
 {
-  "mcpServers": {
-    "lastfm": {
-      "serverUrl": "https://lastfm-mcp.com/mcp"
-    }
-  }
+	"mcpServers": {
+		"lastfm": {
+			"serverUrl": "https://lastfm-mcp.com/mcp"
+		}
+	}
 }
 ```
 
@@ -77,12 +77,12 @@ npx @modelcontextprotocol/inspector https://lastfm-mcp.com/mcp
 
 ```json
 {
-  "mcpServers": {
-    "lastfm": {
-      "command": "npx",
-      "args": ["-y", "mcp-remote", "https://lastfm-mcp.com/mcp"]
-    }
-  }
+	"mcpServers": {
+		"lastfm": {
+			"command": "npx",
+			"args": ["-y", "mcp-remote", "https://lastfm-mcp.com/mcp"]
+		}
+	}
 }
 ```
 
@@ -90,12 +90,12 @@ npx @modelcontextprotocol/inspector https://lastfm-mcp.com/mcp
 
 ```json
 {
-  "context_servers": {
-    "lastfm": {
-      "command": "npx",
-      "args": ["-y", "mcp-remote", "https://lastfm-mcp.com/mcp"]
-    }
-  }
+	"context_servers": {
+		"lastfm": {
+			"command": "npx",
+			"args": ["-y", "mcp-remote", "https://lastfm-mcp.com/mcp"]
+		}
+	}
 }
 ```
 
@@ -108,6 +108,8 @@ This server uses **OAuth 2.0** for authentication. When you connect from any sup
 3. After authorizing, tokens are stored and persist across sessions
 
 All major MCP clients (Claude.ai, Claude Desktop, Claude Code, Windsurf) support OAuth.
+
+**Note:** Public tools (track info, artist info, similar artists, etc.) work without authentication. You only need to sign in to access your personal listening data.
 
 ## 🛠️ Available Tools
 
@@ -122,7 +124,7 @@ All major MCP clients (Claude.ai, Claude Desktop, Claude Code, Windsurf) support
 | `get_similar_tracks`  | Find tracks similar to a given track     |
 | `ping`                | Test server connectivity                 |
 | `server_info`         | Get server status and capabilities       |
-| `auth_status`         | Check your authentication status         |
+| `lastfm_auth_status`  | Check your authentication status         |
 
 ### 🔐 **Personal Tools** (Authentication Required)
 
@@ -311,11 +313,11 @@ curl -X POST "https://lastfm-mcp.com/mcp?session_id=YOUR_SESSION_ID" \
 
 With Claude or other AI assistants, you can now ask natural language questions like:
 
-- *"When did I start listening to Led Zeppelin?"*
-- *"What was I obsessed with in summer 2023?"*
-- *"Show me how my music taste has evolved over the years"*
-- *"Find artists similar to my current favorites"*
-- *"What tracks should I check out based on my listening history?"*
+- _"When did I start listening to Led Zeppelin?"_
+- _"What was I obsessed with in summer 2023?"_
+- _"Show me how my music taste has evolved over the years"_
+- _"Find artists similar to my current favorites"_
+- _"What tracks should I check out based on my listening history?"_
 
 ## 🏗️ Architecture
 
@@ -328,13 +330,13 @@ With Claude or other AI assistants, you can now ask natural language questions l
 
 ### API Endpoints
 
-| Endpoint | Purpose |
-|----------|---------|
-| `/mcp` | MCP JSON-RPC endpoint |
-| `/login` | Manual authentication (legacy) |
-| `/authorize` | OAuth 2.0 authorization |
-| `/.well-known/oauth-authorization-server` | OAuth server metadata |
-| `/.well-known/oauth-protected-resource` | OAuth resource metadata |
+| Endpoint                                  | Purpose                        |
+| ----------------------------------------- | ------------------------------ |
+| `/mcp`                                    | MCP JSON-RPC endpoint          |
+| `/login`                                  | Manual authentication (legacy) |
+| `/authorize`                              | OAuth 2.0 authorization        |
+| `/.well-known/oauth-authorization-server` | OAuth server metadata          |
+| `/.well-known/oauth-protected-resource`   | OAuth resource metadata        |
 
 ## 🧪 Testing
 

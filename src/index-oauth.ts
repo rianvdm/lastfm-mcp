@@ -101,6 +101,46 @@ async function handleSessionBasedMcp(request: Request, env: Env, ctx: ExecutionC
 }
 
 /**
+ * Handle MCP request without authentication (for clients that don't support OAuth)
+ * Public tools work; authenticated tools prompt for login
+ */
+async function handleUnauthenticatedMcp(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
+	const url = new URL(request.url)
+	const baseUrl = `${url.protocol}//${url.host}`
+
+	// Generate a session ID for this client (allows them to authenticate later)
+	// Check for existing session ID in header first
+	let sessionId = request.headers.get('Mcp-Session-Id')
+	if (!sessionId) {
+		sessionId = crypto.randomUUID()
+	}
+
+	// Create MCP server without session context
+	const { server, setContext } = createMcpServer(env, baseUrl)
+
+	// Set context with session ID but no auth session
+	// Tools will check for auth and prompt user to log in if needed
+	setContext({
+		sessionId,
+		session: null,
+	})
+
+	const handler = createMcpHandler(server, { route: '/mcp' })
+	const response = await handler(request, env, ctx)
+
+	// Add session ID to response headers so client can use it for subsequent requests
+	const newHeaders = new Headers(response.headers)
+	newHeaders.set('Mcp-Session-Id', sessionId)
+	newHeaders.set('Access-Control-Expose-Headers', 'Mcp-Session-Id')
+
+	return new Response(response.body, {
+		status: response.status,
+		statusText: response.statusText,
+		headers: newHeaders,
+	})
+}
+
+/**
  * Create the OAuth provider instance
  */
 const oauthProvider = new OAuthProvider({
@@ -227,7 +267,8 @@ export default {
 						title: 'Last.fm MCP Server',
 						version: SERVER_VERSION,
 					},
-					description: 'Model Context Protocol server for Last.fm listening data access. Provides tools for accessing Last.fm listening history, charts, recommendations, and music data.',
+					description:
+						'Model Context Protocol server for Last.fm listening data access. Provides tools for accessing Last.fm listening history, charts, recommendations, and music data.',
 					iconUrl: 'https://www.last.fm/static/images/lastfm_avatar_twitter.52a5d69a85ac.png',
 					documentationUrl: 'https://github.com/rianvdm/lastfm-mcp#readme',
 					transport: {
@@ -323,14 +364,23 @@ Sitemap: https://lastfm-mcp.com/sitemap.xml`,
 			)
 		}
 
-		// Check if this is an MCP request with session_id (manual login flow)
+		// Check if this is an MCP request
 		if (url.pathname === '/mcp') {
 			const sessionId = url.searchParams.get('session_id')
+			const hasOAuthToken = request.headers.get('Authorization')?.startsWith('Bearer ')
 
 			if (sessionId) {
 				// Use session-based auth for Claude Desktop
 				return handleSessionBasedMcp(request, env, ctx, sessionId)
 			}
+
+			if (!hasOAuthToken) {
+				// No OAuth token - handle as unauthenticated MCP request
+				// Public tools work; authenticated tools prompt for login
+				return handleUnauthenticatedMcp(request, env, ctx)
+			}
+
+			// Has Bearer token - fall through to OAuth provider for validation
 		}
 
 		// Strip resource parameter from token requests to prevent audience mismatch
@@ -345,10 +395,7 @@ Sitemap: https://lastfm-mcp.com/sitemap.xml`,
 		// This is required by RFC 9728 for OAuth discovery
 		if (response.status === 401 && url.pathname === '/mcp') {
 			const newHeaders = new Headers(response.headers)
-			newHeaders.set(
-				'WWW-Authenticate',
-				`Bearer resource_metadata="${baseUrl}/.well-known/oauth-protected-resource"`,
-			)
+			newHeaders.set('WWW-Authenticate', `Bearer resource_metadata="${baseUrl}/.well-known/oauth-protected-resource"`)
 			return new Response(response.body, {
 				status: response.status,
 				statusText: response.statusText,
