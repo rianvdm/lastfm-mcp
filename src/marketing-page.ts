@@ -562,8 +562,8 @@ export const MARKETING_PAGE_HTML = `<!DOCTYPE html>
             <div class="footer-links">
                 <a href="https://github.com/rianvdm/lastfm-mcp">Source Code</a>
                 <a href="https://github.com/rianvdm/lastfm-mcp#readme">Documentation</a>
+                <a href="https://github.com/rianvdm/lastfm-mcp/releases">Release Notes</a>
                 <a href="https://github.com/rianvdm/lastfm-mcp/issues">Report a Bug</a>
-                <a href="https://github.com/rianvdm/lastfm-mcp/discussions">Discussions</a>
             </div>
             <p class="footer-note">Open source under MIT. Built on <a href="https://www.last.fm/api">Last.fm API</a> and <a href="https://modelcontextprotocol.io">MCP</a>.</p>
         </div>
