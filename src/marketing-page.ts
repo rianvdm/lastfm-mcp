@@ -464,10 +464,25 @@ export const MARKETING_PAGE_HTML = `<!DOCTYPE html>
                         </div>
                     </div>
                     <div class="setup-card">
-                        <h3>Claude Code / OpenCode</h3>
+                        <h3>Claude Code</h3>
                         <p>Run this command in your terminal:</p>
                         <div class="code-wrap">
                             <code>claude mcp add --transport http lastfm https://lastfm-mcp.com/mcp</code>
+                            <button class="copy-btn" onclick="copyCode(this)">Copy</button>
+                        </div>
+                    </div>
+                    <div class="setup-card">
+                        <h3>OpenCode</h3>
+                        <p class="config-path">opencode.json</p>
+                        <div class="code-wrap">
+                            <code>{
+  "mcp": {
+    "lastfm": {
+      "type": "remote",
+      "url": "https://lastfm-mcp.com/mcp"
+    }
+  }
+}</code>
                             <button class="copy-btn" onclick="copyCode(this)">Copy</button>
                         </div>
                     </div>
