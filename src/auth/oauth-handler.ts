@@ -1,15 +1,10 @@
-/**
- * OAuth Handler for Last.fm MCP Server
- *
- * This handler integrates Last.fm authentication with the MCP OAuth 2.1 flow.
- * When a client initiates OAuth:
- * 1. /authorize - Stores the OAuth request, redirects to Last.fm auth
- * 2. /lastfm-callback - Receives Last.fm token, exchanges it, completes MCP OAuth
- */
+// ABOUTME: OAuth handler integrating Last.fm authentication with the MCP OAuth 2.1 flow.
+// ABOUTME: Handles /authorize, /lastfm-callback, /login, /callback, and OAuth discovery endpoints.
 import type { AuthRequest, OAuthHelpers } from '@cloudflare/workers-oauth-provider'
 import type { ExecutionContext } from '@cloudflare/workers-types'
 
 import type { Env } from '../types/env'
+import { generateCSRFProtection, validateCSRFToken, buildSecurityHeaders, sanitizeText } from '../utils/security'
 
 import { LastfmAuth } from './lastfm'
 
@@ -28,17 +23,18 @@ export interface LastfmUserProps {
 }
 
 /**
- * OAuth handler for the Last.fm MCP server
+ * OAuth handler for the Last.fm MCP server.
+ *
+ * Only handles auth-related routes. General routes (/, /health, /sitemap.xml,
+ * /robots.txt, /.well-known/mcp.json) are handled by the main entry point
+ * in index-oauth.ts to avoid duplication.
  */
 export const LastfmOAuthHandler = {
 	async fetch(request: Request, env: OAuthEnv, _ctx: ExecutionContext): Promise<Response> {
 		const url = new URL(request.url)
 
-		// Route requests
+		// Route requests - only auth-related paths
 		switch (url.pathname) {
-			case '/':
-				return handleHomePage(request, url)
-
 			case '/authorize':
 				if (request.method === 'GET') {
 					return handleAuthorize(request, env)
@@ -59,71 +55,13 @@ export const LastfmOAuthHandler = {
 			case '/lastfm-callback':
 				return handleLastfmCallback(request, env)
 
-			case '/health':
-				return new Response(
-					JSON.stringify({
-						status: 'ok',
-						timestamp: new Date().toISOString(),
-						version: '1.0.0',
-						service: 'lastfm-mcp',
-					}),
-					{
-						status: 200,
-						headers: {
-							'Content-Type': 'application/json',
-							'Access-Control-Allow-Origin': '*',
-						},
-					},
-				)
-
-			case '/.well-known/mcp.json':
-			case '/.well-known/mcp':
-				return handleMcpDiscovery(request)
-
 			case '/.well-known/oauth-protected-resource':
 				return handleProtectedResourceMetadata(request)
-
-			case '/sitemap.xml':
-				return handleSitemap()
-
-			case '/robots.txt':
-				return handleRobots()
 
 			default:
 				return new Response('Not found', { status: 404 })
 		}
 	},
-}
-
-/**
- * Home page - returns API info JSON with login URL
- */
-function handleHomePage(request: Request, url: URL): Response {
-	if (request.method === 'GET') {
-		const baseUrl = `${url.protocol}//${url.host}`
-		return new Response(
-			JSON.stringify({
-				name: 'Last.fm MCP Server',
-				version: '1.0.0',
-				description: 'MCP server for Last.fm listening data',
-				documentation: 'https://github.com/rianvdm/lastfm-mcp',
-				login_url: `${baseUrl}/login`,
-				endpoints: {
-					mcp: '/mcp (requires authentication)',
-					login: '/login (authenticate with Last.fm)',
-					oauth_discovery: '/.well-known/oauth-authorization-server',
-				},
-			}),
-			{
-				status: 200,
-				headers: {
-					'Content-Type': 'application/json',
-					'Access-Control-Allow-Origin': '*',
-				},
-			},
-		)
-	}
-	return new Response('Method not allowed', { status: 405 })
 }
 
 /**
@@ -139,14 +77,15 @@ async function handleAuthorize(request: Request, env: OAuthEnv): Promise<Respons
 		// Parse the OAuth request from the MCP client
 		const oauthReqInfo: AuthRequest = await env.OAUTH_PROVIDER.parseAuthRequest(request)
 
-		// Log the resource parameter Claude is sending
-		console.log(`[OAUTH] Auth request - client: ${oauthReqInfo.clientId}, resource: ${JSON.stringify((oauthReqInfo as any).resource)}`)
-
-		// IMPORTANT: Clear the resource parameter to prevent audience mismatch
-		// workers-oauth-provider validates audience against ${protocol}//${host} only (no path)
-		// but Claude.ai sends the full MCP endpoint URL as resource
-		// By clearing it, no audience will be set on the token, avoiding the mismatch
-		;(oauthReqInfo as any).resource = undefined
+		// workers-oauth-provider validates audience against ${protocol}//${host} (no path),
+		// but Claude.ai sends the full MCP endpoint URL (with /mcp path) as the resource.
+		// Clear the resource to prevent audience mismatch. This can be removed if
+		// workers-oauth-provider adds path-aware audience validation.
+		const oauthReqWithResource = oauthReqInfo as AuthRequest & { resource?: string }
+		if (oauthReqWithResource.resource) {
+			console.log(`[OAUTH] Clearing resource param to prevent audience mismatch: ${oauthReqWithResource.resource}`)
+			oauthReqWithResource.resource = undefined
+		}
 
 		// Look up client info
 		const clientInfo = await env.OAUTH_PROVIDER.lookupClient(oauthReqInfo.clientId)
@@ -268,6 +207,9 @@ async function handleLastfmCallback(request: Request, env: OAuthEnv): Promise<Re
  *
  * Users visit /login directly, authenticate with Last.fm, and get a success page.
  * The session is stored in KV and associated with a session_id they can use.
+ *
+ * CSRF protection: A random token is stored in a __Host- secure cookie and
+ * included in the callback state. The callback validates the cookie matches.
  */
 async function handleManualLogin(request: Request, env: OAuthEnv): Promise<Response> {
 	try {
@@ -276,17 +218,21 @@ async function handleManualLogin(request: Request, env: OAuthEnv): Promise<Respo
 		// Generate a session ID for this login attempt
 		const sessionId = url.searchParams.get('session_id') || crypto.randomUUID()
 
-		// Store pending login
+		// Generate CSRF token and store in secure cookie
+		const { token: csrfToken, setCookie } = generateCSRFProtection()
+
+		// Store pending login with CSRF token for validation on callback
 		await env.MCP_SESSIONS.put(
 			`login-pending:${sessionId}`,
 			JSON.stringify({
 				sessionId,
+				csrfToken,
 				timestamp: Date.now(),
 			}),
 			{ expirationTtl: 600 }, // 10 minutes
 		)
 
-		// Build callback URL
+		// Build callback URL - include session_id so we can look up the pending login
 		const callbackUrl = `${url.protocol}//${url.host}/callback?session_id=${sessionId}`
 
 		// Redirect to Last.fm auth
@@ -295,7 +241,14 @@ async function handleManualLogin(request: Request, env: OAuthEnv): Promise<Respo
 
 		console.log(`[LOGIN] Manual login started, session: ${sessionId}`)
 
-		return Response.redirect(lastfmAuthUrl, 302)
+		// Redirect with CSRF cookie set
+		return new Response(null, {
+			status: 302,
+			headers: {
+				Location: lastfmAuthUrl,
+				'Set-Cookie': setCookie,
+			},
+		})
 	} catch (error) {
 		console.error('[LOGIN] Error:', error)
 		return new Response(`Login error: ${error instanceof Error ? error.message : 'Unknown error'}`, {
@@ -305,11 +258,12 @@ async function handleManualLogin(request: Request, env: OAuthEnv): Promise<Respo
 }
 
 /**
- * Manual login callback - stores session in KV for the user
+ * Manual login callback - validates CSRF, exchanges token, stores session in KV.
  */
 async function handleManualCallback(request: Request, env: OAuthEnv): Promise<Response> {
 	try {
 		const url = new URL(request.url)
+		const baseUrl = `${url.protocol}//${url.host}`
 		const token = url.searchParams.get('token')
 		const sessionId = url.searchParams.get('session_id')
 
@@ -323,10 +277,27 @@ async function handleManualCallback(request: Request, env: OAuthEnv): Promise<Re
 
 		// Verify pending login exists
 		const pendingKey = `login-pending:${sessionId}`
-		const pendingData = await env.MCP_SESSIONS.get(pendingKey)
+		const pendingDataStr = await env.MCP_SESSIONS.get(pendingKey)
 
-		if (!pendingData) {
+		if (!pendingDataStr) {
 			return new Response('Login session expired. Please try again.', { status: 400 })
+		}
+
+		const pendingData = JSON.parse(pendingDataStr)
+
+		// Validate CSRF token from cookie matches the one stored with the pending login
+		let clearCookie: string
+		try {
+			const result = validateCSRFToken(pendingData.csrfToken, request)
+			clearCookie = result.clearCookie
+		} catch (csrfError) {
+			console.error('[LOGIN] CSRF validation failed:', csrfError)
+			// Clean up the pending login since it's been compromised
+			await env.MCP_SESSIONS.delete(pendingKey)
+			return new Response(
+				`Authentication failed: ${csrfError instanceof Error ? csrfError.message : 'CSRF validation failed'}. Please try logging in again.`,
+				{ status: 403 },
+			)
 		}
 
 		// Clean up pending login
@@ -352,7 +323,11 @@ async function handleManualCallback(request: Request, env: OAuthEnv): Promise<Re
 			expirationTtl: 30 * 24 * 60 * 60, // 30 days
 		})
 
-		// Return success page with instructions
+		// Sanitize username for HTML output to prevent XSS
+		const safeUsername = sanitizeText(username)
+		const safeSessionId = sanitizeText(sessionId)
+
+		// Return success page with security headers
 		const successHtml = `<!DOCTYPE html>
 <html>
 <head>
@@ -365,13 +340,13 @@ async function handleManualCallback(request: Request, env: OAuthEnv): Promise<Re
 	</style>
 </head>
 <body>
-	<h1 class="success">✅ Authentication Successful!</h1>
-	<p>You're now authenticated as <strong>${username}</strong> on Last.fm.</p>
+	<h1 class="success">Authentication Successful!</h1>
+	<p>You're now authenticated as <strong>${safeUsername}</strong> on Last.fm.</p>
 	
 	<div class="instructions">
 		<h3>Next Step: Update Your MCP Configuration</h3>
 		<p>Add this session ID to your MCP server URL:</p>
-		<div class="code">https://lastfm-mcp-prod.rian-db8.workers.dev/mcp?session_id=${sessionId}</div>
+		<div class="code">${sanitizeText(baseUrl)}/mcp?session_id=${safeSessionId}</div>
 		<p style="margin-top: 16px; color: #64748b; font-size: 14px;">
 			This session is valid for 30 days. You can close this window.
 		</p>
@@ -381,7 +356,9 @@ async function handleManualCallback(request: Request, env: OAuthEnv): Promise<Re
 
 		return new Response(successHtml, {
 			status: 200,
-			headers: { 'Content-Type': 'text/html' },
+			headers: {
+				...buildSecurityHeaders({ setCookie: clearCookie }),
+			},
 		})
 	} catch (error) {
 		console.error('[LOGIN] Callback error:', error)
@@ -393,15 +370,16 @@ async function handleManualCallback(request: Request, env: OAuthEnv): Promise<Re
 
 /**
  * OAuth Protected Resource Metadata (RFC 9728)
- * Required by MCP spec for OAuth discovery
+ * Required by MCP spec for OAuth discovery.
+ *
+ * The resource MUST be just the base URL (no path) because workers-oauth-provider
+ * validates audience against `${protocol}//${host}` only. Including /mcp would cause
+ * tokens to fail with "Token audience does not match resource server".
  */
 function handleProtectedResourceMetadata(request: Request): Response {
 	const url = new URL(request.url)
 	const baseUrl = `${url.protocol}//${url.host}`
 
-	// NOTE: The resource MUST be just the base URL (no path) because
-	// workers-oauth-provider validates audience against `${protocol}//${host}` only.
-	// If we include /mcp, tokens will fail with "Token audience does not match resource server"
 	return new Response(
 		JSON.stringify({
 			resource: baseUrl,
@@ -415,105 +393,6 @@ function handleProtectedResourceMetadata(request: Request): Response {
 				'Content-Type': 'application/json',
 				'Access-Control-Allow-Origin': '*',
 				'Cache-Control': 'public, max-age=3600',
-			},
-		},
-	)
-}
-
-/**
- * MCP server discovery endpoint
- */
-function handleMcpDiscovery(request: Request): Response {
-	const url = new URL(request.url)
-	const baseUrl = `${url.protocol}//${url.host}`
-
-	return new Response(
-		JSON.stringify({
-			$schema: 'https://static.modelcontextprotocol.io/schemas/mcp-server-card/v1.json',
-			version: '1.0',
-			protocolVersion: '2024-11-05',
-			serverInfo: {
-				name: 'lastfm-mcp',
-				title: 'Last.fm MCP Server',
-				version: '1.0.0',
-			},
-			description:
-				'Model Context Protocol server for Last.fm listening data access. Provides tools for accessing Last.fm listening history, charts, recommendations, and music data.',
-			iconUrl: 'https://www.last.fm/static/images/lastfm_avatar_twitter.52a5d69a85ac.png',
-			documentationUrl: 'https://github.com/rianvdm/lastfm-mcp#readme',
-			transport: {
-				type: 'streamable-http',
-				endpoint: '/mcp',
-			},
-			capabilities: {
-				tools: { listChanged: true },
-				prompts: { listChanged: true },
-				resources: { subscribe: false, listChanged: true },
-			},
-			authentication: {
-				type: 'oauth2',
-				authorizationUrl: `${baseUrl}/authorize`,
-				tokenUrl: `${baseUrl}/oauth/token`,
-				registrationUrl: `${baseUrl}/oauth/register`,
-			},
-			instructions: 'This server uses OAuth 2.0 for authentication. Connect via your MCP client to authenticate with your Last.fm account.',
-			tools: ['dynamic'],
-			prompts: ['dynamic'],
-			resources: ['dynamic'],
-		}),
-		{
-			status: 200,
-			headers: {
-				'Content-Type': 'application/json',
-				'Access-Control-Allow-Origin': '*',
-				'Cache-Control': 'public, max-age=3600',
-			},
-		},
-	)
-}
-
-/**
- * Sitemap for search engines
- */
-function handleSitemap(): Response {
-	return new Response(
-		`<?xml version="1.0" encoding="UTF-8"?>
-<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
-  <url>
-    <loc>https://lastfm-mcp.com/</loc>
-    <lastmod>${new Date().toISOString().split('T')[0]}</lastmod>
-    <changefreq>weekly</changefreq>
-    <priority>1.0</priority>
-  </url>
-</urlset>`,
-		{
-			status: 200,
-			headers: {
-				'Content-Type': 'application/xml',
-				'Cache-Control': 'public, max-age=86400',
-			},
-		},
-	)
-}
-
-/**
- * Robots.txt for search engines
- */
-function handleRobots(): Response {
-	return new Response(
-		`User-agent: *
-Allow: /
-Disallow: /authorize
-Disallow: /lastfm-callback
-Disallow: /oauth/
-Disallow: /mcp
-
-Sitemap: https://lastfm-mcp.com/sitemap.xml`,
-		{
-			status: 200,
-			headers: {
-				'Content-Type': 'text/plain',
-				'Cache-Control': 'public, max-age=86400',
 			},
 		},
 	)

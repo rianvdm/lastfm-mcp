@@ -1,13 +1,5 @@
-/**
- * Authenticated MCP Tools
- *
- * Tools that require Last.fm authentication to access personal user data.
- * Uses the official MCP SDK with Zod schemas for validation.
- *
- * Two registration functions are provided:
- * - registerAuthenticatedTools: Uses closure-based session (for legacy handler)
- * - registerAuthenticatedToolsWithOAuth: Uses getMcpAuthContext() (for OAuth handler)
- */
+// ABOUTME: Authenticated MCP tools that require Last.fm authentication to access personal user data.
+// ABOUTME: Provides a single registration function with pluggable session getter for both OAuth and session-based auth.
 import { getMcpAuthContext } from 'agents/mcp'
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { z } from 'zod'
@@ -29,7 +21,6 @@ type Period = (typeof PERIOD_VALUES)[number]
 
 /**
  * Session context for authenticated tools.
- * This is passed to the registration function and captured in closures.
  */
 export interface AuthSession {
 	username: string
@@ -37,35 +28,26 @@ export interface AuthSession {
 }
 
 /**
- * Register all authenticated tools with the MCP server.
- *
- * These tools access the authenticated user's personal Last.fm data.
- * The session is passed at registration time and captured in closures.
+ * Configuration for how unauthenticated users are prompted to log in.
+ * Allows the same tool code to work for both session-based and OAuth flows.
  */
-export function registerAuthenticatedTools(
-	server: McpServer,
-	client: CachedLastfmClient,
-	getSession: () => AuthSession | null,
-	getBaseUrl: () => string,
-	getSessionId: () => string | null,
-): void {
-	// lastfm_auth_status - Check authentication status
-	server.tool(
-		'lastfm_auth_status',
-		'Check if user is authenticated with Last.fm - Use this to verify login status before accessing personal music data',
-		{},
-		async () => {
-			const session = getSession()
+export interface AuthMessageConfig {
+	/** Generate the "not authenticated" message shown by lastfm_auth_status */
+	notAuthenticatedStatus: () => string
+	/** Generate the "auth required" message shown by tools that need a session */
+	requiresAuth: () => string
+}
+
+/**
+ * Build auth message config for session-based auth (manual login flow).
+ */
+export function buildSessionAuthMessages(getBaseUrl: () => string, getSessionId: () => string | null): AuthMessageConfig {
+	return {
+		notAuthenticatedStatus: () => {
 			const baseUrl = getBaseUrl()
 			const sessionId = getSessionId()
-
-			if (!session) {
-				const loginUrl = sessionId ? `${baseUrl}/login?session_id=${sessionId}` : `${baseUrl}/login`
-				return {
-					content: [
-						{
-							type: 'text',
-							text: `🔐 **Authentication Status: Not Authenticated**
+			const loginUrl = sessionId ? `${baseUrl}/login?session_id=${sessionId}` : `${baseUrl}/login`
+			return `🔐 **Authentication Status: Not Authenticated**
 
 You are not currently authenticated with Last.fm. To access your personal listening data, you need to authenticate first.
 
@@ -91,9 +73,82 @@ You are not currently authenticated with Last.fm. To access your personal listen
 • \`get_artist_info\` - Get basic artist information  
 • \`get_album_info\` - Get basic album information
 • \`get_similar_artists\` - Find similar artists
+• \`get_similar_tracks\` - Find similar tracks`
+		},
+		requiresAuth: () => {
+			const baseUrl = getBaseUrl()
+			const sessionId = getSessionId()
+			const loginUrl = sessionId ? `${baseUrl}/login?session_id=${sessionId}` : `${baseUrl}/login`
+			return `🔐 **Authentication Required**
+
+This tool requires authentication with Last.fm. Please authenticate first:
+
+1. Visit: ${loginUrl}
+2. Sign in with your Last.fm account
+3. Return here and try again
+
+Use the \`lastfm_auth_status\` tool to check your current authentication status.`
+		},
+	}
+}
+
+/**
+ * Build auth message config for OAuth-based auth (MCP client handles the flow).
+ */
+export function buildOAuthAuthMessages(): AuthMessageConfig {
+	return {
+		notAuthenticatedStatus: () =>
+			`🔐 **Authentication Status: Not Authenticated**
+
+You are not currently authenticated with Last.fm.
+
+**How to authenticate:**
+Your MCP client should automatically prompt you to authenticate. If not, try disconnecting and reconnecting to this server.
+
+**Available without authentication:**
+• \`ping\` - Test server connectivity
+• \`server_info\` - Get server information
+• \`lastfm_auth_status\` - Check authentication status (this tool)
+• \`get_track_info\` - Get basic track information
+• \`get_artist_info\` - Get basic artist information
+• \`get_album_info\` - Get basic album information
+• \`get_similar_artists\` - Find similar artists
 • \`get_similar_tracks\` - Find similar tracks`,
-						},
-					],
+		requiresAuth: () =>
+			`🔐 **Authentication Required**
+
+This tool requires authentication with Last.fm.
+
+Your MCP client should automatically initiate the OAuth flow. If not, disconnect and reconnect to this server to start the authentication process.
+
+Once authenticated, your session will persist across conversations.`,
+	}
+}
+
+/**
+ * Register all authenticated tools with the MCP server.
+ *
+ * This is the single implementation used by all auth paths. The getSession
+ * callback and authMessages config are provided by the caller to adapt
+ * to session-based auth, OAuth, or any future auth mechanism.
+ */
+export function registerAuthenticatedTools(
+	server: McpServer,
+	client: CachedLastfmClient,
+	getSession: () => AuthSession | null,
+	authMessages: AuthMessageConfig,
+): void {
+	// lastfm_auth_status - Check authentication status
+	server.tool(
+		'lastfm_auth_status',
+		'Check if user is authenticated with Last.fm - Use this to verify login status before accessing personal music data',
+		{},
+		async () => {
+			const session = getSession()
+
+			if (!session) {
+				return {
+					content: [{ type: 'text', text: authMessages.notAuthenticatedStatus() }],
 				}
 			}
 
@@ -105,7 +160,6 @@ You are not currently authenticated with Last.fm. To access your personal listen
 
 ✅ **Authenticated as:** ${session.username}
 🎵 **Connected to:** Last.fm
-⏰ **Session expires:** Never (permanent session key)
 
 **Available Last.fm tools:**
 • \`get_recent_tracks\` - Get your recent listening history
@@ -150,7 +204,7 @@ You are not currently authenticated with Last.fm. To access your personal listen
 		async ({ username, limit, page, from, to }) => {
 			const session = getSession()
 			if (!session) {
-				return { content: [{ type: 'text', text: requiresAuthMessage(getBaseUrl(), getSessionId()) }] }
+				return { content: [{ type: 'text', text: authMessages.requiresAuth() }] }
 			}
 
 			const effectiveUsername = username || session.username
@@ -203,7 +257,7 @@ ${currentPage > 1 ? `\n⬅️ **Previous page:** Use \`page: ${currentPage - 1}\
 		async ({ username, period, limit }) => {
 			const session = getSession()
 			if (!session) {
-				return { content: [{ type: 'text', text: requiresAuthMessage(getBaseUrl(), getSessionId()) }] }
+				return { content: [{ type: 'text', text: authMessages.requiresAuth() }] }
 			}
 
 			const effectiveUsername = username || session.username
@@ -239,7 +293,7 @@ Total artists: ${data.topartists['@attr'].total}`,
 		async ({ username, period, limit }) => {
 			const session = getSession()
 			if (!session) {
-				return { content: [{ type: 'text', text: requiresAuthMessage(getBaseUrl(), getSessionId()) }] }
+				return { content: [{ type: 'text', text: authMessages.requiresAuth() }] }
 			}
 
 			const effectiveUsername = username || session.username
@@ -279,7 +333,7 @@ Total albums: ${data.topalbums['@attr'].total}`,
 		async ({ username, limit }) => {
 			const session = getSession()
 			if (!session) {
-				return { content: [{ type: 'text', text: requiresAuthMessage(getBaseUrl(), getSessionId()) }] }
+				return { content: [{ type: 'text', text: authMessages.requiresAuth() }] }
 			}
 
 			const effectiveUsername = username || session.username
@@ -318,7 +372,7 @@ Total loved tracks: ${data.lovedtracks['@attr'].total}`,
 		async ({ username }) => {
 			const session = getSession()
 			if (!session) {
-				return { content: [{ type: 'text', text: requiresAuthMessage(getBaseUrl(), getSessionId()) }] }
+				return { content: [{ type: 'text', text: authMessages.requiresAuth() }] }
 			}
 
 			const effectiveUsername = username || session.username
@@ -360,7 +414,7 @@ Total loved tracks: ${data.lovedtracks['@attr'].total}`,
 		async ({ username, period }) => {
 			const session = getSession()
 			if (!session) {
-				return { content: [{ type: 'text', text: requiresAuthMessage(getBaseUrl(), getSessionId()) }] }
+				return { content: [{ type: 'text', text: authMessages.requiresAuth() }] }
 			}
 
 			const effectiveUsername = username || session.username
@@ -398,7 +452,7 @@ Total loved tracks: ${data.lovedtracks['@attr'].total}`,
 		async ({ username, limit, genre }) => {
 			const session = getSession()
 			if (!session) {
-				return { content: [{ type: 'text', text: requiresAuthMessage(getBaseUrl(), getSessionId()) }] }
+				return { content: [{ type: 'text', text: authMessages.requiresAuth() }] }
 			}
 
 			const effectiveUsername = username || session.username
@@ -434,7 +488,7 @@ ${artistList}
 		async ({ username }) => {
 			const session = getSession()
 			if (!session) {
-				return { content: [{ type: 'text', text: requiresAuthMessage(getBaseUrl(), getSessionId()) }] }
+				return { content: [{ type: 'text', text: authMessages.requiresAuth() }] }
 			}
 
 			const effectiveUsername = username || session.username
@@ -485,7 +539,7 @@ ${chartList}
 		async ({ username, from, to }) => {
 			const session = getSession()
 			if (!session) {
-				return { content: [{ type: 'text', text: requiresAuthMessage(getBaseUrl(), getSessionId()) }] }
+				return { content: [{ type: 'text', text: authMessages.requiresAuth() }] }
 			}
 
 			const effectiveUsername = username || session.username
@@ -531,7 +585,7 @@ ${artists.length > 30 ? '\n📝 **Note:** Showing top 30 artists only' : ''}
 		async ({ username, from, to }) => {
 			const session = getSession()
 			if (!session) {
-				return { content: [{ type: 'text', text: requiresAuthMessage(getBaseUrl(), getSessionId()) }] }
+				return { content: [{ type: 'text', text: authMessages.requiresAuth() }] }
 			}
 
 			const effectiveUsername = username || session.username
@@ -567,36 +621,8 @@ ${tracks.length > 30 ? '\n📝 **Note:** Showing top 30 tracks only' : ''}
 }
 
 /**
- * Helper to generate authentication required message.
- */
-function requiresAuthMessage(baseUrl: string, sessionId: string | null): string {
-	const loginUrl = sessionId ? `${baseUrl}/login?session_id=${sessionId}` : `${baseUrl}/login`
-	return `🔐 **Authentication Required**
-
-This tool requires authentication with Last.fm. Please authenticate first:
-
-1. Visit: ${loginUrl}
-2. Sign in with your Last.fm account
-3. Return here and try again
-
-Use the \`lastfm_auth_status\` tool to check your current authentication status.`
-}
-
-/**
- * Helper to generate OAuth authentication required message.
- */
-function requiresOAuthMessage(): string {
-	return `🔐 **Authentication Required**
-
-This tool requires authentication with Last.fm.
-
-Your MCP client should automatically initiate the OAuth flow. If not, disconnect and reconnect to this server to start the authentication process.
-
-Once authenticated, your session will persist across conversations.`
-}
-
-/**
  * Get session from OAuth context.
+ * Used as the session getter when tools are registered via the OAuth path.
  */
 function getOAuthSession(): AuthSession | null {
 	const auth = getMcpAuthContext()
@@ -615,469 +641,11 @@ function getOAuthSession(): AuthSession | null {
 }
 
 /**
- * Register all authenticated tools with OAuth-based session management.
+ * Register authenticated tools using OAuth-based session management.
  *
- * This version uses getMcpAuthContext() to get the session from OAuth tokens
- * instead of closure-based session passing. Use this with OAuthProvider.
+ * Thin wrapper that provides an OAuth-aware session getter and auth messages,
+ * then delegates to the single registerAuthenticatedTools implementation.
  */
 export function registerAuthenticatedToolsWithOAuth(server: McpServer, client: CachedLastfmClient, _getBaseUrl: () => string): void {
-	// lastfm_auth_status - Check authentication status
-	server.tool('lastfm_auth_status', 'Check if user is authenticated with Last.fm - Use this to verify login status before accessing personal music data', {}, async () => {
-		const session = getOAuthSession()
-
-		if (!session) {
-			return {
-				content: [
-					{
-						type: 'text',
-						text: `🔐 **Authentication Status: Not Authenticated**
-
-You are not currently authenticated with Last.fm.
-
-**How to authenticate:**
-Your MCP client should automatically prompt you to authenticate. If not, try disconnecting and reconnecting to this server.
-
-**Available without authentication:**
-• \`ping\` - Test server connectivity
-• \`server_info\` - Get server information
-• \`lastfm_auth_status\` - Check authentication status (this tool)
-• \`get_track_info\` - Get basic track information
-• \`get_artist_info\` - Get basic artist information
-• \`get_album_info\` - Get basic album information
-• \`get_similar_artists\` - Find similar artists
-• \`get_similar_tracks\` - Find similar tracks`,
-					},
-				],
-			}
-		}
-
-		return {
-			content: [
-				{
-					type: 'text',
-					text: `🔐 **Authentication Status: Authenticated** (Last.fm)
-
-✅ **Authenticated as:** ${session.username}
-🎵 **Connected to:** Last.fm
-⏰ **Session:** OAuth 2.0 (persists across conversations)
-
-**Available tools:** All Last.fm tools are available including:
-• \`get_recent_tracks\` - Get your recent listening history
-• \`get_top_artists\` - Get your top artists by time period
-• \`get_top_albums\` - Get your top albums by time period
-• \`get_loved_tracks\` - Get your loved/favorite tracks
-• \`get_user_info\` - Get your profile information
-• \`get_listening_stats\` - Get listening statistics
-• \`get_music_recommendations\` - Get personalized recommendations
-• And more...`,
-				},
-			],
-		}
-	})
-
-	// get_recent_tracks - Get user's recent listening history
-	server.tool(
-		'get_recent_tracks',
-		"Get user's recent Last.fm listening history - REQUIRES AUTHENTICATION",
-		{
-			username: z.string().optional().describe('Last.fm username (defaults to authenticated user)'),
-			limit: z.number().min(1).max(1000).optional().default(50).describe('Number of tracks to return per page (1-1000)'),
-			page: z.number().min(1).optional().default(1).describe('Page number for pagination (starts at 1)'),
-			from: z.number().optional().describe('Start timestamp (Unix timestamp)'),
-			to: z.number().optional().describe('End timestamp (Unix timestamp)'),
-		},
-		async ({ username, limit, page, from, to }) => {
-			const session = getOAuthSession()
-			if (!session) {
-				return { content: [{ type: 'text', text: requiresOAuthMessage() }] }
-			}
-
-			const effectiveUsername = username || session.username
-			const data = await client.getRecentTracks(effectiveUsername, limit, from, to, page)
-
-			const tracks = data.recenttracks.track.slice(0, limit)
-			const trackList = tracks
-				.map((track) => {
-					const nowPlaying = track.nowplaying ? ' 🎵 Now Playing' : ''
-					const date = track.date ? new Date(parseInt(track.date.uts) * 1000).toLocaleDateString() : ''
-					const album = track.album?.['#text'] ? ` [${track.album['#text']}]` : ''
-					return `• ${track.artist['#text']} - ${track.name}${album}${nowPlaying}${date ? ` (${date})` : ''}`
-				})
-				.join('\n')
-
-			const currentPage = parseInt(data.recenttracks['@attr'].page)
-			const totalPages = parseInt(data.recenttracks['@attr'].totalPages)
-			const totalTracks = parseInt(data.recenttracks['@attr'].total)
-
-			return {
-				content: [
-					{
-						type: 'text',
-						text: `🎵 **Recent Tracks for ${effectiveUsername}**
-
-📊 **Pagination Info:**
-• Page ${currentPage} of ${totalPages}
-• Showing ${tracks.length} tracks out of ${totalTracks} total
-
-${trackList}`,
-					},
-				],
-			}
-		},
-	)
-
-	// get_top_artists - Get user's most listened to artists
-	server.tool(
-		'get_top_artists',
-		"Get user's most listened to artists from Last.fm - REQUIRES AUTHENTICATION",
-		{
-			username: z.string().optional().describe('Last.fm username (defaults to authenticated user)'),
-			period: z.enum(PERIOD_VALUES).optional().default('overall').describe('Time period for top artists'),
-			limit: z.number().min(1).max(1000).optional().default(50).describe('Number of artists to return (1-1000)'),
-		},
-		async ({ username, period, limit }) => {
-			const session = getOAuthSession()
-			if (!session) {
-				return { content: [{ type: 'text', text: requiresOAuthMessage() }] }
-			}
-
-			const effectiveUsername = username || session.username
-			const data = await client.getTopArtists(effectiveUsername, period as Period, limit)
-
-			const artists = data.topartists.artist.slice(0, limit)
-			const artistList = artists.map((artist, index) => `${index + 1}. ${artist.name} (${artist.playcount} plays)`).join('\n')
-
-			return {
-				content: [
-					{
-						type: 'text',
-						text: `🎤 **Top Artists for ${effectiveUsername}** (${period})
-
-${artistList}
-
-Total artists: ${data.topartists['@attr'].total}`,
-					},
-				],
-			}
-		},
-	)
-
-	// get_top_albums - Get user's most listened to albums
-	server.tool(
-		'get_top_albums',
-		"Get user's most listened to albums from Last.fm - REQUIRES AUTHENTICATION",
-		{
-			username: z.string().optional().describe('Last.fm username (defaults to authenticated user)'),
-			period: z.enum(PERIOD_VALUES).optional().default('overall').describe('Time period for top albums'),
-			limit: z.number().min(1).max(1000).optional().default(50).describe('Number of albums to return (1-1000)'),
-		},
-		async ({ username, period, limit }) => {
-			const session = getOAuthSession()
-			if (!session) {
-				return { content: [{ type: 'text', text: requiresOAuthMessage() }] }
-			}
-
-			const effectiveUsername = username || session.username
-			const data = await client.getTopAlbums(effectiveUsername, period as Period, limit)
-
-			const albums = data.topalbums.album.slice(0, limit)
-			const albumList = albums
-				.map((album, index) => {
-					const artist = typeof album.artist === 'string' ? album.artist : album.artist.name
-					return `${index + 1}. ${artist} - ${album.name} (${album.playcount} plays)`
-				})
-				.join('\n')
-
-			return {
-				content: [
-					{
-						type: 'text',
-						text: `💿 **Top Albums for ${effectiveUsername}** (${period})
-
-${albumList}
-
-Total albums: ${data.topalbums['@attr'].total}`,
-					},
-				],
-			}
-		},
-	)
-
-	// get_loved_tracks - Get user's loved/favorite tracks
-	server.tool(
-		'get_loved_tracks',
-		"Get user's loved/favorite tracks from Last.fm - REQUIRES AUTHENTICATION",
-		{
-			username: z.string().optional().describe('Last.fm username (defaults to authenticated user)'),
-			limit: z.number().min(1).max(1000).optional().default(50).describe('Number of tracks to return (1-1000)'),
-		},
-		async ({ username, limit }) => {
-			const session = getOAuthSession()
-			if (!session) {
-				return { content: [{ type: 'text', text: requiresOAuthMessage() }] }
-			}
-
-			const effectiveUsername = username || session.username
-			const data = await client.getLovedTracks(effectiveUsername, limit)
-
-			const tracks = data.lovedtracks.track.slice(0, limit)
-			const trackList = tracks
-				.map((track) => {
-					const album = track.album?.['#text'] ? ` [${track.album['#text']}]` : ''
-					return `• ${track.artist['#text'] || (track.artist as unknown as { name: string }).name} - ${track.name}${album}`
-				})
-				.join('\n')
-
-			return {
-				content: [
-					{
-						type: 'text',
-						text: `❤️ **Loved Tracks for ${effectiveUsername}**
-
-${trackList}
-
-Total loved tracks: ${data.lovedtracks['@attr'].total}`,
-					},
-				],
-			}
-		},
-	)
-
-	// get_user_info - Get user profile information
-	server.tool(
-		'get_user_info',
-		'Get Last.fm user profile information and listening statistics - REQUIRES AUTHENTICATION',
-		{
-			username: z.string().optional().describe('Last.fm username (defaults to authenticated user)'),
-		},
-		async ({ username }) => {
-			const session = getOAuthSession()
-			if (!session) {
-				return { content: [{ type: 'text', text: requiresOAuthMessage() }] }
-			}
-
-			const effectiveUsername = username || session.username
-			const data = await client.getUserInfo(effectiveUsername)
-			const user = data.user
-
-			const registrationDate = new Date(parseInt(user.registered.unixtime) * 1000).toLocaleDateString()
-
-			return {
-				content: [
-					{
-						type: 'text',
-						text: `👤 **User Profile**
-
-**Username:** ${user.name}
-**Real Name:** ${user.realname || 'Not provided'}
-**Country:** ${user.country || 'Not provided'}
-
-**Stats:**
-• Total scrobbles: ${user.playcount}
-• Member since: ${registrationDate}
-
-**Profile URL:** ${user.url}`,
-					},
-				],
-			}
-		},
-	)
-
-	// get_listening_stats - Get comprehensive listening statistics
-	server.tool(
-		'get_listening_stats',
-		'Get comprehensive Last.fm listening statistics - REQUIRES AUTHENTICATION',
-		{
-			username: z.string().optional().describe('Last.fm username (defaults to authenticated user)'),
-			period: z.enum(PERIOD_VALUES).optional().default('overall').describe('Time period for statistics'),
-		},
-		async ({ username, period }) => {
-			const session = getOAuthSession()
-			if (!session) {
-				return { content: [{ type: 'text', text: requiresOAuthMessage() }] }
-			}
-
-			const effectiveUsername = username || session.username
-			const stats = await client.getListeningStats(effectiveUsername, period as Period)
-
-			return {
-				content: [
-					{
-						type: 'text',
-						text: `📊 **Listening Statistics for ${effectiveUsername}** (${period})
-
-**Overview:**
-• Total scrobbles: ${stats.totalScrobbles.toLocaleString()}
-• Average tracks per day: ${stats.listeningTrends.averageTracksPerDay}
-• Top artists tracked: ${stats.topArtistsCount}
-• Top albums tracked: ${stats.topAlbumsCount}`,
-					},
-				],
-			}
-		},
-	)
-
-	// get_music_recommendations - Get personalized recommendations
-	server.tool(
-		'get_music_recommendations',
-		'Get personalized music recommendations from Last.fm - REQUIRES AUTHENTICATION',
-		{
-			username: z.string().optional().describe('Last.fm username (defaults to authenticated user)'),
-			limit: z.number().min(1).max(50).optional().default(20).describe('Number of recommendations (1-50)'),
-			genre: z.string().optional().describe('Optional genre filter'),
-		},
-		async ({ username, limit, genre }) => {
-			const session = getOAuthSession()
-			if (!session) {
-				return { content: [{ type: 'text', text: requiresOAuthMessage() }] }
-			}
-
-			const effectiveUsername = username || session.username
-			const recommendations = await client.getMusicRecommendations(effectiveUsername, limit, genre)
-
-			const artistRecs = recommendations.recommendedArtists.slice(0, 8)
-			const artistList = artistRecs.map((rec) => `• ${rec.name} (${rec.reason})`).join('\n')
-
-			return {
-				content: [
-					{
-						type: 'text',
-						text: `🎯 **Music Recommendations for ${effectiveUsername}**
-${genre ? `**Genre Filter:** ${genre}\n` : ''}
-**Recommended Artists:**
-
-${artistList}`,
-					},
-				],
-			}
-		},
-	)
-
-	// get_weekly_chart_list - Get available weekly chart date ranges
-	server.tool(
-		'get_weekly_chart_list',
-		"Get available weekly chart date ranges - REQUIRES AUTHENTICATION",
-		{
-			username: z.string().optional().describe('Last.fm username (defaults to authenticated user)'),
-		},
-		async ({ username }) => {
-			const session = getOAuthSession()
-			if (!session) {
-				return { content: [{ type: 'text', text: requiresOAuthMessage() }] }
-			}
-
-			const effectiveUsername = username || session.username
-			const data = await client.getWeeklyChartList(effectiveUsername)
-
-			const charts = data.weeklychartlist.chart
-			const chartList = charts
-				.slice(-20)
-				.reverse()
-				.map((chart) => {
-					const fromDate = new Date(parseInt(chart.from) * 1000).toLocaleDateString()
-					const toDate = new Date(parseInt(chart.to) * 1000).toLocaleDateString()
-					return `• ${fromDate} to ${toDate}`
-				})
-				.join('\n')
-
-			return {
-				content: [
-					{
-						type: 'text',
-						text: `📅 **Weekly Chart Periods for ${effectiveUsername}**
-
-🗓️ **Available Date Ranges** (most recent 20):
-
-${chartList}
-
-📊 **Total periods:** ${charts.length}`,
-					},
-				],
-			}
-		},
-	)
-
-	// get_weekly_artist_chart - Get artist listening data for a specific period
-	server.tool(
-		'get_weekly_artist_chart',
-		'Get artist listening data for a specific time period - REQUIRES AUTHENTICATION',
-		{
-			username: z.string().optional().describe('Last.fm username (defaults to authenticated user)'),
-			from: z.number().optional().describe('Start timestamp (Unix timestamp)'),
-			to: z.number().optional().describe('End timestamp (Unix timestamp)'),
-		},
-		async ({ username, from, to }) => {
-			const session = getOAuthSession()
-			if (!session) {
-				return { content: [{ type: 'text', text: requiresOAuthMessage() }] }
-			}
-
-			const effectiveUsername = username || session.username
-			const data = await client.getWeeklyArtistChart(effectiveUsername, from, to)
-
-			const artists = data.weeklyartistchart.artist
-			const periodInfo = from && to ? `${new Date(from * 1000).toLocaleDateString()} to ${new Date(to * 1000).toLocaleDateString()}` : 'Most Recent Week'
-
-			const artistList = artists
-				.slice(0, 30)
-				.map((artist, index) => `${index + 1}. ${artist.name} (${artist.playcount} plays)`)
-				.join('\n')
-
-			return {
-				content: [
-					{
-						type: 'text',
-						text: `🎤 **Weekly Artist Chart for ${effectiveUsername}**
-📅 **Period:** ${periodInfo}
-
-${artistList}
-
-📊 **Total artists:** ${artists.length}`,
-					},
-				],
-			}
-		},
-	)
-
-	// get_weekly_track_chart - Get track listening data for a specific period
-	server.tool(
-		'get_weekly_track_chart',
-		'Get track listening data for a specific time period - REQUIRES AUTHENTICATION',
-		{
-			username: z.string().optional().describe('Last.fm username (defaults to authenticated user)'),
-			from: z.number().optional().describe('Start timestamp (Unix timestamp)'),
-			to: z.number().optional().describe('End timestamp (Unix timestamp)'),
-		},
-		async ({ username, from, to }) => {
-			const session = getOAuthSession()
-			if (!session) {
-				return { content: [{ type: 'text', text: requiresOAuthMessage() }] }
-			}
-
-			const effectiveUsername = username || session.username
-			const data = await client.getWeeklyTrackChart(effectiveUsername, from, to)
-
-			const tracks = data.weeklytrackchart.track
-			const periodInfo = from && to ? `${new Date(from * 1000).toLocaleDateString()} to ${new Date(to * 1000).toLocaleDateString()}` : 'Most Recent Week'
-
-			const trackList = tracks
-				.slice(0, 30)
-				.map((track, index) => `${index + 1}. ${track.artist['#text']} - ${track.name} (${track.playcount} plays)`)
-				.join('\n')
-
-			return {
-				content: [
-					{
-						type: 'text',
-						text: `🎵 **Weekly Track Chart for ${effectiveUsername}**
-📅 **Period:** ${periodInfo}
-
-${trackList}
-
-📊 **Total tracks:** ${tracks.length}`,
-					},
-				],
-			}
-		},
-	)
+	registerAuthenticatedTools(server, client, getOAuthSession, buildOAuthAuthMessages())
 }

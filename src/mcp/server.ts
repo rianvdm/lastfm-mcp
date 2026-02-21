@@ -12,7 +12,7 @@ import type { Env } from '../types/env'
 
 import { registerPrompts } from './prompts/analysis'
 import { registerResources } from './resources/lastfm'
-import { registerAuthenticatedTools, registerPublicTools, type AuthSession } from './tools'
+import { registerAuthenticatedTools, registerPublicTools, buildSessionAuthMessages, type AuthSession } from './tools'
 
 // Server metadata
 const SERVER_NAME = 'lastfm-mcp'
@@ -71,8 +71,8 @@ export function createMcpServer(env: Env, initialBaseUrl: string): McpServerWith
 	// Register public tools (no auth required)
 	registerPublicTools(server, cachedClient, getBaseUrl)
 
-	// Register authenticated tools (use session from context)
-	registerAuthenticatedTools(server, cachedClient, getSession, getBaseUrl, getSessionId)
+	// Register authenticated tools (use session from context with session-based auth messages)
+	registerAuthenticatedTools(server, cachedClient, getSession, buildSessionAuthMessages(getBaseUrl, getSessionId))
 
 	// Register resources
 	registerResources(server, cachedClient, getSession)
