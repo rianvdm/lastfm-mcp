@@ -1,7 +1,5 @@
-/**
- * Last.fm MCP Server Type Definitions
- * Defines resources, tools, and prompts for Last.fm data access
- */
+// ABOUTME: Last.fm-specific MCP resource, tool, and prompt definitions.
+// ABOUTME: Declares the full catalog of Last.fm data endpoints exposed via MCP.
 
 import { Resource, Prompt } from './mcp'
 

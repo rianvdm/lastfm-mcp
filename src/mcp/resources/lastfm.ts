@@ -1,8 +1,5 @@
-/**
- * Last.fm MCP Resources
- *
- * Resource templates for accessing Last.fm data via MCP resource URIs.
- */
+// ABOUTME: MCP resource templates for accessing Last.fm data via URI patterns.
+// ABOUTME: Registers resources like recent tracks, top artists, and loved tracks with the server.
 import { McpServer, ResourceTemplate } from '@modelcontextprotocol/sdk/server/mcp.js'
 
 import { CachedLastfmClient } from '../../clients/cachedLastfm'
@@ -11,11 +8,7 @@ import type { AuthSession } from '../tools/authenticated'
 /**
  * Register all Last.fm resources with the MCP server.
  */
-export function registerResources(
-	server: McpServer,
-	client: CachedLastfmClient,
-	getSession: () => AuthSession | null,
-): void {
+export function registerResources(server: McpServer, client: CachedLastfmClient, getSession: () => AuthSession | null): void {
 	// User recent tracks resource
 	server.resource(
 		'user-recent-tracks',
@@ -197,113 +190,93 @@ export function registerResources(
 	)
 
 	// Track info resource
-	server.resource(
-		'track-info',
-		new ResourceTemplate('lastfm://track/{artist}/{track}', { list: undefined }),
-		async (uri) => {
-			const match = uri.href.match(/lastfm:\/\/track\/([^/]+)\/([^/]+)$/)
-			if (!match) throw new Error('Invalid URI')
-			const artist = decodeURIComponent(match[1])
-			const track = decodeURIComponent(match[2])
-			const session = getSession()
-			const data = await client.getTrackInfo(artist, track, session?.username)
-			return {
-				contents: [
-					{
-						uri: uri.href,
-						mimeType: 'application/json',
-						text: JSON.stringify(data, null, 2),
-					},
-				],
-			}
-		},
-	)
+	server.resource('track-info', new ResourceTemplate('lastfm://track/{artist}/{track}', { list: undefined }), async (uri) => {
+		const match = uri.href.match(/lastfm:\/\/track\/([^/]+)\/([^/]+)$/)
+		if (!match) throw new Error('Invalid URI')
+		const artist = decodeURIComponent(match[1])
+		const track = decodeURIComponent(match[2])
+		const session = getSession()
+		const data = await client.getTrackInfo(artist, track, session?.username)
+		return {
+			contents: [
+				{
+					uri: uri.href,
+					mimeType: 'application/json',
+					text: JSON.stringify(data, null, 2),
+				},
+			],
+		}
+	})
 
 	// Artist info resource
-	server.resource(
-		'artist-info',
-		new ResourceTemplate('lastfm://artist/{artist}', { list: undefined }),
-		async (uri) => {
-			const match = uri.href.match(/lastfm:\/\/artist\/([^/]+)$/)
-			if (!match) throw new Error('Invalid URI')
-			const artist = decodeURIComponent(match[1])
-			const session = getSession()
-			const data = await client.getArtistInfo(artist, session?.username)
-			return {
-				contents: [
-					{
-						uri: uri.href,
-						mimeType: 'application/json',
-						text: JSON.stringify(data, null, 2),
-					},
-				],
-			}
-		},
-	)
+	server.resource('artist-info', new ResourceTemplate('lastfm://artist/{artist}', { list: undefined }), async (uri) => {
+		const match = uri.href.match(/lastfm:\/\/artist\/([^/]+)$/)
+		if (!match) throw new Error('Invalid URI')
+		const artist = decodeURIComponent(match[1])
+		const session = getSession()
+		const data = await client.getArtistInfo(artist, session?.username)
+		return {
+			contents: [
+				{
+					uri: uri.href,
+					mimeType: 'application/json',
+					text: JSON.stringify(data, null, 2),
+				},
+			],
+		}
+	})
 
 	// Album info resource
-	server.resource(
-		'album-info',
-		new ResourceTemplate('lastfm://album/{artist}/{album}', { list: undefined }),
-		async (uri) => {
-			const match = uri.href.match(/lastfm:\/\/album\/([^/]+)\/([^/]+)/)
-			if (!match) throw new Error('Invalid URI')
-			const artist = decodeURIComponent(match[1])
-			const album = decodeURIComponent(match[2])
-			const session = getSession()
-			const data = await client.getAlbumInfo(artist, album, session?.username)
-			return {
-				contents: [
-					{
-						uri: uri.href,
-						mimeType: 'application/json',
-						text: JSON.stringify(data, null, 2),
-					},
-				],
-			}
-		},
-	)
+	server.resource('album-info', new ResourceTemplate('lastfm://album/{artist}/{album}', { list: undefined }), async (uri) => {
+		const match = uri.href.match(/lastfm:\/\/album\/([^/]+)\/([^/]+)/)
+		if (!match) throw new Error('Invalid URI')
+		const artist = decodeURIComponent(match[1])
+		const album = decodeURIComponent(match[2])
+		const session = getSession()
+		const data = await client.getAlbumInfo(artist, album, session?.username)
+		return {
+			contents: [
+				{
+					uri: uri.href,
+					mimeType: 'application/json',
+					text: JSON.stringify(data, null, 2),
+				},
+			],
+		}
+	})
 
 	// Similar artists resource
-	server.resource(
-		'similar-artists',
-		new ResourceTemplate('lastfm://artist/{artist}/similar', { list: undefined }),
-		async (uri) => {
-			const match = uri.href.match(/lastfm:\/\/artist\/([^/]+)\/similar/)
-			if (!match) throw new Error('Invalid URI')
-			const artist = decodeURIComponent(match[1])
-			const data = await client.getSimilarArtists(artist, 30)
-			return {
-				contents: [
-					{
-						uri: uri.href,
-						mimeType: 'application/json',
-						text: JSON.stringify(data, null, 2),
-					},
-				],
-			}
-		},
-	)
+	server.resource('similar-artists', new ResourceTemplate('lastfm://artist/{artist}/similar', { list: undefined }), async (uri) => {
+		const match = uri.href.match(/lastfm:\/\/artist\/([^/]+)\/similar/)
+		if (!match) throw new Error('Invalid URI')
+		const artist = decodeURIComponent(match[1])
+		const data = await client.getSimilarArtists(artist, 30)
+		return {
+			contents: [
+				{
+					uri: uri.href,
+					mimeType: 'application/json',
+					text: JSON.stringify(data, null, 2),
+				},
+			],
+		}
+	})
 
 	// Similar tracks resource
-	server.resource(
-		'similar-tracks',
-		new ResourceTemplate('lastfm://track/{artist}/{track}/similar', { list: undefined }),
-		async (uri) => {
-			const match = uri.href.match(/lastfm:\/\/track\/([^/]+)\/([^/]+)\/similar/)
-			if (!match) throw new Error('Invalid URI')
-			const artist = decodeURIComponent(match[1])
-			const track = decodeURIComponent(match[2])
-			const data = await client.getSimilarTracks(artist, track, 30)
-			return {
-				contents: [
-					{
-						uri: uri.href,
-						mimeType: 'application/json',
-						text: JSON.stringify(data, null, 2),
-					},
-				],
-			}
-		},
-	)
+	server.resource('similar-tracks', new ResourceTemplate('lastfm://track/{artist}/{track}/similar', { list: undefined }), async (uri) => {
+		const match = uri.href.match(/lastfm:\/\/track\/([^/]+)\/([^/]+)\/similar/)
+		if (!match) throw new Error('Invalid URI')
+		const artist = decodeURIComponent(match[1])
+		const track = decodeURIComponent(match[2])
+		const data = await client.getSimilarTracks(artist, track, 30)
+		return {
+			contents: [
+				{
+					uri: uri.href,
+					mimeType: 'application/json',
+					text: JSON.stringify(data, null, 2),
+				},
+			],
+		}
+	})
 }

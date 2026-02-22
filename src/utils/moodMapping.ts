@@ -1,7 +1,5 @@
-/**
- * Mood to Genre/Style Mapping Utility
- * Maps emotional descriptors and contextual cues to relevant Last.fm tags and genres
- */
+// ABOUTME: Maps mood descriptors and contextual cues to Last.fm genres and musical styles.
+// ABOUTME: Used by the recommendation engine to translate emotional queries into tag-based searches.
 
 export interface MoodMappingResult {
 	detectedMoods: string[]

@@ -1,6 +1,5 @@
-/**
- * Retry utility with exponential backoff and jitter
- */
+// ABOUTME: Retry utility with exponential backoff and jitter for resilient API calls.
+// ABOUTME: Handles transient failures like rate limits (429) and server errors (5xx).
 
 export interface RetryOptions {
 	maxRetries?: number

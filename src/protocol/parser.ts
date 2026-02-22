@@ -1,6 +1,5 @@
-/**
- * JSON-RPC 2.0 Message Parser and Response Builders
- */
+// ABOUTME: JSON-RPC 2.0 message parser and response/error builder functions.
+// ABOUTME: Parses incoming JSON-RPC requests and constructs well-formed responses.
 
 import { JSONRPCRequest, JSONRPCResponse, JSONRPCError, ErrorCode, isJSONRPCRequest } from '../types/jsonrpc'
 

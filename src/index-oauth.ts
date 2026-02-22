@@ -1,25 +1,17 @@
-/**
- * Last.fm MCP Server - Hybrid Auth Entry Point
- *
- * Supports two authentication methods:
- * 1. OAuth 2.0 for proper MCP clients (token in Authorization header)
- * 2. Session-based auth for Claude Desktop (session_id in URL query param)
- */
+// ABOUTME: Hybrid auth entry point supporting both OAuth 2.0 and session-based authentication.
+// ABOUTME: Routes requests to MCP handler or legacy session auth based on client type.
 import { OAuthProvider } from '@cloudflare/workers-oauth-provider'
 import type { ExecutionContext } from '@cloudflare/workers-types'
-import { createMcpHandler } from 'agents/mcp'
-import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
+import { createMcpHandler, getMcpAuthContext } from 'agents/mcp'
 
 import { LastfmOAuthHandler } from './auth/oauth-handler'
-import { CachedLastfmClient } from './clients/cachedLastfm'
-import { LastfmClient } from './clients/lastfm'
 import { MARKETING_PAGE_HTML } from './marketing-page'
 import { createMcpServer } from './mcp/server'
+import { buildOAuthAuthMessages } from './mcp/tools'
 import { PROTOCOL_VERSION } from './types/mcp'
 import type { Env } from './types/env'
 
 // Server metadata
-const SERVER_NAME = 'lastfm-mcp'
 const SERVER_VERSION = '1.0.0'
 
 /**
@@ -115,14 +107,30 @@ async function handleUnauthenticatedMcp(request: Request, env: Env, ctx: Executi
 		sessionId = crypto.randomUUID()
 	}
 
-	// Create MCP server without session context
+	console.log(
+		`[MCP] Unauthenticated path - sessionId: ${sessionId}, source: ${request.headers.get('Mcp-Session-Id') ? 'header' : 'generated'}`,
+	)
+
+	// Check KV for existing session data (user may have authenticated via /login)
+	let session: { username: string; sessionKey: string } | null = null
+	const sessionDataStr = await env.MCP_SESSIONS.get(`session:${sessionId}`)
+	if (sessionDataStr) {
+		const sessionData: SessionData = JSON.parse(sessionDataStr)
+		if (!sessionData.expiresAt || Date.now() <= sessionData.expiresAt) {
+			session = {
+				username: sessionData.username,
+				sessionKey: sessionData.sessionKey,
+			}
+			console.log(`[MCP] Found existing session for ${sessionData.username} via Mcp-Session-Id header`)
+		}
+	}
+
+	// Create MCP server with session context (if found)
 	const { server, setContext } = createMcpServer(env, baseUrl)
 
-	// Set context with session ID but no auth session
-	// Tools will check for auth and prompt user to log in if needed
 	setContext({
 		sessionId,
-		session: null,
+		session,
 	})
 
 	const handler = createMcpHandler(server, { route: '/mcp' })
@@ -151,33 +159,21 @@ const oauthProvider = new OAuthProvider({
 			const url = new URL(request.url)
 			const baseUrl = `${url.protocol}//${url.host}`
 
-			const server = new McpServer({
-				name: SERVER_NAME,
-				version: SERVER_VERSION,
+			// Use the shared server factory with OAuth auth messages
+			const { server, setContext } = createMcpServer(env, baseUrl, {
+				authMessages: buildOAuthAuthMessages(),
 			})
 
-			const lastfmClient = new LastfmClient(env.LASTFM_API_KEY)
-			const cachedClient = new CachedLastfmClient(lastfmClient, env.MCP_SESSIONS)
-
-			const { registerPublicTools, registerAuthenticatedToolsWithOAuth } = await import('./mcp/tools')
-			const { registerResources } = await import('./mcp/resources/lastfm')
-			const { registerPrompts } = await import('./mcp/prompts/analysis')
-			const { getMcpAuthContext } = await import('agents/mcp')
-
-			const getBaseUrl = () => baseUrl
-
-			registerPublicTools(server, cachedClient, getBaseUrl)
-			registerAuthenticatedToolsWithOAuth(server, cachedClient, getBaseUrl)
-
-			const getOAuthSession = () => {
-				const auth = getMcpAuthContext()
-				if (!auth?.props) return null
+			// Set session from OAuth context
+			const auth = getMcpAuthContext()
+			if (auth?.props) {
 				const props = auth.props as unknown as { username: string; sessionKey: string }
-				if (!props.sessionKey || !props.username) return null
-				return { username: props.username, sessionKey: props.sessionKey }
+				if (props.sessionKey && props.username) {
+					setContext({
+						session: { username: props.username, sessionKey: props.sessionKey },
+					})
+				}
 			}
-			registerResources(server, cachedClient, getOAuthSession)
-			registerPrompts(server)
 
 			return createMcpHandler(server)(request, env, ctx)
 		},
@@ -307,7 +303,7 @@ export default {
 					status: 'ok',
 					timestamp: new Date().toISOString(),
 					version: SERVER_VERSION,
-					service: SERVER_NAME,
+					service: 'lastfm-mcp',
 				}),
 				{
 					status: 200,

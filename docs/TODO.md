@@ -7,6 +7,7 @@ This document tracks the migration from mcp-remote to native HTTP transport for 
 The MCP specification evolved from HTTP+SSE (2024-11-05) to Streamable HTTP (2025-03-26). Claude Code now supports native HTTP transport as of June 2025, making mcp-remote unnecessary. This migration will simplify the connection process and improve compatibility with modern MCP clients.
 
 **Key Changes:**
+
 - mcp-remote is now obsolete (was a workaround for old client limitations)
 - Claude Code supports `--transport http` natively
 - Streamable HTTP is designed for serverless platforms like Cloudflare Workers
@@ -15,6 +16,7 @@ The MCP specification evolved from HTTP+SSE (2024-11-05) to Streamable HTTP (202
 ## Phase 1: Verify Current Compatibility (Low Risk)
 
 ### 1.1 Test Current Server with HTTP Transport
+
 - [ ] Start local dev server: `npm run dev`
 - [ ] Try adding server with HTTP transport: `claude mcp add --transport http lastfm http://localhost:8787`
 - [ ] Verify connection establishes successfully
@@ -22,6 +24,7 @@ The MCP specification evolved from HTTP+SSE (2024-11-05) to Streamable HTTP (202
 - [ ] Test result: [ PASS / FAIL / PARTIAL ]
 
 ### 1.2 Test Unauthenticated Tools
+
 - [ ] Test `ping` tool
 - [ ] Test `server_info` tool
 - [ ] Test `lastfm_auth_status` tool (unauthenticated)
@@ -31,6 +34,7 @@ The MCP specification evolved from HTTP+SSE (2024-11-05) to Streamable HTTP (202
 - [ ] Test result: [ PASS / FAIL / PARTIAL ]
 
 ### 1.3 Test Authentication Flow
+
 - [ ] Attempt authenticated tool (e.g., `get_recent_tracks`)
 - [ ] Follow authentication URL provided
 - [ ] Complete Last.fm OAuth flow
@@ -40,6 +44,7 @@ The MCP specification evolved from HTTP+SSE (2024-11-05) to Streamable HTTP (202
 - [ ] Test result: [ PASS / FAIL / PARTIAL ]
 
 ### 1.4 Test Authenticated Tools Post-Auth
+
 - [ ] Test `get_recent_tracks`
 - [ ] Test `get_top_artists`
 - [ ] Test `get_user_info`
@@ -49,12 +54,14 @@ The MCP specification evolved from HTTP+SSE (2024-11-05) to Streamable HTTP (202
 - [ ] Test result: [ PASS / FAIL / PARTIAL ]
 
 ### 1.5 Test Production Server
+
 - [ ] Test with production URL: `claude mcp add --transport http lastfm-prod https://lastfm-mcp-prod.rian-db8.workers.dev`
 - [ ] Repeat tests 1.2-1.4 on production
 - [ ] Document any differences from local
 - [ ] Test result: [ PASS / FAIL / PARTIAL ]
 
 ### Phase 1 Decision Point
+
 - [x] **If all tests pass:** Proceed to Phase 3 (documentation update only)
 - [ ] **If tests fail:** Identify specific issues and proceed to Phase 2
 - [x] **Test Results:** All tests passed with both MCP Inspector and Claude Code
@@ -69,6 +76,7 @@ The MCP specification evolved from HTTP+SSE (2024-11-05) to Streamable HTTP (202
 ## Phase 2: Add Streamable HTTP Enhancements (Medium Risk)
 
 ### 2.1 Add Mcp-Session-Id Header Support
+
 - [x] Read spec requirements for session IDs
 - [x] Generate session ID on `initialize` request
 - [x] Store session ID in response header: `Mcp-Session-Id`
@@ -78,21 +86,25 @@ The MCP specification evolved from HTTP+SSE (2024-11-05) to Streamable HTTP (202
 - [x] Test result: **PASS** - Session IDs working with both MCP Inspector and Claude Code
 
 ### 2.2 Update Accept Header Handling
+
 - [x] **SKIPPED** - Server already handles Accept headers correctly for JSON transport
 - [x] Current implementation returns `application/json` which works for HTTP transport
 - [x] SSE endpoint at `/sse` handles `text/event-stream` separately
 
 ### 2.3 Add GET Endpoint Support (Optional - for resumption)
+
 - [x] **SKIPPED** - Not required for basic HTTP transport functionality
 - [x] POST-only approach is sufficient for MCP HTTP transport
 
 ### 2.4 Update Authentication to Work with Session IDs
+
 - [x] Link JWT sessions with MCP session IDs - **COMPLETE**
 - [x] Ensure auth state persists across requests - **COMPLETE**
 - [x] Update connection-specific session storage - **COMPLETE**
 - [x] Test authentication flow with new session handling - **PASS**
 
 ### 2.5 Integration Testing
+
 - [x] Test complete flow: connect → auth → use tools - **PASS**
 - [x] Verify session persistence across requests - **PASS**
 - [x] Test with MCP Inspector - **PASS**
@@ -106,6 +118,7 @@ The MCP specification evolved from HTTP+SSE (2024-11-05) to Streamable HTTP (202
 ## Phase 3: Update Documentation & Remove mcp-remote
 
 ### 3.1 Update README.md
+
 - [x] Add new "Quick Start with HTTP Transport" section - **COMPLETE**
 - [x] Update configuration examples to use HTTP transport - **COMPLETE**
 - [x] Add both local and production connection examples - **COMPLETE**
@@ -115,26 +128,31 @@ The MCP specification evolved from HTTP+SSE (2024-11-05) to Streamable HTTP (202
 - [x] Test result: **Documentation is clear and complete**
 
 ### 3.2 Update Configuration Files
+
 - [x] **SKIPPED** - Not needed, config is now in README
 - [x] README examples serve as configuration templates
 
 ### 3.3 Clean Up Code
+
 - [x] **DEFERRED** - Keep backward compatibility for now
 - [x] Legacy connection ID handling maintained for mcp-remote users
 - [x] Code is clean and well-documented with new session ID logic
 - [x] Both approaches work concurrently without conflicts
 
 ### 3.4 Update CLAUDE.md
+
 - [ ] Update architecture documentation - **PENDING**
 - [ ] Document HTTP transport implementation - **PENDING**
 - [ ] Update connection management section - **PENDING**
 
 ### 3.5 Create Migration Guide
+
 - [x] **SKIPPED** - README now serves as migration guide
 - [x] README clearly shows both old (mcp-remote) and new (HTTP transport) methods
 - [x] Users can self-migrate using the documented examples
 
 ### 3.6 Update Marketing Page
+
 - [ ] Update src/marketing-page.ts with new connection method - **PENDING**
 - [ ] Update examples to use HTTP transport - **PENDING**
 - [ ] Keep backward compatibility notes - **PENDING**
@@ -144,18 +162,21 @@ The MCP specification evolved from HTTP+SSE (2024-11-05) to Streamable HTTP (202
 ## Phase 4: Production Deployment & Validation
 
 ### 4.1 Pre-Deployment
+
 - [ ] Run full test suite: `npm test`
 - [ ] Run linter: `npm run lint`
 - [ ] Run build check: `npm run build`
 - [ ] Test result: [ PASS / FAIL ]
 
 ### 4.2 Deploy to Production
+
 - [ ] Review changes one final time
 - [ ] Deploy: `npm run deploy:prod`
 - [ ] Verify deployment succeeded
 - [ ] Test result: [ PASS / FAIL ]
 
 ### 4.3 Production Validation
+
 - [ ] Test HTTP transport connection to production
 - [ ] Test authentication flow on production
 - [ ] Test all tools work correctly
@@ -164,6 +185,7 @@ The MCP specification evolved from HTTP+SSE (2024-11-05) to Streamable HTTP (202
 - [ ] Test result: [ PASS / FAIL ]
 
 ### 4.4 User Communication
+
 - [ ] Update GitHub README
 - [ ] Create release notes
 - [ ] Notify users of new connection method
@@ -175,6 +197,7 @@ The MCP specification evolved from HTTP+SSE (2024-11-05) to Streamable HTTP (202
 ## Notes & Issues
 
 ### Session 1 Notes (2025-10-17)
+
 - Completed research on MCP evolution
 - Found that SSE is deprecated, Streamable HTTP is standard
 - Claude Code supports native HTTP as of June 2025
@@ -182,6 +205,7 @@ The MCP specification evolved from HTTP+SSE (2024-11-05) to Streamable HTTP (202
 - Main concern: authentication flow (why previous attempt failed)
 
 #### Phase 1 Automated Testing Results (via curl)
+
 - ✅ Server starts successfully on localhost:8787
 - ✅ Health endpoint works: `/health` returns 200 OK
 - ✅ API info endpoint works: `/api` returns server info
@@ -198,24 +222,29 @@ The MCP specification evolved from HTTP+SSE (2024-11-05) to Streamable HTTP (202
   - Error message includes auth URL
 
 #### Response Headers Analysis
+
 **Current headers returned:**
+
 - `Content-Type: application/json` ✅
 - `Access-Control-Allow-Origin: *` ✅
 - `Access-Control-Allow-Headers: Content-Type, Authorization, X-Connection-ID, Cookie` ✅
 - `Access-Control-Allow-Methods: GET, POST, OPTIONS` ✅
 
 **Missing for full Streamable HTTP spec:**
+
 - ❌ `Mcp-Session-Id` header (optional but recommended)
 - ❌ No response headers for connection/session management
 
 **Verdict:** Server is 95% compatible with HTTP transport for basic usage!
 
 ### Known Issues
+
 - Missing `Mcp-Session-Id` header support (recommended for Streamable HTTP spec)
 - Need to verify session persistence with real Claude Code client
 - Unknown: How authentication cookies persist across HTTP transport requests
 
 ### Questions to Answer
+
 - [x] Does basic MCP protocol work over HTTP? **YES!** Works perfectly.
 - [x] Do unauthenticated tools work? **YES!** All tested tools work.
 - [x] Does auth error handling work? **YES!** Proper error codes and messages.
@@ -261,4 +290,36 @@ If issues are discovered in production:
 
 ---
 
-Last Updated: 2025-10-17
+Last Updated: 2026-02-21
+
+---
+
+## P2 Cleanup Items (from MCP Server Review - 2026-02-21)
+
+See `docs/MCP-SERVER-REVIEW.md` for full assessment.
+
+### Unused Dependencies
+
+- [ ] Remove `crypto-js` and `oauth-1.0a` from package.json (codebase uses Web Crypto API)
+- [ ] Move `@types/crypto-js` from dependencies to devDependencies (or remove if crypto-js is removed)
+
+### KV Namespace Separation
+
+- [ ] Consider splitting `MCP_SESSIONS` into separate namespaces for session data, cache data, pending login state, and pending OAuth state
+
+### In-Memory Deduplication Limitation
+
+- [ ] `SmartCache.pendingRequests` uses an in-memory `Map` that resets per-request in Workers isolates. Only helps within a single request's lifecycle. Consider if this is worth keeping or should be documented as a known limitation.
+
+### MCP Discovery Endpoint Duplication
+
+- [ ] Consolidate the `/.well-known/mcp.json` response into a single shared function (currently defined in both `index-oauth.ts` and `oauth-handler.ts` with slightly different content)
+
+### Test Infrastructure
+
+- [ ] Fix vitest/MCP SDK compatibility issue (6 test suites fail to collect due to `ajv` CJS/ESM incompatibility)
+- [ ] Re-enable tests in CI once fixed
+
+### Legacy Entry Point
+
+- [ ] Consider removing or refactoring `src/index.ts` (~900 lines) -- the legacy entry point has mixed concerns

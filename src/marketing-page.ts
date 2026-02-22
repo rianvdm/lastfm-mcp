@@ -1,7 +1,5 @@
-/**
- * ABOUTME: Static HTML marketing page content for Last.fm MCP Server
- * ABOUTME: Serves as the landing page at the root URL to showcase the project
- */
+// ABOUTME: Static HTML marketing page content for Last.fm MCP Server.
+// ABOUTME: Serves as the landing page at the root URL to showcase the project.
 
 export const MARKETING_PAGE_HTML = `<!DOCTYPE html>
 <html lang="en">

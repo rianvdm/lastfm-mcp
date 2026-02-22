@@ -1,7 +1,5 @@
-/**
- * JSON-RPC 2.0 Type Definitions
- * Based on https://www.jsonrpc.org/specification
- */
+// ABOUTME: JSON-RPC 2.0 type definitions, error codes, and type guards.
+// ABOUTME: Provides the messaging foundation used by the MCP protocol layer.
 
 export interface JSONRPCRequest {
 	jsonrpc: '2.0'

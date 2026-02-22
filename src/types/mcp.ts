@@ -1,7 +1,5 @@
-/**
- * MCP (Model Context Protocol) Type Definitions
- * Based on the MCP specification
- */
+// ABOUTME: Type definitions for the Model Context Protocol (MCP) specification.
+// ABOUTME: Defines server/client capabilities, tool schemas, resource types, and prompt structures.
 
 // Protocol version
 // Note: Using 2024-11-05 for Claude Desktop compatibility

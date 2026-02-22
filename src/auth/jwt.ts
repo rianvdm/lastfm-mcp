@@ -1,7 +1,5 @@
-/**
- * JWT utilities for session management
- * Uses Web Crypto API available in Cloudflare Workers
- */
+// ABOUTME: JWT token creation and verification for session management.
+// ABOUTME: Uses the Web Crypto API (HMAC-SHA256) to sign and validate session tokens.
 
 export interface SessionPayload {
 	userId: string

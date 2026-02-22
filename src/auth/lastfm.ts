@@ -1,3 +1,6 @@
+// ABOUTME: Last.fm Web Authentication handler for obtaining user session keys.
+// ABOUTME: Implements the Last.fm auth flow: generates auth URLs, exchanges tokens, and signs API calls.
+
 /// <reference lib="dom" />
 /// <reference lib="dom.iterable" />
 /// <reference lib="webworker" />

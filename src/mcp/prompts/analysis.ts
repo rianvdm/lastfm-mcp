@@ -1,8 +1,5 @@
-/**
- * Last.fm MCP Prompts
- *
- * Prompt templates for common Last.fm analysis tasks.
- */
+// ABOUTME: Prompt templates for Last.fm listening analysis tasks.
+// ABOUTME: Registers prompt definitions (listening insights, music taste, discovery) with the MCP server.
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { z } from 'zod'
 
@@ -16,10 +13,7 @@ export function registerPrompts(server: McpServer): void {
 		"Get insights about user's listening habits and patterns",
 		{
 			username: z.string().describe('Last.fm username to analyze'),
-			period: z
-				.string()
-				.optional()
-				.describe('Time period for analysis (7day, 1month, 3month, 6month, 12month, overall)'),
+			period: z.string().optional().describe('Time period for analysis (7day, 1month, 3month, 6month, 12month, overall)'),
 		},
 		async ({ username, period }) => {
 			const periodText = period ? ` over the ${period} period` : ''
