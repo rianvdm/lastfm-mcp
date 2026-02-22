@@ -15,7 +15,7 @@ import type { ExecutionContext } from '@cloudflare/workers-types'
 import { parseMessage, createError, serializeResponse } from './protocol/parser'
 import { handleMethod, verifyAuthentication } from './protocol/handlers'
 import { ErrorCode, JSONRPCError } from './types/jsonrpc'
-import { createSSEResponse, getConnection } from './transport/sse'
+import { createSSEResponse } from './transport/sse'
 import { PROTOCOL_VERSION } from './types/mcp'
 
 // These types are available globally in Workers runtime
@@ -654,10 +654,6 @@ async function handleMCPRequest(request: Request, env?: Env): Promise<Response> 
 		// Use connection ID as fallback for backwards compatibility
 		if (!sessionId && legacyConnectionId) {
 			sessionId = legacyConnectionId
-			const connection = getConnection(legacyConnectionId)
-			if (!connection) {
-				console.warn(`Invalid connection ID: ${legacyConnectionId}`)
-			}
 		}
 
 		// Parse request body

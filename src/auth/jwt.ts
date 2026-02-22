@@ -53,11 +53,11 @@ export async function verifySessionToken(token: string, secret: string): Promise
 
 		const [encodedHeader, encodedPayload, signature] = parts
 
-		// Verify signature
+		// Verify signature using constant-time comparison to prevent timing attacks
 		const data = `${encodedHeader}.${encodedPayload}`
 		const expectedSignature = await sign(data, secret)
 
-		if (signature !== expectedSignature) {
+		if (!timingSafeEqual(signature, expectedSignature)) {
 			return null
 		}
 
@@ -75,6 +75,30 @@ export async function verifySessionToken(token: string, secret: string): Promise
 		console.error('JWT verification error:', error)
 		return null
 	}
+}
+
+/**
+ * Constant-time string comparison to prevent timing side-channel attacks.
+ * Encodes both strings as UTF-8 bytes and uses the Workers runtime
+ * crypto.subtle.timingSafeEqual so that comparison time does not leak
+ * information about the expected value.
+ */
+function timingSafeEqual(a: string, b: string): boolean {
+	const encoder = new TextEncoder()
+	const aBuf = encoder.encode(a)
+	const bBuf = encoder.encode(b)
+
+	if (aBuf.byteLength !== bBuf.byteLength) {
+		return false
+	}
+
+	// timingSafeEqual is a Cloudflare Workers extension to SubtleCrypto.
+	// The DOM lib types don't include it, but it is present in the runtime
+	// and in @cloudflare/workers-types.
+	const subtle = crypto.subtle as SubtleCrypto & {
+		timingSafeEqual(a: ArrayBuffer | ArrayBufferView, b: ArrayBuffer | ArrayBufferView): boolean
+	}
+	return subtle.timingSafeEqual(aBuf, bBuf)
 }
 
 /**

@@ -11,6 +11,7 @@ const mockCrypto = {
 	subtle: {
 		importKey: vi.fn(),
 		sign: vi.fn(),
+		timingSafeEqual: vi.fn(),
 	},
 }
 
@@ -51,6 +52,18 @@ describe('JWT Authentication', () => {
 				keyHash, // Add unique identifier based on secret
 				keyLength: keyBytes.length,
 			})
+		})
+
+		// Mock crypto.subtle.timingSafeEqual for constant-time comparison
+		mockCrypto.subtle.timingSafeEqual.mockImplementation((a: ArrayBufferLike | ArrayBufferView, b: ArrayBufferLike | ArrayBufferView) => {
+			const aBuf = new Uint8Array(a instanceof ArrayBuffer ? a : (a as ArrayBufferView).buffer)
+			const bBuf = new Uint8Array(b instanceof ArrayBuffer ? b : (b as ArrayBufferView).buffer)
+			if (aBuf.length !== bBuf.length) return false
+			let result = 0
+			for (let i = 0; i < aBuf.length; i++) {
+				result |= aBuf[i] ^ bBuf[i]
+			}
+			return result === 0
 		})
 
 		// Mock crypto.subtle.sign to return signatures that vary based on secret/data

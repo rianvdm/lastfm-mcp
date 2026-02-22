@@ -1,79 +1,34 @@
-// ABOUTME: Server-Sent Events (SSE) transport layer for legacy MCP client connections.
-// ABOUTME: Manages persistent SSE streams, per-connection auth state, and message delivery.
+// ABOUTME: Deprecated SSE transport layer kept for backward compatibility.
+// ABOUTME: Returns SSE streams but does not track connection state in global memory.
 
 import { JSONRPCResponse } from '../types/jsonrpc'
 
-// Store active SSE connections with enhanced tracking
-const connections = new Map<string, SSEConnection>()
-
-interface SSEConnection {
-	id: string
-	writer: WritableStreamDefaultWriter<Uint8Array>
-	encoder: TextEncoder
-	lastActivity: number
-	isAuthenticated: boolean
-	userId?: string
-	createdAt: number
-}
-
 /**
- * Create an SSE response for a client with optional connection ID
+ * Create an SSE response for a client with optional connection ID.
+ *
+ * This endpoint is deprecated. Modern MCP clients should use the HTTP
+ * transport (POST /) with Mcp-Session-Id headers instead. Auth state
+ * is stored in KV, not in-memory.
  */
 export function createSSEResponse(providedConnectionId?: string): { response: Response; connectionId: string } {
 	const connectionId = providedConnectionId || crypto.randomUUID()
 	const encoder = new TextEncoder()
 
-	// Create a TransformStream for SSE
+	// Create a TransformStream for the SSE response
 	const { readable, writable } = new TransformStream()
 	const writer = writable.getWriter()
 
-	// Store connection with authentication tracking
-	const connection: SSEConnection = {
-		id: connectionId,
-		writer,
-		encoder,
-		lastActivity: Date.now(),
-		isAuthenticated: false,
-		createdAt: Date.now(),
-	}
-	connections.set(connectionId, connection)
-
-	// Send initial connection event with authentication info
-	sendSSEMessage(connection, 'endpoint', {
-		endpoint: '/', // Main JSON-RPC endpoint
+	// Send initial connection event so legacy clients know where to POST
+	const initMessage = `event: endpoint\ndata: ${JSON.stringify({
+		endpoint: '/',
 		connectionId,
 		requiresAuth: true,
-		authUrl: `/login?connection_id=${connectionId}`,
-	})
+		authUrl: `/login?session_id=${connectionId}`,
+	})}\n\n`
 
-	// Set up keepalive
-	const keepaliveInterval = setInterval(() => {
-		if (!connections.has(connectionId)) {
-			clearInterval(keepaliveInterval)
-			return
-		}
+	writer.write(encoder.encode(initMessage))
 
-		// Send keepalive comment
-		try {
-			writer.write(encoder.encode(':keepalive\n\n'))
-			connection.lastActivity = Date.now()
-		} catch {
-			// Connection closed
-			connections.delete(connectionId)
-			clearInterval(keepaliveInterval)
-		}
-	}, 30000) // Every 30 seconds
-
-	// Clean up on close
-	writer.closed
-		.then(() => {
-			connections.delete(connectionId)
-			clearInterval(keepaliveInterval)
-		})
-		.catch(() => {
-			connections.delete(connectionId)
-			clearInterval(keepaliveInterval)
-		})
+	console.warn(`[SSE] Legacy SSE connection created: ${connectionId}. SSE transport is deprecated; use HTTP transport instead.`)
 
 	const response = new Response(readable, {
 		headers: {
@@ -81,7 +36,7 @@ export function createSSEResponse(providedConnectionId?: string): { response: Re
 			'Cache-Control': 'no-cache',
 			Connection: 'keep-alive',
 			'Access-Control-Allow-Origin': '*',
-			'X-Connection-ID': connectionId, // Include connection ID in headers
+			'X-Connection-ID': connectionId,
 		},
 	})
 
@@ -89,127 +44,65 @@ export function createSSEResponse(providedConnectionId?: string): { response: Re
 }
 
 /**
- * Send a message to a specific SSE connection
+ * @deprecated SSE connection state is no longer tracked in-memory.
+ * Auth state is stored in KV via session:{id} keys.
  */
-export function sendSSEMessage(connection: SSEConnection, event: string, data: unknown): void {
-	try {
-		const message = `event: ${event}\ndata: ${JSON.stringify(data)}\n\n`
-		connection.writer.write(connection.encoder.encode(message))
-		connection.lastActivity = Date.now()
-	} catch (error) {
-		console.error('Failed to send SSE message:', error)
-		connections.delete(connection.id)
-	}
+export function getConnection(_connectionId: string): undefined {
+	return undefined
 }
 
 /**
- * Broadcast a JSON-RPC response to a specific connection
+ * @deprecated No-op. Auth state is managed via KV, not in-memory connections.
  */
-export function broadcastResponse(connectionId: string, response: JSONRPCResponse): boolean {
-	const connection = connections.get(connectionId)
-	if (!connection) {
-		return false
-	}
-
-	sendSSEMessage(connection, 'message', response)
-	return true
+export function broadcastResponse(_connectionId: string, _response: JSONRPCResponse): boolean {
+	return false
 }
 
 /**
- * Get active connection by ID
+ * @deprecated No-op. SSE connections are not tracked in-memory.
  */
-export function getConnection(connectionId: string): SSEConnection | undefined {
-	return connections.get(connectionId)
+export function isConnectionAuthenticated(_connectionId: string): boolean {
+	return false
 }
 
 /**
- * Update connection authentication status
+ * @deprecated No-op. SSE connections are not tracked in-memory.
  */
-export function authenticateConnection(connectionId: string, userId: string): boolean {
-	const connection = connections.get(connectionId)
-	if (!connection) {
-		return false
-	}
-
-	connection.isAuthenticated = true
-	connection.userId = userId
-	connection.lastActivity = Date.now()
-
-	// Send authentication success event
-	sendSSEMessage(connection, 'authenticated', {
-		connectionId,
-		userId,
-		message: 'Authentication successful',
-	})
-
-	return true
+export function authenticateConnection(_connectionId: string, _userId: string): boolean {
+	return false
 }
 
 /**
- * Check if connection is authenticated
+ * @deprecated No-op. SSE connections are not tracked in-memory.
  */
-export function isConnectionAuthenticated(connectionId: string): boolean {
-	const connection = connections.get(connectionId)
-	return connection?.isAuthenticated ?? false
+export function getConnectionUserId(_connectionId: string): string | undefined {
+	return undefined
 }
 
 /**
- * Get user ID for authenticated connection
+ * @deprecated No-op. SSE connections are not tracked in-memory.
  */
-export function getConnectionUserId(connectionId: string): string | undefined {
-	const connection = connections.get(connectionId)
-	return connection?.isAuthenticated ? connection.userId : undefined
+export function closeConnection(_connectionId: string): void {
+	// No-op
 }
 
 /**
- * Close a connection
- */
-export function closeConnection(connectionId: string): void {
-	const connection = connections.get(connectionId)
-	if (connection) {
-		try {
-			connection.writer.close()
-		} catch {
-			// Already closed
-		}
-		connections.delete(connectionId)
-	}
-}
-
-/**
- * Get number of active connections
+ * @deprecated Always returns 0. SSE connections are not tracked in-memory.
  */
 export function getActiveConnectionCount(): number {
-	return connections.size
+	return 0
 }
 
 /**
- * Get all active connections (for debugging/monitoring)
+ * @deprecated Always returns empty array. SSE connections are not tracked in-memory.
  */
 export function getActiveConnections(): Array<{ id: string; isAuthenticated: boolean; userId?: string; lastActivity: number }> {
-	return Array.from(connections.values()).map((conn) => ({
-		id: conn.id,
-		isAuthenticated: conn.isAuthenticated,
-		userId: conn.userId,
-		lastActivity: conn.lastActivity,
-	}))
+	return []
 }
 
 /**
- * Clean up stale connections
+ * @deprecated No-op. SSE connections are not tracked in-memory.
  */
 export function cleanupConnections(): void {
-	const now = Date.now()
-	const INACTIVE_TIMEOUT = 30 * 60 * 1000 // 30 minutes
-	const MAX_AGE = 7 * 24 * 60 * 60 * 1000 // 7 days
-
-	for (const [connectionId, connection] of connections) {
-		const inactive = now - connection.lastActivity > INACTIVE_TIMEOUT
-		const expired = now - connection.createdAt > MAX_AGE
-
-		if (inactive || expired) {
-			console.log(`Cleaning up connection ${connectionId} - inactive: ${inactive}, expired: ${expired}`)
-			closeConnection(connectionId)
-		}
-	}
+	// No-op
 }

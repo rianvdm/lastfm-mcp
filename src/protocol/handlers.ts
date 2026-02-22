@@ -30,7 +30,6 @@ import { verifySessionToken, SessionPayload } from '../auth/jwt'
 import { LastfmClient } from '../clients/lastfm'
 import { CachedLastfmClient } from '../clients/cachedLastfm'
 import { LASTFM_RESOURCES, LASTFM_TOOLS, LASTFM_PROMPTS, parseLastfmUri } from '../types/lastfm-mcp'
-import { isConnectionAuthenticated } from '../transport/sse'
 
 /**
  * Get cached Last.fm client instance
@@ -137,15 +136,6 @@ async function getConnectionSession(request: Request, jwtSecret: string, env?: E
 	if (!connectionId || !env?.MCP_SESSIONS) {
 		// No connection ID or KV storage, and no session ID, so return null
 		return null
-	}
-
-	// For mcp-remote connections, skip the SSE connection check
-	// mcp-remote uses deterministic connection IDs and doesn't establish SSE connections
-	if (!connectionId.startsWith('mcp-remote-')) {
-		// Check if SSE connection is authenticated
-		if (!isConnectionAuthenticated(connectionId)) {
-			return null
-		}
 	}
 
 	try {
