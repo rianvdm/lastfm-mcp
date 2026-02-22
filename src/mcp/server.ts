@@ -1,9 +1,5 @@
-/**
- * MCP Server configuration using the official SDK
- *
- * This module creates and configures the McpServer instance
- * that will handle all MCP protocol operations.
- */
+// ABOUTME: Creates and configures the McpServer instance using the official MCP SDK.
+// ABOUTME: Registers tools, prompts, and resources, and manages per-request auth context.
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 
 import { CachedLastfmClient } from '../clients/cachedLastfm'
@@ -12,7 +8,14 @@ import type { Env } from '../types/env'
 
 import { registerPrompts } from './prompts/analysis'
 import { registerResources } from './resources/lastfm'
-import { registerAuthenticatedTools, registerPublicTools, buildSessionAuthMessages, type AuthSession } from './tools'
+import {
+	registerAuthenticatedTools,
+	registerPublicTools,
+	buildSessionAuthMessages,
+	buildOAuthAuthMessages,
+	type AuthSession,
+	type AuthMessageConfig,
+} from './tools'
 
 // Server metadata
 const SERVER_NAME = 'lastfm-mcp'
@@ -45,8 +48,9 @@ export interface McpServerWithContext {
  *
  * @param env - Cloudflare Worker environment bindings
  * @param initialBaseUrl - Base URL for the server (used for auth URLs)
+ * @param options - Optional configuration (e.g. OAuth mode for auth messages)
  */
-export function createMcpServer(env: Env, initialBaseUrl: string): McpServerWithContext {
+export function createMcpServer(env: Env, initialBaseUrl: string, options?: { authMessages?: AuthMessageConfig }): McpServerWithContext {
 	const server = new McpServer({
 		name: SERVER_NAME,
 		version: SERVER_VERSION,
@@ -71,8 +75,9 @@ export function createMcpServer(env: Env, initialBaseUrl: string): McpServerWith
 	// Register public tools (no auth required)
 	registerPublicTools(server, cachedClient, getBaseUrl)
 
-	// Register authenticated tools (use session from context with session-based auth messages)
-	registerAuthenticatedTools(server, cachedClient, getSession, buildSessionAuthMessages(getBaseUrl, getSessionId))
+	// Register authenticated tools with appropriate auth messages
+	const authMessages = options?.authMessages ?? buildSessionAuthMessages(getBaseUrl, getSessionId)
+	registerAuthenticatedTools(server, cachedClient, getSession, authMessages)
 
 	// Register resources
 	registerResources(server, cachedClient, getSession)

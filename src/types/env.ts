@@ -1,6 +1,5 @@
-/**
- * Environment variables and bindings for the Cloudflare Worker
- */
+// ABOUTME: TypeScript interface for Cloudflare Worker environment bindings.
+// ABOUTME: Defines API keys, secrets, and KV namespace bindings used by the worker.
 export interface Env {
 	// Last.fm API credentials
 	LASTFM_API_KEY: string

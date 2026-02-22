@@ -1,4 +1,5 @@
-// Last.fm API client for interacting with user listening data and music information
+// ABOUTME: Last.fm API client for fetching user listening data and public music information.
+// ABOUTME: Wraps all Last.fm API endpoints with typed interfaces and retry-enabled HTTP calls.
 
 import { fetchWithRetry, RetryOptions } from '../utils/retry'
 

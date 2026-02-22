@@ -1,7 +1,5 @@
-/**
- * MCP Protocol Handlers
- * Implements the core MCP methods
- */
+// ABOUTME: Core MCP protocol method handlers for the legacy transport layer.
+// ABOUTME: Implements initialize, tools/list, tools/call, resources, prompts, and auth verification.
 
 import { JSONRPCRequest, hasId, mapErrorToJSONRPC, MCPErrorCode, ErrorCode } from '../types/jsonrpc'
 import { createResponse, createError, createMethodNotFoundError } from './parser'
@@ -1542,11 +1540,11 @@ export async function handleMethod(request: JSONRPCRequest, httpRequest?: Reques
 		return hasId(request) ? createResponse(id!, result) : null
 	}
 
-    // Special case: initialized notification (support both modern and legacy names)
-    if (method === 'initialized' || method === 'notifications/initialized') {
-        handleInitialized()
-        return null // No response for notifications
-    }
+	// Special case: initialized notification (support both modern and legacy names)
+	if (method === 'initialized' || method === 'notifications/initialized') {
+		handleInitialized()
+		return null // No response for notifications
+	}
 
 	// In stateless HTTP mode, we don't enforce initialization state
 	// The mcp-remote client handles the proper initialization flow

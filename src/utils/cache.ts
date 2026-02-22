@@ -1,7 +1,5 @@
-/**
- * Smart caching utility for Last.fm MCP server
- * Supports TTL-based caching, request deduplication, and cache warming
- */
+// ABOUTME: Smart caching utility with TTL-based expiration, request deduplication, and KV storage.
+// ABOUTME: Provides optimized cache TTLs per Last.fm endpoint type to reduce API calls.
 
 // KVNamespace is available globally in Cloudflare Workers runtime
 declare global {

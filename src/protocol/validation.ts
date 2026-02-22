@@ -1,7 +1,5 @@
-/**
- * MCP Protocol Compliance Validation
- * Ensures all messages and responses conform to the MCP specification
- */
+// ABOUTME: MCP protocol compliance validation for JSON-RPC messages and responses.
+// ABOUTME: Validates protocol flow, initialization params, tool arguments, and response structure.
 
 import { JSONRPCRequest, JSONRPCResponse, ErrorCode } from '../types/jsonrpc'
 import {

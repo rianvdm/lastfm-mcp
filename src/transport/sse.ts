@@ -1,7 +1,5 @@
-/**
- * Server-Sent Events (SSE) Transport for MCP
- * Manages bidirectional communication with clients and per-connection authentication
- */
+// ABOUTME: Server-Sent Events (SSE) transport layer for legacy MCP client connections.
+// ABOUTME: Manages persistent SSE streams, per-connection auth state, and message delivery.
 
 import { JSONRPCResponse } from '../types/jsonrpc'
 

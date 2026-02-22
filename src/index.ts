@@ -1,10 +1,5 @@
-/**
- * Last.fm MCP Server - Cloudflare Worker
- * Implements Model Context Protocol for Last.fm listening data access
- *
- * This version uses the Cloudflare Agents SDK with createMcpHandler.
- */
-
+// ABOUTME: Main Cloudflare Worker entry point for the Last.fm MCP server.
+// ABOUTME: Handles HTTP routing, authentication, SSE transport, and MCP protocol via Agents SDK.
 import { createMcpHandler } from 'agents/mcp'
 
 import { createSessionToken, verifySessionToken, SessionPayload } from './auth/jwt'
@@ -47,10 +42,7 @@ async function getSessionFromRequest(request: Request, env: Env): Promise<Sessio
 	const url = new URL(request.url)
 
 	// Try session ID from multiple sources (URL param, headers)
-	const sessionId =
-		url.searchParams.get('session_id') ||
-		request.headers.get('Mcp-Session-Id') ||
-		request.headers.get('X-Connection-ID')
+	const sessionId = url.searchParams.get('session_id') || request.headers.get('Mcp-Session-Id') || request.headers.get('X-Connection-ID')
 
 	if (env.MCP_SESSIONS) {
 		// 1. First try session-specific auth if we have a session ID
@@ -235,7 +227,8 @@ export default {
 								title: 'Last.fm MCP Server',
 								version: '1.0.0',
 							},
-							description: 'Model Context Protocol server for Last.fm listening data access. Provides tools for accessing Last.fm listening history, charts, recommendations, and music data.',
+							description:
+								'Model Context Protocol server for Last.fm listening data access. Provides tools for accessing Last.fm listening history, charts, recommendations, and music data.',
 							iconUrl: 'https://www.last.fm/static/images/lastfm_avatar_twitter.52a5d69a85ac.png',
 							documentationUrl: 'https://github.com/rianvdm/lastfm-mcp#readme',
 							transport: {
@@ -249,7 +242,8 @@ export default {
 							},
 							authentication: {
 								required: false,
-								instructions: 'Some tools work without authentication. For personalized data (recent tracks, top artists, etc.), you will be prompted to authenticate with Last.fm when needed. The server uses Last.fm Web Authentication Flow with session management.',
+								instructions:
+									'Some tools work without authentication. For personalized data (recent tracks, top artists, etc.), you will be prompted to authenticate with Last.fm when needed. The server uses Last.fm Web Authentication Flow with session management.',
 							},
 							instructions: `To use authenticated tools, you'll be provided with a URL to authenticate with Last.fm. Visit: ${baseUrl}/login?session_id=YOUR_SESSION_ID`,
 							tools: ['dynamic'],
@@ -879,7 +873,7 @@ async function handleMCPAuth(request: Request, env: Env): Promise<Response> {
 			}
 		}
 
-		const baseUrl = 'https://lastfm-mcp-prod.rian-db8.workers.dev'
+		const baseUrl = new URL(request.url).origin
 
 		// Check for connection ID to provide connection-specific login URL
 		const connectionId = request.headers.get('X-Connection-ID')

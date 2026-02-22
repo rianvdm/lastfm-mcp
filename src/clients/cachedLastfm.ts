@@ -1,7 +1,5 @@
-/**
- * Cached wrapper for LastfmClient
- * Implements smart caching to reduce API calls and rate limiting issues
- */
+// ABOUTME: Cached wrapper around LastfmClient that reduces API calls via smart caching.
+// ABOUTME: Delegates to SmartCache with per-endpoint TTLs and KV-backed persistent storage.
 
 import {
 	LastfmClient,

@@ -1,3 +1,6 @@
+// ABOUTME: Request logging utility that stores structured log entries in Cloudflare KV.
+// ABOUTME: Tracks user requests, method calls, latency, and error details with auto-expiring keys.
+
 // KVNamespace is available globally in Cloudflare Workers runtime
 declare global {
 	interface KVNamespace {

@@ -1,3 +1,6 @@
+// ABOUTME: Rate limiting utility using Cloudflare KV for per-user request throttling.
+// ABOUTME: Enforces per-minute and per-hour request limits with sliding window counters.
+
 // KVNamespace is available globally in Cloudflare Workers runtime
 declare global {
 	interface KVNamespace {
