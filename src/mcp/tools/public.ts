@@ -1,13 +1,10 @@
-/**
- * Public MCP Tools
- *
- * Tools that do not require authentication - work with public Last.fm data.
- * Uses the official MCP SDK with Zod schemas for validation.
- */
+// ABOUTME: Public MCP tools that work without authentication using public Last.fm data.
+// ABOUTME: Provides track/artist/album info, similar artist/track lookups, and server status.
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { z } from 'zod'
 
 import { CachedLastfmClient } from '../../clients/cachedLastfm'
+import { toolError } from './error-handler'
 
 /**
  * Register all public (non-authenticated) tools with the MCP server.
@@ -67,22 +64,23 @@ To get started, authenticate at ${authUrl}`,
 			username: z.string().optional().describe('Last.fm username (optional, for user-specific data)'),
 		},
 		async ({ artist, track, username }) => {
-			const data = await client.getTrackInfo(artist, track, username)
+			try {
+				const data = await client.getTrackInfo(artist, track, username)
 
-			const tags =
-				data.track.toptags?.tag
-					.slice(0, 5)
-					.map((tag) => tag.name)
-					.join(', ') || 'None'
+				const tags =
+					data.track.toptags?.tag
+						.slice(0, 5)
+						.map((tag) => tag.name)
+						.join(', ') || 'None'
 
-			const userStats = username && data.track.userplaycount ? `• Your plays: ${data.track.userplaycount}` : ''
-			const loved = data.track.userloved === '1' ? ' ❤️' : ''
+				const userStats = username && data.track.userplaycount ? `• Your plays: ${data.track.userplaycount}` : ''
+				const loved = data.track.userloved === '1' ? ' ❤️' : ''
 
-			return {
-				content: [
-					{
-						type: 'text',
-						text: `🎵 **Track Information**
+				return {
+					content: [
+						{
+							type: 'text',
+							text: `🎵 **Track Information**
 
 **Track:** ${data.track.name}${loved}
 **Artist:** ${data.track.artist['#text'] || (data.track.artist as unknown as { name: string }).name}
@@ -98,8 +96,11 @@ ${userStats}
 ${data.track.wiki?.summary ? `**Description:** ${data.track.wiki.summary.replace(/<[^>]*>/g, '')}` : ''}
 
 ${!username ? '*Note: Sign in to see your personal listening stats for this track*' : ''}`,
-					},
-				],
+						},
+					],
+				}
+			} catch (error) {
+				return toolError('get_track_info', error)
 			}
 		},
 	)
@@ -113,25 +114,26 @@ ${!username ? '*Note: Sign in to see your personal listening stats for this trac
 			username: z.string().optional().describe('Last.fm username (optional, for user-specific data)'),
 		},
 		async ({ artist, username }) => {
-			const data = await client.getArtistInfo(artist, username)
+			try {
+				const data = await client.getArtistInfo(artist, username)
 
-			const tags =
-				data.artist.tags?.tag
-					.slice(0, 5)
-					.map((tag) => tag.name)
-					.join(', ') || 'None'
-			const similar =
-				data.artist.similar?.artist
-					.slice(0, 5)
-					.map((a) => a.name)
-					.join(', ') || 'None'
-			const userStats = username && data.artist.stats.userplaycount ? `• Your plays: ${data.artist.stats.userplaycount}` : ''
+				const tags =
+					data.artist.tags?.tag
+						.slice(0, 5)
+						.map((tag) => tag.name)
+						.join(', ') || 'None'
+				const similar =
+					data.artist.similar?.artist
+						.slice(0, 5)
+						.map((a) => a.name)
+						.join(', ') || 'None'
+				const userStats = username && data.artist.stats.userplaycount ? `• Your plays: ${data.artist.stats.userplaycount}` : ''
 
-			return {
-				content: [
-					{
-						type: 'text',
-						text: `🎤 **Artist Information**
+				return {
+					content: [
+						{
+							type: 'text',
+							text: `🎤 **Artist Information**
 
 **Artist:** ${data.artist.name}
 
@@ -146,8 +148,11 @@ ${userStats}
 ${data.artist.bio?.summary ? `**Bio:** ${data.artist.bio.summary.replace(/<[^>]*>/g, '')}` : ''}
 
 ${!username ? '*Note: Sign in to see your personal listening stats for this artist*' : ''}`,
-					},
-				],
+						},
+					],
+				}
+			} catch (error) {
+				return toolError('get_artist_info', error)
 			}
 		},
 	)
@@ -162,25 +167,26 @@ ${!username ? '*Note: Sign in to see your personal listening stats for this arti
 			username: z.string().optional().describe('Last.fm username (optional, for user-specific data)'),
 		},
 		async ({ artist, album, username }) => {
-			const data = await client.getAlbumInfo(artist, album, username)
+			try {
+				const data = await client.getAlbumInfo(artist, album, username)
 
-			const tags =
-				data.album.tags?.tag
-					.slice(0, 5)
-					.map((tag) => tag.name)
-					.join(', ') || 'None'
-			const tracks =
-				data.album.tracks?.track
-					.slice(0, 10)
-					.map((track, i) => `${i + 1}. ${track.name}`)
-					.join('\n') || 'Track listing not available'
-			const userStats = username && data.album.userplaycount ? `• Your plays: ${data.album.userplaycount}` : ''
+				const tags =
+					data.album.tags?.tag
+						.slice(0, 5)
+						.map((tag) => tag.name)
+						.join(', ') || 'None'
+				const tracks =
+					data.album.tracks?.track
+						.slice(0, 10)
+						.map((track, i) => `${i + 1}. ${track.name}`)
+						.join('\n') || 'Track listing not available'
+				const userStats = username && data.album.userplaycount ? `• Your plays: ${data.album.userplaycount}` : ''
 
-			return {
-				content: [
-					{
-						type: 'text',
-						text: `💿 **Album Information**
+				return {
+					content: [
+						{
+							type: 'text',
+							text: `💿 **Album Information**
 
 **Album:** ${data.album.name}
 **Artist:** ${data.album.artist}
@@ -198,8 +204,11 @@ ${tracks}
 ${data.album.wiki?.summary ? `**Description:** ${data.album.wiki.summary.replace(/<[^>]*>/g, '')}` : ''}
 
 ${!username ? '*Note: Sign in to see your personal listening stats for this album*' : ''}`,
-					},
-				],
+						},
+					],
+				}
+			} catch (error) {
+				return toolError('get_album_info', error)
 			}
 		},
 	)
@@ -210,29 +219,27 @@ ${!username ? '*Note: Sign in to see your personal listening stats for this albu
 		'Find artists similar to any artist using Last.fm data - No authentication required',
 		{
 			artist: z.string().describe('Artist name'),
-			limit: z
-				.number()
-				.min(1)
-				.max(100)
-				.optional()
-				.default(30)
-				.describe('Number of similar artists to return (1-100)'),
+			limit: z.number().min(1).max(100).optional().default(30).describe('Number of similar artists to return (1-100)'),
 		},
 		async ({ artist, limit }) => {
-			const data = await client.getSimilarArtists(artist, limit)
+			try {
+				const data = await client.getSimilarArtists(artist, limit)
 
-			const artists = data.similarartists.artist.slice(0, limit)
-			const artistList = artists.map((a) => `• ${a.name} (${Math.round(parseFloat(a.match) * 100)}% match)`).join('\n')
+				const artists = data.similarartists.artist.slice(0, limit)
+				const artistList = artists.map((a) => `• ${a.name} (${Math.round(parseFloat(a.match) * 100)}% match)`).join('\n')
 
-			return {
-				content: [
-					{
-						type: 'text',
-						text: `🎤 **Artists Similar to ${artist}**
+				return {
+					content: [
+						{
+							type: 'text',
+							text: `🎤 **Artists Similar to ${artist}**
 
 ${artistList}`,
-					},
-				],
+						},
+					],
+				}
+			} catch (error) {
+				return toolError('get_similar_artists', error)
 			}
 		},
 	)
@@ -244,34 +251,32 @@ ${artistList}`,
 		{
 			artist: z.string().describe('Artist name'),
 			track: z.string().describe('Track name'),
-			limit: z
-				.number()
-				.min(1)
-				.max(100)
-				.optional()
-				.default(30)
-				.describe('Number of similar tracks to return (1-100)'),
+			limit: z.number().min(1).max(100).optional().default(30).describe('Number of similar tracks to return (1-100)'),
 		},
 		async ({ artist, track, limit }) => {
-			const data = await client.getSimilarTracks(artist, track, limit)
+			try {
+				const data = await client.getSimilarTracks(artist, track, limit)
 
-			const tracks = data.similartracks.track.slice(0, limit)
-			const trackList = tracks
-				.map((t) => {
-					const album = t.album?.['#text'] ? ` [${t.album['#text']}]` : ''
-					return `• ${t.artist['#text'] || (t.artist as unknown as { name: string }).name} - ${t.name}${album} (${Math.round(parseFloat(t.match) * 100)}% match)`
-				})
-				.join('\n')
+				const tracks = data.similartracks.track.slice(0, limit)
+				const trackList = tracks
+					.map((t) => {
+						const album = t.album?.['#text'] ? ` [${t.album['#text']}]` : ''
+						return `• ${t.artist['#text'] || (t.artist as unknown as { name: string }).name} - ${t.name}${album} (${Math.round(parseFloat(t.match) * 100)}% match)`
+					})
+					.join('\n')
 
-			return {
-				content: [
-					{
-						type: 'text',
-						text: `🎵 **Tracks Similar to ${track} by ${artist}**
+				return {
+					content: [
+						{
+							type: 'text',
+							text: `🎵 **Tracks Similar to ${track} by ${artist}**
 
 ${trackList}`,
-					},
-				],
+						},
+					],
+				}
+			} catch (error) {
+				return toolError('get_similar_tracks', error)
 			}
 		},
 	)

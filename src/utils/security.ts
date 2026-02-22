@@ -3,11 +3,11 @@
 
 /**
  * Generate a CSRF token and a secure cookie to store it.
- * Uses __Host- prefix to prevent subdomain cookie attacks on workers.dev.
+ * Uses a Secure, HttpOnly, SameSite=Lax cookie.
  */
 export function generateCSRFProtection(): { token: string; setCookie: string } {
 	const token = crypto.randomUUID()
-	const setCookie = `__Host-CSRF_TOKEN=${token}; HttpOnly; Secure; Path=/; SameSite=Lax; Max-Age=600`
+	const setCookie = `_csrf_token=${token}; HttpOnly; Secure; Path=/; SameSite=Lax; Max-Age=600`
 	return { token, setCookie }
 }
 
@@ -19,7 +19,7 @@ export function validateCSRFToken(stateToken: string, request: Request): { clear
 	const cookieHeader = request.headers.get('Cookie') || ''
 	const tokenFromCookie = cookieHeader
 		.split(';')
-		.find((c) => c.trim().startsWith('__Host-CSRF_TOKEN='))
+		.find((c) => c.trim().startsWith('_csrf_token='))
 		?.split('=')[1]
 		?.trim()
 
@@ -32,7 +32,7 @@ export function validateCSRFToken(stateToken: string, request: Request): { clear
 	}
 
 	return {
-		clearCookie: '__Host-CSRF_TOKEN=; HttpOnly; Secure; Path=/; SameSite=Lax; Max-Age=0',
+		clearCookie: '_csrf_token=; HttpOnly; Secure; Path=/; SameSite=Lax; Max-Age=0',
 	}
 }
 

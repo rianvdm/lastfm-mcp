@@ -216,7 +216,10 @@ async function handleManualLogin(request: Request, env: OAuthEnv): Promise<Respo
 		const url = new URL(request.url)
 
 		// Generate a session ID for this login attempt
-		const sessionId = url.searchParams.get('session_id') || crypto.randomUUID()
+		// Track whether it came from an active MCP session (provided) or was generated fresh
+		const providedSessionId = url.searchParams.get('session_id')
+		const sessionId = providedSessionId || crypto.randomUUID()
+		const fromMcpClient = !!providedSessionId
 
 		// Generate CSRF token and store in secure cookie
 		const { token: csrfToken, setCookie } = generateCSRFProtection()
@@ -227,6 +230,7 @@ async function handleManualLogin(request: Request, env: OAuthEnv): Promise<Respo
 			JSON.stringify({
 				sessionId,
 				csrfToken,
+				fromMcpClient,
 				timestamp: Date.now(),
 			}),
 			{ expirationTtl: 600 }, // 10 minutes
@@ -284,12 +288,16 @@ async function handleManualCallback(request: Request, env: OAuthEnv): Promise<Re
 		}
 
 		const pendingData = JSON.parse(pendingDataStr)
+		console.log(`[LOGIN] Pending data found for session: ${sessionId}, hasCsrfToken: ${!!pendingData.csrfToken}`)
 
 		// Validate CSRF token from cookie matches the one stored with the pending login
 		let clearCookie: string
+		const cookieHeader = request.headers.get('Cookie') || ''
+		console.log(`[LOGIN] Cookie header present: ${!!cookieHeader}, length: ${cookieHeader.length}`)
 		try {
 			const result = validateCSRFToken(pendingData.csrfToken, request)
 			clearCookie = result.clearCookie
+			console.log(`[LOGIN] CSRF validation passed`)
 		} catch (csrfError) {
 			console.error('[LOGIN] CSRF validation failed:', csrfError)
 			// Clean up the pending login since it's been compromised
@@ -319,13 +327,35 @@ async function handleManualCallback(request: Request, env: OAuthEnv): Promise<Re
 			sessionId,
 		}
 
-		await env.MCP_SESSIONS.put(`session:${sessionId}`, JSON.stringify(sessionData), {
+		const kvKey = `session:${sessionId}`
+		console.log(`[LOGIN] Writing session to KV: key=${kvKey}, username=${username}`)
+		await env.MCP_SESSIONS.put(kvKey, JSON.stringify(sessionData), {
 			expirationTtl: 30 * 24 * 60 * 60, // 30 days
 		})
+		console.log(`[LOGIN] Session written to KV successfully`)
 
 		// Sanitize username for HTML output to prevent XSS
 		const safeUsername = sanitizeText(username)
 		const safeSessionId = sanitizeText(sessionId)
+
+		// Show different messages depending on whether the user came from an active MCP session
+		const fromMcpClient = !!pendingData.fromMcpClient
+
+		const instructionsHtml = fromMcpClient
+			? `<div class="instructions">
+		<p>Your MCP session is now connected. You can close this window and return to your conversation.</p>
+		<p style="margin-top: 12px; color: #64748b; font-size: 14px;">
+			Session valid for 30 days.
+		</p>
+	</div>`
+			: `<div class="instructions">
+		<h3>Next Step: Add to Your MCP Client</h3>
+		<p>Use this URL in your MCP client configuration:</p>
+		<div class="code">${sanitizeText(baseUrl)}/mcp?session_id=${safeSessionId}</div>
+		<p style="margin-top: 12px; color: #64748b; font-size: 14px;">
+			Session valid for 30 days. You can close this window.
+		</p>
+	</div>`
 
 		// Return success page with security headers
 		const successHtml = `<!DOCTYPE html>
@@ -342,15 +372,7 @@ async function handleManualCallback(request: Request, env: OAuthEnv): Promise<Re
 <body>
 	<h1 class="success">Authentication Successful!</h1>
 	<p>You're now authenticated as <strong>${safeUsername}</strong> on Last.fm.</p>
-	
-	<div class="instructions">
-		<h3>Next Step: Update Your MCP Configuration</h3>
-		<p>Add this session ID to your MCP server URL:</p>
-		<div class="code">${sanitizeText(baseUrl)}/mcp?session_id=${safeSessionId}</div>
-		<p style="margin-top: 16px; color: #64748b; font-size: 14px;">
-			This session is valid for 30 days. You can close this window.
-		</p>
-	</div>
+	${instructionsHtml}
 </body>
 </html>`
 

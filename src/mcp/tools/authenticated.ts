@@ -5,6 +5,7 @@ import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { z } from 'zod'
 
 import { CachedLastfmClient } from '../../clients/cachedLastfm'
+import { toolError } from './error-handler'
 
 /**
  * Last.fm user props stored in OAuth token
@@ -207,28 +208,29 @@ export function registerAuthenticatedTools(
 				return { content: [{ type: 'text', text: authMessages.requiresAuth() }] }
 			}
 
-			const effectiveUsername = username || session.username
-			const data = await client.getRecentTracks(effectiveUsername, limit, from, to, page)
+			try {
+				const effectiveUsername = username || session.username
+				const data = await client.getRecentTracks(effectiveUsername, limit, from, to, page)
 
-			const tracks = data.recenttracks.track.slice(0, limit)
-			const trackList = tracks
-				.map((track) => {
-					const nowPlaying = track.nowplaying ? ' 🎵 Now Playing' : ''
-					const date = track.date ? new Date(parseInt(track.date.uts) * 1000).toLocaleDateString() : ''
-					const album = track.album?.['#text'] ? ` [${track.album['#text']}]` : ''
-					return `• ${track.artist['#text']} - ${track.name}${album}${nowPlaying}${date ? ` (${date})` : ''}`
-				})
-				.join('\n')
+				const tracks = data.recenttracks.track.slice(0, limit)
+				const trackList = tracks
+					.map((track) => {
+						const nowPlaying = track.nowplaying ? ' 🎵 Now Playing' : ''
+						const date = track.date ? new Date(parseInt(track.date.uts) * 1000).toLocaleDateString() : ''
+						const album = track.album?.['#text'] ? ` [${track.album['#text']}]` : ''
+						return `• ${track.artist['#text']} - ${track.name}${album}${nowPlaying}${date ? ` (${date})` : ''}`
+					})
+					.join('\n')
 
-			const currentPage = parseInt(data.recenttracks['@attr'].page)
-			const totalPages = parseInt(data.recenttracks['@attr'].totalPages)
-			const totalTracks = parseInt(data.recenttracks['@attr'].total)
+				const currentPage = parseInt(data.recenttracks['@attr'].page)
+				const totalPages = parseInt(data.recenttracks['@attr'].totalPages)
+				const totalTracks = parseInt(data.recenttracks['@attr'].total)
 
-			return {
-				content: [
-					{
-						type: 'text',
-						text: `🎵 **Recent Tracks for ${effectiveUsername}**
+				return {
+					content: [
+						{
+							type: 'text',
+							text: `🎵 **Recent Tracks for ${effectiveUsername}**
 
 📊 **Pagination Info:**
 • Page ${currentPage} of ${totalPages}
@@ -239,8 +241,11 @@ ${trackList}
 
 ${currentPage < totalPages ? `\n💡 **Next page:** Use \`page: ${currentPage + 1}\` to get more tracks` : ''}
 ${currentPage > 1 ? `\n⬅️ **Previous page:** Use \`page: ${currentPage - 1}\` to go back` : ''}`,
-					},
-				],
+						},
+					],
+				}
+			} catch (error) {
+				return toolError('get_recent_tracks', error)
 			}
 		},
 	)
@@ -260,23 +265,27 @@ ${currentPage > 1 ? `\n⬅️ **Previous page:** Use \`page: ${currentPage - 1}\
 				return { content: [{ type: 'text', text: authMessages.requiresAuth() }] }
 			}
 
-			const effectiveUsername = username || session.username
-			const data = await client.getTopArtists(effectiveUsername, period as Period, limit)
+			try {
+				const effectiveUsername = username || session.username
+				const data = await client.getTopArtists(effectiveUsername, period as Period, limit)
 
-			const artists = data.topartists.artist.slice(0, limit)
-			const artistList = artists.map((artist, index) => `${index + 1}. ${artist.name} (${artist.playcount} plays)`).join('\n')
+				const artists = data.topartists.artist.slice(0, limit)
+				const artistList = artists.map((artist, index) => `${index + 1}. ${artist.name} (${artist.playcount} plays)`).join('\n')
 
-			return {
-				content: [
-					{
-						type: 'text',
-						text: `🎤 **Top Artists for ${effectiveUsername}** (${period})
+				return {
+					content: [
+						{
+							type: 'text',
+							text: `🎤 **Top Artists for ${effectiveUsername}** (${period})
 
 ${artistList}
 
 Total artists: ${data.topartists['@attr'].total}`,
-					},
-				],
+						},
+					],
+				}
+			} catch (error) {
+				return toolError('get_top_artists', error)
 			}
 		},
 	)
@@ -296,28 +305,32 @@ Total artists: ${data.topartists['@attr'].total}`,
 				return { content: [{ type: 'text', text: authMessages.requiresAuth() }] }
 			}
 
-			const effectiveUsername = username || session.username
-			const data = await client.getTopAlbums(effectiveUsername, period as Period, limit)
+			try {
+				const effectiveUsername = username || session.username
+				const data = await client.getTopAlbums(effectiveUsername, period as Period, limit)
 
-			const albums = data.topalbums.album.slice(0, limit)
-			const albumList = albums
-				.map((album, index) => {
-					const artist = typeof album.artist === 'string' ? album.artist : album.artist.name
-					return `${index + 1}. ${artist} - ${album.name} (${album.playcount} plays)`
-				})
-				.join('\n')
+				const albums = data.topalbums.album.slice(0, limit)
+				const albumList = albums
+					.map((album, index) => {
+						const artist = typeof album.artist === 'string' ? album.artist : album.artist.name
+						return `${index + 1}. ${artist} - ${album.name} (${album.playcount} plays)`
+					})
+					.join('\n')
 
-			return {
-				content: [
-					{
-						type: 'text',
-						text: `💿 **Top Albums for ${effectiveUsername}** (${period})
+				return {
+					content: [
+						{
+							type: 'text',
+							text: `💿 **Top Albums for ${effectiveUsername}** (${period})
 
 ${albumList}
 
 Total albums: ${data.topalbums['@attr'].total}`,
-					},
-				],
+						},
+					],
+				}
+			} catch (error) {
+				return toolError('get_top_albums', error)
 			}
 		},
 	)
@@ -336,28 +349,32 @@ Total albums: ${data.topalbums['@attr'].total}`,
 				return { content: [{ type: 'text', text: authMessages.requiresAuth() }] }
 			}
 
-			const effectiveUsername = username || session.username
-			const data = await client.getLovedTracks(effectiveUsername, limit)
+			try {
+				const effectiveUsername = username || session.username
+				const data = await client.getLovedTracks(effectiveUsername, limit)
 
-			const tracks = data.lovedtracks.track.slice(0, limit)
-			const trackList = tracks
-				.map((track) => {
-					const album = track.album?.['#text'] ? ` [${track.album['#text']}]` : ''
-					return `• ${track.artist['#text'] || (track.artist as unknown as { name: string }).name} - ${track.name}${album}`
-				})
-				.join('\n')
+				const tracks = data.lovedtracks.track.slice(0, limit)
+				const trackList = tracks
+					.map((track) => {
+						const album = track.album?.['#text'] ? ` [${track.album['#text']}]` : ''
+						return `• ${track.artist['#text'] || (track.artist as unknown as { name: string }).name} - ${track.name}${album}`
+					})
+					.join('\n')
 
-			return {
-				content: [
-					{
-						type: 'text',
-						text: `❤️ **Loved Tracks for ${effectiveUsername}**
+				return {
+					content: [
+						{
+							type: 'text',
+							text: `❤️ **Loved Tracks for ${effectiveUsername}**
 
 ${trackList}
 
 Total loved tracks: ${data.lovedtracks['@attr'].total}`,
-					},
-				],
+						},
+					],
+				}
+			} catch (error) {
+				return toolError('get_loved_tracks', error)
 			}
 		},
 	)
@@ -375,17 +392,18 @@ Total loved tracks: ${data.lovedtracks['@attr'].total}`,
 				return { content: [{ type: 'text', text: authMessages.requiresAuth() }] }
 			}
 
-			const effectiveUsername = username || session.username
-			const data = await client.getUserInfo(effectiveUsername)
-			const user = data.user
+			try {
+				const effectiveUsername = username || session.username
+				const data = await client.getUserInfo(effectiveUsername)
+				const user = data.user
 
-			const registrationDate = new Date(parseInt(user.registered.unixtime) * 1000).toLocaleDateString()
+				const registrationDate = new Date(parseInt(user.registered.unixtime) * 1000).toLocaleDateString()
 
-			return {
-				content: [
-					{
-						type: 'text',
-						text: `👤 **User Profile**
+				return {
+					content: [
+						{
+							type: 'text',
+							text: `👤 **User Profile**
 
 **Username:** ${user.name}
 **Real Name:** ${user.realname || 'Not provided'}
@@ -397,8 +415,11 @@ Total loved tracks: ${data.lovedtracks['@attr'].total}`,
 • Subscriber: ${user.subscriber === '1' ? 'Yes' : 'No'}
 
 **Profile URL:** ${user.url}`,
-					},
-				],
+						},
+					],
+				}
+			} catch (error) {
+				return toolError('get_user_info', error)
 			}
 		},
 	)
@@ -417,14 +438,15 @@ Total loved tracks: ${data.lovedtracks['@attr'].total}`,
 				return { content: [{ type: 'text', text: authMessages.requiresAuth() }] }
 			}
 
-			const effectiveUsername = username || session.username
-			const stats = await client.getListeningStats(effectiveUsername, period as Period)
+			try {
+				const effectiveUsername = username || session.username
+				const stats = await client.getListeningStats(effectiveUsername, period as Period)
 
-			return {
-				content: [
-					{
-						type: 'text',
-						text: `📊 **Listening Statistics for ${effectiveUsername}** (${period})
+				return {
+					content: [
+						{
+							type: 'text',
+							text: `📊 **Listening Statistics for ${effectiveUsername}** (${period})
 
 **Overview:**
 • Total scrobbles: ${stats.totalScrobbles.toLocaleString()}
@@ -434,8 +456,11 @@ Total loved tracks: ${data.lovedtracks['@attr'].total}`,
 
 **Activity:**
 • Recent activity level: ${stats.listeningTrends.recentActivity} tracked items`,
-					},
-				],
+						},
+					],
+				}
+			} catch (error) {
+				return toolError('get_listening_stats', error)
 			}
 		},
 	)
@@ -455,25 +480,29 @@ Total loved tracks: ${data.lovedtracks['@attr'].total}`,
 				return { content: [{ type: 'text', text: authMessages.requiresAuth() }] }
 			}
 
-			const effectiveUsername = username || session.username
-			const recommendations = await client.getMusicRecommendations(effectiveUsername, limit, genre)
+			try {
+				const effectiveUsername = username || session.username
+				const recommendations = await client.getMusicRecommendations(effectiveUsername, limit, genre)
 
-			const artistRecs = recommendations.recommendedArtists.slice(0, 8)
-			const artistList = artistRecs.map((rec) => `• ${rec.name} (${rec.reason})`).join('\n')
+				const artistRecs = recommendations.recommendedArtists.slice(0, 8)
+				const artistList = artistRecs.map((rec) => `• ${rec.name} (${rec.reason})`).join('\n')
 
-			return {
-				content: [
-					{
-						type: 'text',
-						text: `🎯 **Music Recommendations for ${effectiveUsername}**
+				return {
+					content: [
+						{
+							type: 'text',
+							text: `🎯 **Music Recommendations for ${effectiveUsername}**
 ${genre ? `**Genre Filter:** ${genre}\n` : ''}
 **Recommended Artists:**
 
 ${artistList}
 
 *Based on your listening history and similar user preferences*`,
-					},
-				],
+						},
+					],
+				}
+			} catch (error) {
+				return toolError('get_music_recommendations', error)
 			}
 		},
 	)
@@ -491,25 +520,26 @@ ${artistList}
 				return { content: [{ type: 'text', text: authMessages.requiresAuth() }] }
 			}
 
-			const effectiveUsername = username || session.username
-			const data = await client.getWeeklyChartList(effectiveUsername)
+			try {
+				const effectiveUsername = username || session.username
+				const data = await client.getWeeklyChartList(effectiveUsername)
 
-			const charts = data.weeklychartlist.chart
-			const chartList = charts
-				.slice(-20)
-				.reverse()
-				.map((chart) => {
-					const fromDate = new Date(parseInt(chart.from) * 1000).toLocaleDateString()
-					const toDate = new Date(parseInt(chart.to) * 1000).toLocaleDateString()
-					return `• ${fromDate} to ${toDate} (from: ${chart.from}, to: ${chart.to})`
-				})
-				.join('\n')
+				const charts = data.weeklychartlist.chart
+				const chartList = charts
+					.slice(-20)
+					.reverse()
+					.map((chart) => {
+						const fromDate = new Date(parseInt(chart.from) * 1000).toLocaleDateString()
+						const toDate = new Date(parseInt(chart.to) * 1000).toLocaleDateString()
+						return `• ${fromDate} to ${toDate} (from: ${chart.from}, to: ${chart.to})`
+					})
+					.join('\n')
 
-			return {
-				content: [
-					{
-						type: 'text',
-						text: `📅 **Weekly Chart Periods for ${effectiveUsername}**
+				return {
+					content: [
+						{
+							type: 'text',
+							text: `📅 **Weekly Chart Periods for ${effectiveUsername}**
 
 🗓️ **Available Date Ranges** (showing most recent 20):
 
@@ -521,8 +551,11 @@ ${chartList}
 
 **Example:** To see what artists you were listening to during a specific week:
 \`get_weekly_artist_chart\` with from: ${charts[charts.length - 1]?.from} and to: ${charts[charts.length - 1]?.to}`,
-					},
-				],
+						},
+					],
+				}
+			} catch (error) {
+				return toolError('get_weekly_chart_list', error)
 			}
 		},
 	)
@@ -542,23 +575,24 @@ ${chartList}
 				return { content: [{ type: 'text', text: authMessages.requiresAuth() }] }
 			}
 
-			const effectiveUsername = username || session.username
-			const data = await client.getWeeklyArtistChart(effectiveUsername, from, to)
+			try {
+				const effectiveUsername = username || session.username
+				const data = await client.getWeeklyArtistChart(effectiveUsername, from, to)
 
-			const artists = data.weeklyartistchart.artist
-			const periodInfo =
-				from && to ? `${new Date(from * 1000).toLocaleDateString()} to ${new Date(to * 1000).toLocaleDateString()}` : 'Most Recent Week'
+				const artists = data.weeklyartistchart.artist
+				const periodInfo =
+					from && to ? `${new Date(from * 1000).toLocaleDateString()} to ${new Date(to * 1000).toLocaleDateString()}` : 'Most Recent Week'
 
-			const artistList = artists
-				.slice(0, 30)
-				.map((artist, index) => `${index + 1}. ${artist.name} (${artist.playcount} plays)`)
-				.join('\n')
+				const artistList = artists
+					.slice(0, 30)
+					.map((artist, index) => `${index + 1}. ${artist.name} (${artist.playcount} plays)`)
+					.join('\n')
 
-			return {
-				content: [
-					{
-						type: 'text',
-						text: `🎤 **Weekly Artist Chart for ${effectiveUsername}**
+				return {
+					content: [
+						{
+							type: 'text',
+							text: `🎤 **Weekly Artist Chart for ${effectiveUsername}**
 📅 **Period:** ${periodInfo}
 
 ${artistList}
@@ -567,8 +601,11 @@ ${artistList}
 ${artists.length > 30 ? '\n📝 **Note:** Showing top 30 artists only' : ''}
 
 💡 **Tip:** Use \`get_weekly_chart_list\` to find other time periods to explore!`,
-					},
-				],
+						},
+					],
+				}
+			} catch (error) {
+				return toolError('get_weekly_artist_chart', error)
 			}
 		},
 	)
@@ -588,23 +625,24 @@ ${artists.length > 30 ? '\n📝 **Note:** Showing top 30 artists only' : ''}
 				return { content: [{ type: 'text', text: authMessages.requiresAuth() }] }
 			}
 
-			const effectiveUsername = username || session.username
-			const data = await client.getWeeklyTrackChart(effectiveUsername, from, to)
+			try {
+				const effectiveUsername = username || session.username
+				const data = await client.getWeeklyTrackChart(effectiveUsername, from, to)
 
-			const tracks = data.weeklytrackchart.track
-			const periodInfo =
-				from && to ? `${new Date(from * 1000).toLocaleDateString()} to ${new Date(to * 1000).toLocaleDateString()}` : 'Most Recent Week'
+				const tracks = data.weeklytrackchart.track
+				const periodInfo =
+					from && to ? `${new Date(from * 1000).toLocaleDateString()} to ${new Date(to * 1000).toLocaleDateString()}` : 'Most Recent Week'
 
-			const trackList = tracks
-				.slice(0, 30)
-				.map((track, index) => `${index + 1}. ${track.artist['#text']} - ${track.name} (${track.playcount} plays)`)
-				.join('\n')
+				const trackList = tracks
+					.slice(0, 30)
+					.map((track, index) => `${index + 1}. ${track.artist['#text']} - ${track.name} (${track.playcount} plays)`)
+					.join('\n')
 
-			return {
-				content: [
-					{
-						type: 'text',
-						text: `🎵 **Weekly Track Chart for ${effectiveUsername}**
+				return {
+					content: [
+						{
+							type: 'text',
+							text: `🎵 **Weekly Track Chart for ${effectiveUsername}**
 📅 **Period:** ${periodInfo}
 
 ${trackList}
@@ -613,8 +651,11 @@ ${trackList}
 ${tracks.length > 30 ? '\n📝 **Note:** Showing top 30 tracks only' : ''}
 
 💡 **Tip:** Use \`get_weekly_chart_list\` to find other time periods to explore!`,
-					},
-				],
+						},
+					],
+				}
+			} catch (error) {
+				return toolError('get_weekly_track_chart', error)
 			}
 		},
 	)
