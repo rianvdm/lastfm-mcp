@@ -12,7 +12,6 @@ import {
 	registerAuthenticatedTools,
 	registerPublicTools,
 	buildSessionAuthMessages,
-	buildOAuthAuthMessages,
 	type AuthSession,
 	type AuthMessageConfig,
 } from './tools'
