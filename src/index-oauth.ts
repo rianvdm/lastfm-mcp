@@ -363,20 +363,15 @@ Sitemap: https://lastfm-mcp.com/sitemap.xml`,
 		// Check if this is an MCP request
 		if (url.pathname === '/mcp') {
 			const sessionId = url.searchParams.get('session_id')
-			const hasOAuthToken = request.headers.get('Authorization')?.startsWith('Bearer ')
 
 			if (sessionId) {
 				// Use session-based auth for Claude Desktop
 				return handleSessionBasedMcp(request, env, ctx, sessionId)
 			}
 
-			if (!hasOAuthToken) {
-				// No OAuth token - handle as unauthenticated MCP request
-				// Public tools work; authenticated tools prompt for login
-				return handleUnauthenticatedMcp(request, env, ctx)
-			}
-
-			// Has Bearer token - fall through to OAuth provider for validation
+			// No session_id — fall through to OAuth provider.
+			// If the request has a valid Bearer token, OAuthProvider calls apiHandler.
+			// If not, OAuthProvider returns 401 which triggers OAuth discovery in Claude.ai.
 		}
 
 		// Strip resource parameter from token requests to prevent audience mismatch
