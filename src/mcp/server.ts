@@ -10,6 +10,7 @@ import { registerPrompts } from './prompts/analysis'
 import { registerResources } from './resources/lastfm'
 import {
 	registerAuthenticatedTools,
+	registerAuthenticatedToolsWithOAuth,
 	registerPublicTools,
 	buildSessionAuthMessages,
 	type AuthSession,
@@ -75,8 +76,14 @@ export function createMcpServer(env: Env, initialBaseUrl: string, options?: { au
 	registerPublicTools(server, cachedClient, getBaseUrl)
 
 	// Register authenticated tools with appropriate auth messages
-	const authMessages = options?.authMessages ?? buildSessionAuthMessages(getBaseUrl, getSessionId)
-	registerAuthenticatedTools(server, cachedClient, getSession, authMessages)
+	if (options?.authMessages) {
+		// OAuth path: use getOAuthSession which defers getMcpAuthContext() into tool execution
+		registerAuthenticatedToolsWithOAuth(server, cachedClient, getBaseUrl)
+	} else {
+		// Session-based path: use context.session set via setContext()
+		const authMessages = buildSessionAuthMessages(getBaseUrl, getSessionId)
+		registerAuthenticatedTools(server, cachedClient, getSession, authMessages)
+	}
 
 	// Register resources
 	registerResources(server, cachedClient, getSession)

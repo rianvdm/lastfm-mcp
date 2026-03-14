@@ -160,20 +160,9 @@ const oauthProvider = new OAuthProvider({
 			const baseUrl = `${url.protocol}//${url.host}`
 
 			// Use the shared server factory with OAuth auth messages
-			const { server, setContext } = createMcpServer(env, baseUrl, {
+			const { server } = createMcpServer(env, baseUrl, {
 				authMessages: buildOAuthAuthMessages(),
 			})
-
-			// Set session from OAuth context
-			const auth = getMcpAuthContext()
-			if (auth?.props) {
-				const props = auth.props as unknown as { username: string; sessionKey: string }
-				if (props.sessionKey && props.username) {
-					setContext({
-						session: { username: props.username, sessionKey: props.sessionKey },
-					})
-				}
-			}
 
 			return createMcpHandler(server)(request, env, ctx)
 		},
