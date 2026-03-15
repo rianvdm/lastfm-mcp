@@ -1,15 +1,16 @@
 /**
  * Tests for the OAuth entry point (src/index-oauth.ts)
  *
- * Tests unauthenticated MCP access, session-based auth, and OAuth routing.
+ * Tests that unauthenticated /mcp requests trigger the OAuth flow (401 + WWW-Authenticate),
+ * session-based auth via session_id param, and OAuth Bearer token routing.
  */
 import { env, createExecutionContext, waitOnExecutionContext } from 'cloudflare:test'
 import { describe, it, expect } from 'vitest'
 import worker from '../src/index-oauth'
 
 describe('Last.fm MCP Server (OAuth Entry Point)', () => {
-	describe('/mcp endpoint - unauthenticated access', () => {
-		it('should handle initialize request without authentication', async () => {
+	describe('/mcp endpoint - unauthenticated access triggers OAuth flow', () => {
+		it('should return 401 with WWW-Authenticate for requests without auth', async () => {
 			const initRequest = {
 				jsonrpc: '2.0',
 				method: 'initialize',
@@ -34,16 +35,14 @@ describe('Last.fm MCP Server (OAuth Entry Point)', () => {
 			const response = await worker.fetch(request, env, ctx)
 			await waitOnExecutionContext(ctx)
 
-			expect(response.status).toBe(200)
-
-			// Should return a session ID for subsequent requests
-			const sessionId = response.headers.get('Mcp-Session-Id')
-			expect(sessionId).toBeTruthy()
-			expect(sessionId).toMatch(/^[0-9a-f-]{36}$/) // UUID format
+			// Must return 401 so mcp-remote / Claude Code / OpenCode trigger the OAuth flow
+			expect(response.status).toBe(401)
+			const wwwAuth = response.headers.get('WWW-Authenticate')
+			expect(wwwAuth).toContain('Bearer')
+			expect(wwwAuth).toContain('resource_metadata')
 		})
 
-		it('should preserve existing session ID from header', async () => {
-			const existingSessionId = '12345678-1234-1234-1234-123456789012'
+		it('should return 401 even when Mcp-Session-Id header is present but no Bearer token', async () => {
 			const initRequest = {
 				jsonrpc: '2.0',
 				method: 'initialize',
@@ -61,7 +60,7 @@ describe('Last.fm MCP Server (OAuth Entry Point)', () => {
 				headers: {
 					'Content-Type': 'application/json',
 					Accept: 'application/json, text/event-stream',
-					'Mcp-Session-Id': existingSessionId,
+					'Mcp-Session-Id': '12345678-1234-1234-1234-123456789012',
 				},
 			})
 
@@ -69,37 +68,9 @@ describe('Last.fm MCP Server (OAuth Entry Point)', () => {
 			const response = await worker.fetch(request, env, ctx)
 			await waitOnExecutionContext(ctx)
 
-			expect(response.status).toBe(200)
-			expect(response.headers.get('Mcp-Session-Id')).toBe(existingSessionId)
-		})
-
-		it('should expose Mcp-Session-Id in Access-Control-Expose-Headers', async () => {
-			const initRequest = {
-				jsonrpc: '2.0',
-				method: 'initialize',
-				params: {
-					protocolVersion: '2024-11-05',
-					capabilities: {},
-					clientInfo: { name: 'TestClient', version: '1.0.0' },
-				},
-				id: 1,
-			}
-
-			const request = new Request('http://example.com/mcp', {
-				method: 'POST',
-				body: JSON.stringify(initRequest),
-				headers: {
-					'Content-Type': 'application/json',
-					Accept: 'application/json, text/event-stream',
-				},
-			})
-
-			const ctx = createExecutionContext()
-			const response = await worker.fetch(request, env, ctx)
-			await waitOnExecutionContext(ctx)
-
-			const exposeHeaders = response.headers.get('Access-Control-Expose-Headers')
-			expect(exposeHeaders).toContain('Mcp-Session-Id')
+			expect(response.status).toBe(401)
+			const wwwAuth = response.headers.get('WWW-Authenticate')
+			expect(wwwAuth).toContain('Bearer')
 		})
 	})
 
