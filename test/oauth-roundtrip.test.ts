@@ -80,9 +80,9 @@ describe('OAuth round-trip integration', () => {
 			expect(res.status).toBe(401)
 			const wwwAuth = res.headers.get('WWW-Authenticate')
 			expect(wwwAuth).not.toBeNull()
-			expect(wwwAuth).toContain('Bearer')
-			expect(wwwAuth).toContain('resource_metadata')
-			expect(wwwAuth).toContain('/.well-known/oauth-protected-resource')
+			expect(wwwAuth).toContain(
+				`Bearer resource_metadata="${BASE_URL}/.well-known/oauth-protected-resource"`,
+			)
 		})
 	})
 
@@ -274,10 +274,8 @@ describe('OAuth round-trip integration', () => {
 
 			const accessToken = tokenBody.access_token!
 
-			// Step 7: Use the access token to make an authenticated /mcp request
-			// NOTE: This step currently FAILS (returns 200 via handleUnauthenticatedMcp even without
-			// a token) but will return 200 correctly via the OAuth apiHandler after the routing fix.
-			// We verify that a valid Bearer token is accepted (not rejected as invalid_token).
+			// Step 7: Use the access token to make an authenticated /mcp request.
+			// A valid Bearer token must be accepted by the OAuth apiHandler and return 200.
 			const mcpRes = await worker.fetch(
 				new Request(`${BASE_URL}/mcp`, {
 					method: 'POST',

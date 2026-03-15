@@ -49,14 +49,13 @@ describe('Last.fm MCP Server (OAuth Entry Point)', () => {
 			expect(response.status).toBe(401)
 			const wwwAuth = response.headers.get('WWW-Authenticate')
 			expect(wwwAuth).not.toBeNull()
-			expect(wwwAuth).toContain('Bearer')
-			expect(wwwAuth).toContain('resource_metadata')
-			expect(wwwAuth).toContain('/.well-known/oauth-protected-resource')
+			expect(wwwAuth).toContain(
+				'Bearer resource_metadata="http://example.com/.well-known/oauth-protected-resource"',
+			)
 		})
 
 		it('should return 401 when Mcp-Session-Id header has no matching KV session', async () => {
 			// An unknown Mcp-Session-Id (not in KV) must fall through to OAuth → 401.
-			// The old behavior returned 200 by routing all requests through handleUnauthenticatedMcp.
 			const request = new Request('http://example.com/mcp', {
 				method: 'POST',
 				body: initBody,
@@ -69,7 +68,9 @@ describe('Last.fm MCP Server (OAuth Entry Point)', () => {
 
 			expect(response.status).toBe(401)
 			const wwwAuth = response.headers.get('WWW-Authenticate')
-			expect(wwwAuth).toContain('Bearer')
+			expect(wwwAuth).toContain(
+				'Bearer resource_metadata="http://example.com/.well-known/oauth-protected-resource"',
+			)
 		})
 
 		it('should not include a /login?session_id= URL in the response body', async () => {
@@ -334,9 +335,12 @@ describe('Last.fm MCP Server (OAuth Entry Point)', () => {
 
 			expect(response.status).toBe(401)
 			const wwwAuth = response.headers.get('WWW-Authenticate')
-			expect(wwwAuth).toContain('Bearer')
-			expect(wwwAuth).toContain('resource_metadata')
+			expect(wwwAuth).toContain(
+				'Bearer resource_metadata="http://example.com/.well-known/oauth-protected-resource"',
+			)
 		})
+
+		it.todo('should return 200 when valid bearer token provided — covered by oauth-roundtrip integration test')
 
 		it('should not return a /login?session_id= URL in OAuth path tool responses', async () => {
 			// Even with an invalid bearer token (401 expected),
