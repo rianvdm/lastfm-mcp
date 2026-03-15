@@ -499,7 +499,7 @@ export const MARKETING_PAGE_HTML = `<!DOCTYPE html>
                         </div>
                     </div>
                     <div class="setup-card">
-                        <h3>Continue.dev / Zed / Other MCP Clients</h3>
+                        <h3>Continue.dev / Other MCP Clients</h3>
                         <p>Use mcp-remote for clients that don't support HTTP transport natively:</p>
                         <div class="code-wrap">
                             <code>{
