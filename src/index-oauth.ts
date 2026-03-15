@@ -2,9 +2,9 @@
 // ABOUTME: Routes requests to MCP handler or legacy session auth based on client type.
 import { OAuthProvider } from '@cloudflare/workers-oauth-provider'
 import type { ExecutionContext } from '@cloudflare/workers-types'
-import { createMcpHandler, getMcpAuthContext } from 'agents/mcp'
+import { createMcpHandler } from 'agents/mcp'
 
-import { LastfmOAuthHandler } from './auth/oauth-handler'
+import { LastfmOAuthHandler, type LastfmUserProps } from './auth/oauth-handler'
 import { MARKETING_PAGE_HTML } from './marketing-page'
 import { createMcpServer } from './mcp/server'
 import { buildOAuthAuthMessages } from './mcp/tools'
@@ -164,15 +164,13 @@ const oauthProvider = new OAuthProvider({
 				authMessages: buildOAuthAuthMessages(),
 			})
 
-			// Set session from OAuth context
-			const auth = getMcpAuthContext()
-			if (auth?.props) {
-				const props = auth.props as unknown as { username: string; sessionKey: string }
-				if (props.sessionKey && props.username) {
-					setContext({
-						session: { username: props.username, sessionKey: props.sessionKey },
-					})
-				}
+			// Set session from OAuth context.
+			// workers-oauth-provider injects the user props from completeAuthorization() into ctx.props.
+			const props = (ctx as unknown as { props?: LastfmUserProps }).props
+			if (props?.sessionKey && props?.username) {
+				setContext({
+					session: { username: props.username, sessionKey: props.sessionKey },
+				})
 			}
 
 			return createMcpHandler(server)(request, env, ctx)
