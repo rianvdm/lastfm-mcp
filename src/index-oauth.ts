@@ -1,5 +1,5 @@
-// ABOUTME: OAuth 2.1 entry point for MCP. All /mcp requests require authentication.
-// ABOUTME: Clients (mcp-remote, Claude Code, OpenCode) get the OAuth browser flow automatically via 401.
+// ABOUTME: Hybrid auth entry point supporting both OAuth 2.0 and session-based authentication.
+// ABOUTME: Routes requests to MCP handler or legacy session auth based on client type.
 import { OAuthProvider } from '@cloudflare/workers-oauth-provider'
 import type { ExecutionContext } from '@cloudflare/workers-types'
 import { createMcpHandler, getMcpAuthContext } from 'agents/mcp'
@@ -84,6 +84,62 @@ async function handleSessionBasedMcp(request: Request, env: Env, ctx: ExecutionC
 	// Add session ID to response headers
 	const newHeaders = new Headers(response.headers)
 	newHeaders.set('Mcp-Session-Id', sessionId)
+
+	return new Response(response.body, {
+		status: response.status,
+		statusText: response.statusText,
+		headers: newHeaders,
+	})
+}
+
+/**
+ * Handle MCP request without authentication (for clients that don't support OAuth)
+ * Public tools work; authenticated tools prompt for login
+ */
+async function handleUnauthenticatedMcp(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
+	const url = new URL(request.url)
+	const baseUrl = `${url.protocol}//${url.host}`
+
+	// Generate a session ID for this client (allows them to authenticate later)
+	// Check for existing session ID in header first
+	let sessionId = request.headers.get('Mcp-Session-Id')
+	if (!sessionId) {
+		sessionId = crypto.randomUUID()
+	}
+
+	console.log(
+		`[MCP] Unauthenticated path - sessionId: ${sessionId}, source: ${request.headers.get('Mcp-Session-Id') ? 'header' : 'generated'}`,
+	)
+
+	// Check KV for existing session data (user may have authenticated via /login)
+	let session: { username: string; sessionKey: string } | null = null
+	const sessionDataStr = await env.MCP_SESSIONS.get(`session:${sessionId}`)
+	if (sessionDataStr) {
+		const sessionData: SessionData = JSON.parse(sessionDataStr)
+		if (!sessionData.expiresAt || Date.now() <= sessionData.expiresAt) {
+			session = {
+				username: sessionData.username,
+				sessionKey: sessionData.sessionKey,
+			}
+			console.log(`[MCP] Found existing session for ${sessionData.username} via Mcp-Session-Id header`)
+		}
+	}
+
+	// Create MCP server with session context (if found)
+	const { server, setContext } = createMcpServer(env, baseUrl)
+
+	setContext({
+		sessionId,
+		session,
+	})
+
+	const handler = createMcpHandler(server, { route: '/mcp' })
+	const response = await handler(request, env, ctx)
+
+	// Add session ID to response headers so client can use it for subsequent requests
+	const newHeaders = new Headers(response.headers)
+	newHeaders.set('Mcp-Session-Id', sessionId)
+	newHeaders.set('Access-Control-Expose-Headers', 'Mcp-Session-Id')
 
 	return new Response(response.body, {
 		status: response.status,
@@ -307,15 +363,20 @@ Sitemap: https://lastfm-mcp.com/sitemap.xml`,
 		// Check if this is an MCP request
 		if (url.pathname === '/mcp') {
 			const sessionId = url.searchParams.get('session_id')
+			const hasOAuthToken = request.headers.get('Authorization')?.startsWith('Bearer ')
 
 			if (sessionId) {
-				// Use session-based auth for Claude Desktop (legacy path)
+				// Use session-based auth for Claude Desktop
 				return handleSessionBasedMcp(request, env, ctx, sessionId)
 			}
 
-			// No Bearer token and no session_id: fall through to OAuth provider.
-			// The provider returns 401 and we augment it with WWW-Authenticate below,
-			// which triggers mcp-remote / Claude Code / OpenCode to start the OAuth flow.
+			if (!hasOAuthToken) {
+				// No OAuth token - handle as unauthenticated MCP request
+				// Public tools work; authenticated tools prompt for login
+				return handleUnauthenticatedMcp(request, env, ctx)
+			}
+
+			// Has Bearer token - fall through to OAuth provider for validation
 		}
 
 		// Strip resource parameter from token requests to prevent audience mismatch
