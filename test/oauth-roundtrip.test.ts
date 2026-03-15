@@ -54,11 +54,7 @@ async function computeS256Challenge(verifier: string): Promise<string> {
 
 describe('OAuth round-trip integration', () => {
 	describe('Step 1: POST /mcp without auth returns 401', () => {
-		// These two tests document the routing bug: handleUnauthenticatedMcp intercepts
-		// unauthenticated /mcp requests and returns 200 instead of letting the OAuth
-		// provider return 401. They are marked it.fails to confirm the current behaviour
-		// and will be converted to regular `it` tests once the routing fix is applied.
-		it.fails('should return 401 when no auth is provided [fails before routing fix]', async () => {
+		it('should return 401 when no auth is provided', async () => {
 			const req = new Request(`${BASE_URL}/mcp`, {
 				method: 'POST',
 				body: MCP_INIT_BODY,
@@ -71,26 +67,23 @@ describe('OAuth round-trip integration', () => {
 			expect(res.status).toBe(401)
 		})
 
-		it.fails(
-			'should include WWW-Authenticate header pointing to OAuth metadata [fails before routing fix]',
-			async () => {
-				const req = new Request(`${BASE_URL}/mcp`, {
-					method: 'POST',
-					body: MCP_INIT_BODY,
-					headers: MCP_HEADERS,
-				})
-				const ctx = createExecutionContext()
-				const res = await worker.fetch(req, env, ctx)
-				await waitOnExecutionContext(ctx)
+		it('should include WWW-Authenticate header pointing to OAuth metadata', async () => {
+			const req = new Request(`${BASE_URL}/mcp`, {
+				method: 'POST',
+				body: MCP_INIT_BODY,
+				headers: MCP_HEADERS,
+			})
+			const ctx = createExecutionContext()
+			const res = await worker.fetch(req, env, ctx)
+			await waitOnExecutionContext(ctx)
 
-				expect(res.status).toBe(401)
-				const wwwAuth = res.headers.get('WWW-Authenticate')
-				expect(wwwAuth).not.toBeNull()
-				expect(wwwAuth).toContain('Bearer')
-				expect(wwwAuth).toContain('resource_metadata')
-				expect(wwwAuth).toContain('/.well-known/oauth-protected-resource')
-			},
-		)
+			expect(res.status).toBe(401)
+			const wwwAuth = res.headers.get('WWW-Authenticate')
+			expect(wwwAuth).not.toBeNull()
+			expect(wwwAuth).toContain('Bearer')
+			expect(wwwAuth).toContain('resource_metadata')
+			expect(wwwAuth).toContain('/.well-known/oauth-protected-resource')
+		})
 	})
 
 	describe('Step 2: GET /.well-known/oauth-protected-resource', () => {

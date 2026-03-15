@@ -235,7 +235,7 @@ describe('Last.fm MCP Server (OAuth Entry Point)', () => {
 			await waitOnExecutionContext(ctx)
 
 			expect(response.status).toBe(200)
-			expect(response.headers.get('Access-Control-Expose-Headers')).toContain('Mcp-Session-Id')
+			expect(response.headers.get('Access-Control-Expose-Headers')?.toLowerCase()).toContain('mcp-session-id')
 		})
 
 		it('should return 401 when Mcp-Session-Id header session is expired', async () => {
