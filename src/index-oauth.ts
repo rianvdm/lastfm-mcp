@@ -84,6 +84,7 @@ async function handleSessionBasedMcp(request: Request, env: Env, ctx: ExecutionC
 	// Add session ID to response headers
 	const newHeaders = new Headers(response.headers)
 	newHeaders.set('Mcp-Session-Id', sessionId)
+	newHeaders.set('Access-Control-Expose-Headers', 'Mcp-Session-Id')
 
 	return new Response(response.body, {
 		status: response.status,
