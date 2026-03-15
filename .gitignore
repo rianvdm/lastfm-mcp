@@ -194,3 +194,4 @@ coverage/
 # Temporary files
 *.tmp
 *.temp
+.worktrees/

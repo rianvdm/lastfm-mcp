@@ -2,9 +2,9 @@
 // ABOUTME: Routes requests to MCP handler or legacy session auth based on client type.
 import { OAuthProvider } from '@cloudflare/workers-oauth-provider'
 import type { ExecutionContext } from '@cloudflare/workers-types'
-import { createMcpHandler, getMcpAuthContext } from 'agents/mcp'
+import { createMcpHandler } from 'agents/mcp'
 
-import { LastfmOAuthHandler } from './auth/oauth-handler'
+import { LastfmOAuthHandler, type LastfmUserProps } from './auth/oauth-handler'
 import { MARKETING_PAGE_HTML } from './marketing-page'
 import { createMcpServer } from './mcp/server'
 import { buildOAuthAuthMessages } from './mcp/tools'
@@ -84,61 +84,6 @@ async function handleSessionBasedMcp(request: Request, env: Env, ctx: ExecutionC
 	// Add session ID to response headers
 	const newHeaders = new Headers(response.headers)
 	newHeaders.set('Mcp-Session-Id', sessionId)
-
-	return new Response(response.body, {
-		status: response.status,
-		statusText: response.statusText,
-		headers: newHeaders,
-	})
-}
-
-/**
- * Handle MCP request without authentication (for clients that don't support OAuth)
- * Public tools work; authenticated tools prompt for login
- */
-async function handleUnauthenticatedMcp(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
-	const url = new URL(request.url)
-	const baseUrl = `${url.protocol}//${url.host}`
-
-	// Generate a session ID for this client (allows them to authenticate later)
-	// Check for existing session ID in header first
-	let sessionId = request.headers.get('Mcp-Session-Id')
-	if (!sessionId) {
-		sessionId = crypto.randomUUID()
-	}
-
-	console.log(
-		`[MCP] Unauthenticated path - sessionId: ${sessionId}, source: ${request.headers.get('Mcp-Session-Id') ? 'header' : 'generated'}`,
-	)
-
-	// Check KV for existing session data (user may have authenticated via /login)
-	let session: { username: string; sessionKey: string } | null = null
-	const sessionDataStr = await env.MCP_SESSIONS.get(`session:${sessionId}`)
-	if (sessionDataStr) {
-		const sessionData: SessionData = JSON.parse(sessionDataStr)
-		if (!sessionData.expiresAt || Date.now() <= sessionData.expiresAt) {
-			session = {
-				username: sessionData.username,
-				sessionKey: sessionData.sessionKey,
-			}
-			console.log(`[MCP] Found existing session for ${sessionData.username} via Mcp-Session-Id header`)
-		}
-	}
-
-	// Create MCP server with session context (if found)
-	const { server, setContext } = createMcpServer(env, baseUrl)
-
-	setContext({
-		sessionId,
-		session,
-	})
-
-	const handler = createMcpHandler(server, { route: '/mcp' })
-	const response = await handler(request, env, ctx)
-
-	// Add session ID to response headers so client can use it for subsequent requests
-	const newHeaders = new Headers(response.headers)
-	newHeaders.set('Mcp-Session-Id', sessionId)
 	newHeaders.set('Access-Control-Expose-Headers', 'Mcp-Session-Id')
 
 	return new Response(response.body, {
@@ -147,6 +92,7 @@ async function handleUnauthenticatedMcp(request: Request, env: Env, ctx: Executi
 		headers: newHeaders,
 	})
 }
+
 
 /**
  * Create the OAuth provider instance
@@ -164,15 +110,13 @@ const oauthProvider = new OAuthProvider({
 				authMessages: buildOAuthAuthMessages(),
 			})
 
-			// Set session from OAuth context
-			const auth = getMcpAuthContext()
-			if (auth?.props) {
-				const props = auth.props as unknown as { username: string; sessionKey: string }
-				if (props.sessionKey && props.username) {
-					setContext({
-						session: { username: props.username, sessionKey: props.sessionKey },
-					})
-				}
+			// Set session from OAuth context.
+			// workers-oauth-provider injects the user props from completeAuthorization() into ctx.props.
+			const props = (ctx as unknown as { props?: LastfmUserProps }).props
+			if (props?.sessionKey && props?.username) {
+				setContext({
+					session: { username: props.username, sessionKey: props.sessionKey },
+				})
 			}
 
 			return createMcpHandler(server)(request, env, ctx)
@@ -363,20 +307,25 @@ Sitemap: https://lastfm-mcp.com/sitemap.xml`,
 		// Check if this is an MCP request
 		if (url.pathname === '/mcp') {
 			const sessionId = url.searchParams.get('session_id')
-			const hasOAuthToken = request.headers.get('Authorization')?.startsWith('Bearer ')
 
 			if (sessionId) {
-				// Use session-based auth for Claude Desktop
+				// Explicit session_id param → session-based auth
 				return handleSessionBasedMcp(request, env, ctx, sessionId)
 			}
 
-			if (!hasOAuthToken) {
-				// No OAuth token - handle as unauthenticated MCP request
-				// Public tools work; authenticated tools prompt for login
-				return handleUnauthenticatedMcp(request, env, ctx)
+			// Check for existing session via Mcp-Session-Id header
+			// (clients that previously authenticated via manual /login flow)
+			const mcpSessionId = request.headers.get('Mcp-Session-Id')
+			if (mcpSessionId) {
+				const sessionDataStr = await env.MCP_SESSIONS.get(`session:${mcpSessionId}`)
+				if (sessionDataStr) {
+					return handleSessionBasedMcp(request, env, ctx, mcpSessionId)
+				}
 			}
 
-			// Has Bearer token - fall through to OAuth provider for validation
+			// No valid session → fall through to OAuth provider
+			// - Valid bearer token: OAuth provider authenticates and serves MCP
+			// - No bearer token: OAuth provider returns 401 + WWW-Authenticate (triggers browser OAuth flow)
 		}
 
 		// Strip resource parameter from token requests to prevent audience mismatch
