@@ -128,16 +128,20 @@ export const MARKETING_PAGE_HTML = `<!DOCTYPE html>
         
         .hero-mcp-note {
             color: var(--text-dim);
-            font-size: 0.85rem;
+            font-size: 0.75rem;
             margin: 0 auto 32px;
-            display: flex;
+            display: inline-flex;
             align-items: center;
-            justify-content: center;
             gap: 6px;
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 100px;
+            padding: 6px 14px;
+            max-width: none;
         }
         
         .hero-mcp-note i {
-            font-size: 1rem;
+            font-size: 0.8rem;
             color: var(--text-dim);
         }
         
