@@ -126,7 +126,7 @@ export const MARKETING_PAGE_HTML = `<!DOCTYPE html>
             margin: 0 auto 16px;
         }
         
-        .hero-mcp-note {
+        .hero p.hero-mcp-note {
             color: var(--text-dim);
             font-size: 0.75rem;
             margin: 0 auto 32px;
