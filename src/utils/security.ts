@@ -44,9 +44,9 @@ export function buildSecurityHeaders(options?: { setCookie?: string; nonce?: str
 	const cspDirectives = [
 		"default-src 'none'",
 		"script-src 'self'" + (options?.nonce ? ` 'nonce-${options.nonce}'` : ''),
-		"style-src 'self' 'unsafe-inline'",
+		"style-src 'self' 'unsafe-inline' https://unpkg.com",
 		"img-src 'self' https:",
-		"font-src 'self'",
+		"font-src 'self' https://unpkg.com",
 		"form-action 'self'",
 		"frame-ancestors 'none'",
 		"base-uri 'self'",

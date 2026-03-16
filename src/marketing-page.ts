@@ -25,6 +25,7 @@ export const MARKETING_PAGE_HTML = `<!DOCTYPE html>
     <meta name="robots" content="index, follow">
     
     <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23d51007' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M3 18v-6a9 9 0 0 1 18 0v6'/%3E%3Cpath d='M21 19a2 2 0 0 1-2 2h-1a2 2 0 0 1-2-2v-3a2 2 0 0 1 2-2h3zM3 19a2 2 0 0 0 2 2h1a2 2 0 0 0 2-2v-3a2 2 0 0 0-2-2H3z'/%3E%3C/svg%3E">
+    <link rel="stylesheet" href="https://unpkg.com/@phosphor-icons/web@2.1.1/src/regular/style.css">
     
     <script type="application/ld+json">
     {
@@ -122,7 +123,22 @@ export const MARKETING_PAGE_HTML = `<!DOCTYPE html>
             color: var(--text-muted);
             font-size: 1.1rem;
             max-width: 540px;
+            margin: 0 auto 16px;
+        }
+        
+        .hero-mcp-note {
+            color: var(--text-dim);
+            font-size: 0.85rem;
             margin: 0 auto 32px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 6px;
+        }
+        
+        .hero-mcp-note i {
+            font-size: 1rem;
+            color: var(--text-dim);
         }
         
         .cta-row {
@@ -366,6 +382,90 @@ export const MARKETING_PAGE_HTML = `<!DOCTYPE html>
             text-decoration: none;
         }
         
+        .footer-links a i {
+            font-size: 1rem;
+            vertical-align: -2px;
+            margin-right: 4px;
+        }
+        
+        .how-it-works {
+            border-top: 1px solid var(--border);
+        }
+        
+        .steps {
+            display: flex;
+            align-items: flex-start;
+            justify-content: center;
+            gap: 0;
+        }
+        
+        .step {
+            text-align: center;
+            flex: 1;
+            max-width: 180px;
+        }
+        
+        .step-icon {
+            width: 48px;
+            height: 48px;
+            border-radius: 12px;
+            background: rgba(213, 16, 7, 0.1);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin: 0 auto 12px;
+        }
+        
+        .step-icon i {
+            font-size: 1.4rem;
+            color: var(--lastfm-red);
+        }
+        
+        .step-label {
+            font-size: 0.95rem;
+            font-weight: 500;
+            color: var(--text);
+            margin-bottom: 4px;
+        }
+        
+        .step-desc {
+            font-size: 0.82rem;
+            color: var(--text-muted);
+        }
+        
+        .step-arrow {
+            display: flex;
+            align-items: center;
+            padding-top: 14px;
+            color: var(--border);
+            font-size: 1.2rem;
+            flex-shrink: 0;
+            margin: 0 8px;
+        }
+        
+        .query-icon {
+            width: 32px;
+            height: 32px;
+            border-radius: 6px;
+            background: rgba(213, 16, 7, 0.1);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-shrink: 0;
+            margin-bottom: 12px;
+        }
+        
+        .query-icon i {
+            font-size: 1rem;
+            color: var(--lastfm-red);
+        }
+        
+        .tool-col h3 i {
+            font-size: 0.85rem;
+            margin-right: 6px;
+            vertical-align: -1px;
+        }
+        
         @media (max-width: 640px) {
             .hero { padding: 48px 0 40px; }
             .hero h1 { font-size: 1.8rem; }
@@ -374,6 +474,9 @@ export const MARKETING_PAGE_HTML = `<!DOCTYPE html>
             nav { gap: 16px; }
             .cta-row { flex-direction: column; align-items: center; }
             .btn { width: 100%; max-width: 280px; text-align: center; }
+            .steps { flex-direction: column; align-items: center; gap: 16px; }
+            .step-arrow { transform: rotate(90deg); margin: 0; }
+            .hero-mcp-note { font-size: 0.8rem; }
         }
     </style>
 </head>
@@ -399,9 +502,35 @@ export const MARKETING_PAGE_HTML = `<!DOCTYPE html>
             <div class="container">
                 <h1>Connect <span>AI</span> to your music</h1>
                 <p>An MCP server that lets Claude and other AI assistants access your Last.fm listening history. Ask questions about your music taste, discover patterns, find new artists.</p>
+                <p class="hero-mcp-note"><i class="ph ph-info"></i> MCP (Model Context Protocol) lets AI apps connect to external data sources securely.</p>
                 <div class="cta-row">
                     <a href="#setup" class="btn btn-primary">Get Started</a>
                     <a href="https://github.com/rianvdm/lastfm-mcp" class="btn btn-secondary">View Source</a>
+                </div>
+            </div>
+        </section>
+        
+        <section class="how-it-works">
+            <div class="container">
+                <h2>How it works</h2>
+                <div class="steps">
+                    <div class="step">
+                        <div class="step-icon"><i class="ph ph-plug"></i></div>
+                        <div class="step-label">Add to your AI client</div>
+                        <div class="step-desc">One URL, works with Claude, Cursor, Windsurf, and more</div>
+                    </div>
+                    <div class="step-arrow"><i class="ph ph-arrow-right"></i></div>
+                    <div class="step">
+                        <div class="step-icon"><i class="ph ph-key"></i></div>
+                        <div class="step-label">Sign in with Last.fm</div>
+                        <div class="step-desc">Securely connect your account to unlock personal data</div>
+                    </div>
+                    <div class="step-arrow"><i class="ph ph-arrow-right"></i></div>
+                    <div class="step">
+                        <div class="step-icon"><i class="ph ph-chat-circle"></i></div>
+                        <div class="step-label">Ask about your music</div>
+                        <div class="step-desc">Your AI assistant can now explore your listening history</div>
+                    </div>
                 </div>
             </div>
         </section>
@@ -411,18 +540,22 @@ export const MARKETING_PAGE_HTML = `<!DOCTYPE html>
                 <h2>Things you can ask</h2>
                 <div class="query-grid">
                     <div class="query">
+                        <div class="query-icon"><i class="ph ph-clock-counter-clockwise"></i></div>
                         <q>When did I start listening to Radiohead?</q>
                         <span>Searches your historical charts to find when an artist first appeared</span>
                     </div>
                     <div class="query">
+                        <div class="query-icon"><i class="ph ph-music-notes"></i></div>
                         <q>What was I obsessed with last summer?</q>
                         <span>Analyzes your listening data for any time period</span>
                     </div>
                     <div class="query">
+                        <div class="query-icon"><i class="ph ph-users-three"></i></div>
                         <q>Find artists similar to my top 5</q>
                         <span>Discovers new music based on your actual listening habits</span>
                     </div>
                     <div class="query">
+                        <div class="query-icon"><i class="ph ph-chart-line-up"></i></div>
                         <q>How has my music taste changed over the years?</q>
                         <span>Tracks the evolution of your listening patterns</span>
                     </div>
@@ -522,7 +655,7 @@ export const MARKETING_PAGE_HTML = `<!DOCTYPE html>
                 <h2>Available Tools</h2>
                 <div class="tool-cols">
                     <div class="tool-col">
-                        <h3>Public (no auth)</h3>
+                        <h3><i class="ph ph-globe"></i> Public (no auth)</h3>
                         <ul>
                             <li>get_track_info</li>
                             <li>get_artist_info</li>
@@ -532,7 +665,7 @@ export const MARKETING_PAGE_HTML = `<!DOCTYPE html>
                         </ul>
                     </div>
                     <div class="tool-col">
-                        <h3>Personal (auth required)</h3>
+                        <h3><i class="ph ph-user-circle"></i> Personal (auth required)</h3>
                         <ul>
                             <li>get_recent_tracks</li>
                             <li>get_top_artists</li>
@@ -543,7 +676,7 @@ export const MARKETING_PAGE_HTML = `<!DOCTYPE html>
                         </ul>
                     </div>
                     <div class="tool-col">
-                        <h3>Temporal</h3>
+                        <h3><i class="ph ph-calendar-blank"></i> Temporal</h3>
                         <ul>
                             <li>get_weekly_chart_list</li>
                             <li>get_weekly_artist_chart</li>
@@ -558,10 +691,10 @@ export const MARKETING_PAGE_HTML = `<!DOCTYPE html>
     <footer>
         <div class="container">
             <div class="footer-links">
-                <a href="https://github.com/rianvdm/lastfm-mcp">Source Code</a>
-                <a href="https://github.com/rianvdm/lastfm-mcp#readme">Documentation</a>
-                <a href="https://github.com/rianvdm/lastfm-mcp/releases">Release Notes</a>
-                <a href="https://github.com/rianvdm/lastfm-mcp/issues">Report a Bug</a>
+                <a href="https://github.com/rianvdm/lastfm-mcp"><i class="ph ph-github-logo"></i>Source Code</a>
+                <a href="https://github.com/rianvdm/lastfm-mcp#readme"><i class="ph ph-book-open"></i>Documentation</a>
+                <a href="https://github.com/rianvdm/lastfm-mcp/releases"><i class="ph ph-tag"></i>Release Notes</a>
+                <a href="https://github.com/rianvdm/lastfm-mcp/issues"><i class="ph ph-bug"></i>Report a Bug</a>
             </div>
             <p class="footer-note">Open source under MIT. Built on <a href="https://www.last.fm/api">Last.fm API</a> and <a href="https://modelcontextprotocol.io">MCP</a>.</p>
         </div>
