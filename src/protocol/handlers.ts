@@ -995,11 +995,19 @@ Your authentication is secure and tied to your specific session.`,
 			const totalPages = parseInt(data.recenttracks['@attr'].totalPages)
 			const totalTracks = parseInt(data.recenttracks['@attr'].total)
 
+			const nowStr = formatTimestamp(Math.floor(Date.now() / 1000), effectiveTimezone)
+			const rangeStr = from && to
+				? `${formatTimestamp(from, effectiveTimezone)} – ${formatTimestamp(to, effectiveTimezone)}`
+				: from
+					? `from ${formatTimestamp(from, effectiveTimezone)}`
+					: `most recent (server time: ${nowStr})`
+
 			return {
 				content: [
 					{
 						type: 'text',
 						text: `${timezoneWarning ? timezoneWarning + '\n\n' : ''}🎵 **Recent Tracks for ${username}** (times in ${effectiveTimezone})
+📅 **Queried range:** ${rangeStr}
 
 📊 **Pagination Info:**
 • Page ${currentPage} of ${totalPages}
