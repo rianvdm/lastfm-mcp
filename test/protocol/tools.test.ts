@@ -4,17 +4,36 @@ import { resetProtocolState } from '../../src/protocol/validation'
 import { lastfmClient } from '../../src/clients/lastfm'
 import { createSessionToken } from '../../src/auth/jwt'
 
-// Mock the Last.fm client
+// Shared mock object used by the CachedLastfmClient mock below
+const mockCachedClient = {
+	getUserInfo: vi.fn(),
+	getUserRecentTracks: vi.fn(),
+	getRecentTracks: vi.fn(),
+	getUserTopArtists: vi.fn(),
+	getUserTopAlbums: vi.fn(),
+	getTrackInfo: vi.fn(),
+	getArtistInfo: vi.fn(),
+	getAlbumInfo: vi.fn(),
+}
+
+// Mock CachedLastfmClient so the authenticated handler gets our mock instead of hitting the real API
+vi.mock('../../src/clients/cachedLastfm', () => ({
+	CachedLastfmClient: vi.fn(() => mockCachedClient),
+}))
+
+// Mock the Last.fm client (and LastfmClient class so the constructor doesn't throw)
 vi.mock('../../src/clients/lastfm', () => ({
 	lastfmClient: {
 		getUserInfo: vi.fn(),
 		getUserRecentTracks: vi.fn(),
+		getRecentTracks: vi.fn(),
 		getUserTopArtists: vi.fn(),
 		getUserTopAlbums: vi.fn(),
 		getTrackInfo: vi.fn(),
 		getArtistInfo: vi.fn(),
 		getAlbumInfo: vi.fn(),
 	},
+	LastfmClient: vi.fn(() => ({})),
 }))
 
 const mockLastfmClient = vi.mocked(lastfmClient)
@@ -195,6 +214,91 @@ describe('Tools', () => {
 			if (response?.result) {
 				expect(mockLastfmClient.getUserInfo).toHaveBeenCalledWith('test-session-key')
 			}
+		})
+
+		describe('get_recent_tracks timezone handling', () => {
+			const mockRecentTracksData = {
+				recenttracks: {
+					track: [
+						{
+							name: 'Test Track',
+							artist: { '#text': 'Test Artist' },
+							album: { '#text': 'Test Album' },
+							// Unix timestamp 1705359600 = 2024-01-15T23:00:00Z
+							date: { uts: '1705359600', '#text': '15 Jan 2024, 23:00' },
+						},
+					],
+					'@attr': { page: '1', totalPages: '1', total: '1', perPage: '50' },
+				},
+			}
+
+			beforeEach(async () => {
+				resetInitialization()
+				resetProtocolState()
+				vi.clearAllMocks()
+				mockCachedClient.getRecentTracks.mockResolvedValue(mockRecentTracksData)
+
+				await handleMethod({
+					jsonrpc: '2.0',
+					method: 'initialize',
+					params: { protocolVersion: '2024-11-05', capabilities: {}, clientInfo: { name: 'Test', version: '1.0' } },
+					id: 1,
+				})
+				await handleMethod({ jsonrpc: '2.0', method: 'initialized' })
+			})
+
+			it('shows "(times in UTC)" in header when no timezone is given', async () => {
+				const response = await handleMethod(
+					{
+						jsonrpc: '2.0',
+						method: 'tools/call',
+						params: { name: 'get_recent_tracks', arguments: { username: 'testuser' } },
+						id: 2,
+					},
+					await createMockAuthenticatedRequest(),
+					mockJwtSecret,
+					mockEnv,
+				)
+				const text = response?.result?.content?.[0]?.text ?? ''
+				expect(text).toContain('(times in UTC)')
+			})
+
+			it('shows "(times in America/New_York)" and ET-formatted date when timezone is provided', async () => {
+				const response = await handleMethod(
+					{
+						jsonrpc: '2.0',
+						method: 'tools/call',
+						params: { name: 'get_recent_tracks', arguments: { username: 'testuser', timezone: 'America/New_York' } },
+						id: 2,
+					},
+					await createMockAuthenticatedRequest(),
+					mockJwtSecret,
+					mockEnv,
+				)
+				const text = response?.result?.content?.[0]?.text ?? ''
+				expect(text).toContain('(times in America/New_York)')
+				// 2024-01-15T23:00:00Z = 6:00 PM EST
+				expect(text).toContain('Jan 15, 2024')
+				expect(text).toContain('6:00 PM')
+			})
+
+			it('shows a warning and falls back to UTC for an invalid timezone', async () => {
+				const response = await handleMethod(
+					{
+						jsonrpc: '2.0',
+						method: 'tools/call',
+						params: { name: 'get_recent_tracks', arguments: { username: 'testuser', timezone: 'Invalid/Zone' } },
+						id: 2,
+					},
+					await createMockAuthenticatedRequest(),
+					mockJwtSecret,
+					mockEnv,
+				)
+				const text = response?.result?.content?.[0]?.text ?? ''
+				expect(text).toContain('Unrecognized timezone "Invalid/Zone"')
+				expect(text).toContain('falling back to UTC')
+				expect(text).toContain('(times in UTC)')
+			})
 		})
 
 		it('should handle get_user_recent_tracks tool', async () => {
