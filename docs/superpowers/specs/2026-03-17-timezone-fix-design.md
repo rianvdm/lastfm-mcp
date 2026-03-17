@@ -56,10 +56,10 @@ try {
 
 If invalid, a single warning line appears at the top of the response. All track dates then format in UTC. This keeps `formatTimestamp` pure (no error state) and avoids polluting every track line with a repeated warning.
 
-Response header notes the active timezone in all cases:
+Response header notes the active timezone inline on the heading line:
 ```
-🎵 Recent Tracks for rian (times in America/New_York)
-🎵 Recent Tracks for rian (times in UTC)   ← default / fallback case
+🎵 **Recent Tracks for rian** (times in America/New_York)
+🎵 **Recent Tracks for rian** (times in UTC)   ← default / fallback case
 ```
 
 When Claude knows the user's timezone from context, it passes it; when unknown, UTC + visible note is the fallback.
