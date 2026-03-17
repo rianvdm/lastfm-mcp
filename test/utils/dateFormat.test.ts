@@ -18,11 +18,15 @@ describe('formatTimestamp', () => {
     expect(result).toContain('PST')
   })
 
-  it('does not throw for an invalid timezone string', () => {
-    expect(() => formatTimestamp(KNOWN_TS, 'Invalid/Zone')).not.toThrow()
+  it('falls back to UTC for an invalid timezone string', () => {
+    const result = formatTimestamp(KNOWN_TS, 'Invalid/Zone')
+    expect(result).toContain('UTC')
+    expect(result).toContain('Jan 15, 2024')
   })
 
-  it('does not throw for the zero epoch timestamp', () => {
-    expect(() => formatTimestamp(0)).not.toThrow()
+  it('formats the zero epoch timestamp without throwing', () => {
+    const result = formatTimestamp(0)
+    expect(result).toContain('Jan 1, 1970')
+    expect(result).toContain('UTC')
   })
 })
