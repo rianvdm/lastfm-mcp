@@ -6,6 +6,7 @@ import { z } from 'zod'
 
 import { CachedLastfmClient } from '../../clients/cachedLastfm'
 import { toolError } from './error-handler'
+import { formatTimestamp } from '../../utils/dateFormat'
 
 /**
  * Last.fm user props stored in OAuth token
@@ -201,8 +202,10 @@ export function registerAuthenticatedTools(
 			page: z.number().min(1).optional().default(1).describe('Page number for pagination (starts at 1)'),
 			from: z.number().optional().describe('Start timestamp (Unix timestamp)'),
 			to: z.number().optional().describe('End timestamp (Unix timestamp)'),
+			timezone: z.string().optional().default('UTC')
+				.describe('IANA timezone name (e.g. "America/New_York"). Defaults to UTC.'),
 		},
-		async ({ username, limit, page, from, to }) => {
+		async ({ username, limit, page, from, to, timezone }) => {
 			const session = getSession()
 			if (!session) {
 				return { content: [{ type: 'text', text: authMessages.requiresAuth() }] }
@@ -210,13 +213,21 @@ export function registerAuthenticatedTools(
 
 			try {
 				const effectiveUsername = username || session.username
+				let effectiveTimezone = timezone
+				let timezoneWarning: string | undefined
+				try {
+					Intl.DateTimeFormat('en-US', { timeZone: effectiveTimezone })
+				} catch {
+					timezoneWarning = `⚠️ Unrecognized timezone "${effectiveTimezone}" — falling back to UTC.`
+					effectiveTimezone = 'UTC'
+				}
 				const data = await client.getRecentTracks(effectiveUsername, limit, from, to, page)
 
 				const tracks = data.recenttracks.track.slice(0, limit)
 				const trackList = tracks
 					.map((track) => {
 						const nowPlaying = track.nowplaying ? ' 🎵 Now Playing' : ''
-						const date = track.date ? new Date(parseInt(track.date.uts) * 1000).toLocaleDateString() : ''
+						const date = track.date ? formatTimestamp(parseInt(track.date.uts), effectiveTimezone) : ''
 						const album = track.album?.['#text'] ? ` [${track.album['#text']}]` : ''
 						return `• ${track.artist['#text']} - ${track.name}${album}${nowPlaying}${date ? ` (${date})` : ''}`
 					})
@@ -230,7 +241,7 @@ export function registerAuthenticatedTools(
 					content: [
 						{
 							type: 'text',
-							text: `🎵 **Recent Tracks for ${effectiveUsername}**
+							text: `${timezoneWarning ? timezoneWarning + '\n\n' : ''}🎵 **Recent Tracks for ${effectiveUsername}** (times in ${effectiveTimezone})
 
 📊 **Pagination Info:**
 • Page ${currentPage} of ${totalPages}
@@ -397,7 +408,7 @@ Total loved tracks: ${data.lovedtracks['@attr'].total}`,
 				const data = await client.getUserInfo(effectiveUsername)
 				const user = data.user
 
-				const registrationDate = new Date(parseInt(user.registered.unixtime) * 1000).toLocaleDateString()
+				const registrationDate = formatTimestamp(parseInt(user.registered.unixtime))
 
 				return {
 					content: [
@@ -529,8 +540,8 @@ ${artistList}
 					.slice(-20)
 					.reverse()
 					.map((chart) => {
-						const fromDate = new Date(parseInt(chart.from) * 1000).toLocaleDateString()
-						const toDate = new Date(parseInt(chart.to) * 1000).toLocaleDateString()
+						const fromDate = formatTimestamp(parseInt(chart.from))
+						const toDate = formatTimestamp(parseInt(chart.to))
 						return `• ${fromDate} to ${toDate} (from: ${chart.from}, to: ${chart.to})`
 					})
 					.join('\n')
@@ -581,7 +592,7 @@ ${chartList}
 
 				const artists = data.weeklyartistchart.artist
 				const periodInfo =
-					from && to ? `${new Date(from * 1000).toLocaleDateString()} to ${new Date(to * 1000).toLocaleDateString()}` : 'Most Recent Week'
+					from && to ? `${formatTimestamp(from)} to ${formatTimestamp(to)}` : 'Most Recent Week'
 
 				const artistList = artists
 					.slice(0, 30)
@@ -631,7 +642,7 @@ ${artists.length > 30 ? '\n📝 **Note:** Showing top 30 artists only' : ''}
 
 				const tracks = data.weeklytrackchart.track
 				const periodInfo =
-					from && to ? `${new Date(from * 1000).toLocaleDateString()} to ${new Date(to * 1000).toLocaleDateString()}` : 'Most Recent Week'
+					from && to ? `${formatTimestamp(from)} to ${formatTimestamp(to)}` : 'Most Recent Week'
 
 				const trackList = tracks
 					.slice(0, 30)
