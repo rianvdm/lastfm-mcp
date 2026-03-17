@@ -200,10 +200,10 @@ export function registerAuthenticatedTools(
 			username: z.string().optional().describe('Last.fm username (defaults to authenticated user)'),
 			limit: z.number().min(1).max(1000).optional().default(50).describe('Number of tracks to return per page (1-1000)'),
 			page: z.number().min(1).optional().default(1).describe('Page number for pagination (starts at 1)'),
-			from: z.number().optional().describe('Start timestamp (Unix timestamp)'),
-			to: z.number().optional().describe('End timestamp (Unix timestamp)'),
+			from: z.number().optional().describe('Start timestamp (Unix timestamp). When filtering by day (e.g. "yesterday", "today"), compute midnight boundaries in the user\'s local timezone, not UTC.'),
+			to: z.number().optional().describe('End timestamp (Unix timestamp). When filtering by day, use the end of that day in the user\'s local timezone.'),
 			timezone: z.string().optional().default('UTC')
-				.describe('IANA timezone name (e.g. "America/New_York"). Defaults to UTC.'),
+				.describe('IANA timezone name (e.g. "America/New_York"). Defaults to UTC. Always pass this when the user\'s timezone is known — it affects both date display and how day boundaries should be computed for from/to.'),
 		},
 		async ({ username, limit, page, from, to, timezone }) => {
 			const session = getSession()
