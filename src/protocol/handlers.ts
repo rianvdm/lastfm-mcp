@@ -28,7 +28,7 @@ import {
 } from './validation'
 import { verifySessionToken, SessionPayload } from '../auth/jwt'
 import { LastfmClient } from '../clients/lastfm'
-import { formatTimestamp } from '../utils/dateFormat'
+import { formatTimestamp, getDayBoundsUTC } from '../utils/dateFormat'
 import { CachedLastfmClient } from '../clients/cachedLastfm'
 import { LASTFM_RESOURCES, LASTFM_TOOLS, LASTFM_PROMPTS, parseLastfmUri } from '../types/lastfm-mcp'
 
@@ -967,8 +967,9 @@ Your authentication is secure and tied to your specific session.`,
 			const username = (args?.username as string) || session.username
 			const limit = Math.min(Math.max((args?.limit as number) || 50, 1), 1000)
 			const page = Math.max((args?.page as number) || 1, 1)
-			const from = args?.from as number
-			const to = args?.to as number
+			const dateParam = args?.date as string | undefined
+			let effectiveFrom = args?.from as number | undefined
+			let effectiveTo = args?.to as number | undefined
 			const rawTimezone = (args?.timezone as string) || 'UTC'
 			let effectiveTimezone = rawTimezone
 			let timezoneWarning: string | undefined
@@ -978,8 +979,13 @@ Your authentication is secure and tied to your specific session.`,
 				timezoneWarning = `⚠️ Unrecognized timezone "${rawTimezone}" — falling back to UTC.`
 				effectiveTimezone = 'UTC'
 			}
+			if (dateParam) {
+				const bounds = getDayBoundsUTC(dateParam, effectiveTimezone)
+				effectiveFrom = bounds.from
+				effectiveTo = bounds.to
+			}
 
-			const data = await client.getRecentTracks(username, limit, from, to, page)
+			const data = await client.getRecentTracks(username, limit, effectiveFrom, effectiveTo, page)
 
 			const tracks = data.recenttracks.track.slice(0, limit)
 			const trackList = tracks
@@ -996,10 +1002,10 @@ Your authentication is secure and tied to your specific session.`,
 			const totalTracks = parseInt(data.recenttracks['@attr'].total)
 
 			const nowStr = formatTimestamp(Math.floor(Date.now() / 1000), effectiveTimezone)
-			const rangeStr = from && to
-				? `${formatTimestamp(from, effectiveTimezone)} – ${formatTimestamp(to, effectiveTimezone)}`
-				: from
-					? `from ${formatTimestamp(from, effectiveTimezone)}`
+			const rangeStr = effectiveFrom && effectiveTo
+				? `${formatTimestamp(effectiveFrom, effectiveTimezone)} – ${formatTimestamp(effectiveTo, effectiveTimezone)}`
+				: effectiveFrom
+					? `from ${formatTimestamp(effectiveFrom, effectiveTimezone)}`
 					: `most recent (server time: ${nowStr})`
 
 			return {

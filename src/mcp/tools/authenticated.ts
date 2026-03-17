@@ -6,7 +6,7 @@ import { z } from 'zod'
 
 import { CachedLastfmClient } from '../../clients/cachedLastfm'
 import { toolError } from './error-handler'
-import { formatTimestamp } from '../../utils/dateFormat'
+import { formatTimestamp, getDayBoundsUTC } from '../../utils/dateFormat'
 
 /**
  * Last.fm user props stored in OAuth token
@@ -200,12 +200,13 @@ export function registerAuthenticatedTools(
 			username: z.string().optional().describe('Last.fm username (defaults to authenticated user)'),
 			limit: z.number().min(1).max(1000).optional().default(50).describe('Number of tracks to return per page (1-1000)'),
 			page: z.number().min(1).optional().default(1).describe('Page number for pagination (starts at 1)'),
-			from: z.number().optional().describe('Start timestamp (Unix timestamp). When filtering by day (e.g. "yesterday", "today"), compute midnight boundaries in the user\'s local timezone, not UTC.'),
-			to: z.number().optional().describe('End timestamp (Unix timestamp). When filtering by day, use the end of that day in the user\'s local timezone.'),
+			date: z.string().optional().describe('Calendar date in YYYY-MM-DD format (e.g. "2026-03-16"). The server computes correct UTC day boundaries using the timezone param. Prefer this over from/to when querying "today", "yesterday", or a specific date.'),
+			from: z.number().optional().describe('Start timestamp (Unix timestamp). Ignored if date is provided.'),
+			to: z.number().optional().describe('End timestamp (Unix timestamp). Ignored if date is provided.'),
 			timezone: z.string().optional().default('UTC')
-				.describe('IANA timezone name (e.g. "America/New_York"). Defaults to UTC. Always pass this when the user\'s timezone is known — it affects both date display and how day boundaries should be computed for from/to.'),
+				.describe('IANA timezone name (e.g. "America/New_York"). Defaults to UTC. Required for date param to work correctly — always pass when the user\'s timezone is known.'),
 		},
-		async ({ username, limit, page, from, to, timezone }) => {
+		async ({ username, limit, page, date, from, to, timezone }) => {
 			const session = getSession()
 			if (!session) {
 				return { content: [{ type: 'text', text: authMessages.requiresAuth() }] }
@@ -213,6 +214,13 @@ export function registerAuthenticatedTools(
 
 			try {
 				const effectiveUsername = username || session.username
+				let effectiveFrom = from
+				let effectiveTo = to
+				if (date) {
+					const bounds = getDayBoundsUTC(date, timezone)
+					effectiveFrom = bounds.from
+					effectiveTo = bounds.to
+				}
 				let effectiveTimezone = timezone
 				let timezoneWarning: string | undefined
 				try {
@@ -221,7 +229,7 @@ export function registerAuthenticatedTools(
 					timezoneWarning = `⚠️ Unrecognized timezone "${effectiveTimezone}" — falling back to UTC.`
 					effectiveTimezone = 'UTC'
 				}
-				const data = await client.getRecentTracks(effectiveUsername, limit, from, to, page)
+				const data = await client.getRecentTracks(effectiveUsername, limit, effectiveFrom, effectiveTo, page)
 
 				const tracks = data.recenttracks.track.slice(0, limit)
 				const trackList = tracks
@@ -238,10 +246,10 @@ export function registerAuthenticatedTools(
 				const totalTracks = parseInt(data.recenttracks['@attr'].total)
 
 				const nowStr = formatTimestamp(Math.floor(Date.now() / 1000), effectiveTimezone)
-				const rangeStr = from && to
-					? `${formatTimestamp(from, effectiveTimezone)} – ${formatTimestamp(to, effectiveTimezone)}`
-					: from
-						? `from ${formatTimestamp(from, effectiveTimezone)}`
+				const rangeStr = effectiveFrom && effectiveTo
+					? `${formatTimestamp(effectiveFrom, effectiveTimezone)} – ${formatTimestamp(effectiveTo, effectiveTimezone)}`
+					: effectiveFrom
+						? `from ${formatTimestamp(effectiveFrom, effectiveTimezone)}`
 						: `most recent (server time: ${nowStr})`
 
 				return {
