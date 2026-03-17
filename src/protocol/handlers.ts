@@ -28,6 +28,7 @@ import {
 } from './validation'
 import { verifySessionToken, SessionPayload } from '../auth/jwt'
 import { LastfmClient } from '../clients/lastfm'
+import { formatTimestamp } from '../utils/dateFormat'
 import { CachedLastfmClient } from '../clients/cachedLastfm'
 import { LASTFM_RESOURCES, LASTFM_TOOLS, LASTFM_PROMPTS, parseLastfmUri } from '../types/lastfm-mcp'
 
@@ -968,6 +969,15 @@ Your authentication is secure and tied to your specific session.`,
 			const page = Math.max((args?.page as number) || 1, 1)
 			const from = args?.from as number
 			const to = args?.to as number
+			const rawTimezone = (args?.timezone as string) || 'UTC'
+			let effectiveTimezone = rawTimezone
+			let timezoneWarning: string | undefined
+			try {
+				Intl.DateTimeFormat('en-US', { timeZone: effectiveTimezone })
+			} catch {
+				timezoneWarning = `⚠️ Unrecognized timezone "${rawTimezone}" — falling back to UTC.`
+				effectiveTimezone = 'UTC'
+			}
 
 			const data = await client.getRecentTracks(username, limit, from, to, page)
 
@@ -975,7 +985,7 @@ Your authentication is secure and tied to your specific session.`,
 			const trackList = tracks
 				.map((track) => {
 					const nowPlaying = track.nowplaying ? ' 🎵 Now Playing' : ''
-					const date = track.date ? new Date(parseInt(track.date.uts) * 1000).toLocaleDateString() : ''
+					const date = track.date ? formatTimestamp(parseInt(track.date.uts), effectiveTimezone) : ''
 					const album = track.album?.['#text'] ? ` [${track.album['#text']}]` : ''
 					return `• ${track.artist['#text']} - ${track.name}${album}${nowPlaying}${date ? ` (${date})` : ''}`
 				})
@@ -989,7 +999,7 @@ Your authentication is secure and tied to your specific session.`,
 				content: [
 					{
 						type: 'text',
-						text: `🎵 **Recent Tracks for ${username}**
+						text: `${timezoneWarning ? timezoneWarning + '\n\n' : ''}🎵 **Recent Tracks for ${username}** (times in ${effectiveTimezone})
 
 📊 **Pagination Info:**
 • Page ${currentPage} of ${totalPages}
@@ -1230,7 +1240,7 @@ ${data.album.wiki?.summary ? `**Description:** ${data.album.wiki.summary.replace
 			const data = await client.getUserInfo(username)
 			const user = data.user
 
-			const registrationDate = new Date(parseInt(user.registered.unixtime) * 1000).toLocaleDateString()
+			const registrationDate = formatTimestamp(parseInt(user.registered.unixtime))
 
 			return {
 				content: [
@@ -1370,8 +1380,8 @@ ${artistList}
 				.slice(-20)
 				.reverse()
 				.map((chart) => {
-					const fromDate = new Date(parseInt(chart.from) * 1000).toLocaleDateString()
-					const toDate = new Date(parseInt(chart.to) * 1000).toLocaleDateString()
+					const fromDate = formatTimestamp(parseInt(chart.from))
+					const toDate = formatTimestamp(parseInt(chart.to))
 					return `• ${fromDate} to ${toDate} (from: ${chart.from}, to: ${chart.to})`
 				})
 				.join('\n')
@@ -1406,7 +1416,7 @@ ${chartList}
 
 			const artists = data.weeklyartistchart.artist
 			const periodInfo =
-				from && to ? `${new Date(from * 1000).toLocaleDateString()} to ${new Date(to * 1000).toLocaleDateString()}` : 'Most Recent Week'
+				from && to ? `${formatTimestamp(from)} to ${formatTimestamp(to)}` : 'Most Recent Week'
 
 			const artistList = artists
 				.slice(0, 30)
@@ -1442,7 +1452,7 @@ ${artists.length > 30 ? '\n📝 **Note:** Showing top 30 artists only' : ''}
 
 			const tracks = data.weeklytrackchart.track
 			const periodInfo =
-				from && to ? `${new Date(from * 1000).toLocaleDateString()} to ${new Date(to * 1000).toLocaleDateString()}` : 'Most Recent Week'
+				from && to ? `${formatTimestamp(from)} to ${formatTimestamp(to)}` : 'Most Recent Week'
 
 			const trackList = tracks
 				.slice(0, 30)
