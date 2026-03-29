@@ -6,13 +6,7 @@ Runs on Cloudflare Workers with OAuth 2.0 authentication. Public tools (track in
 
 ## Quick start
 
-### Claude.ai
-
-1. Go to **Settings** -> **Connectors** -> **Add Custom Connector**
-2. Enter `https://lastfm-mcp.com/mcp`
-3. Sign in to Last.fm when prompted
-
-### Claude Desktop
+### Claude.ai / Claude Desktop
 
 1. Open **Settings** -> **Connectors** -> **Add Custom Connector**
 2. Enter `https://lastfm-mcp.com/mcp`
