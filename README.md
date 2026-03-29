@@ -8,9 +8,9 @@ Runs on Cloudflare Workers. Authenticates via OAuth 2.0. Public tools (track inf
 
 ### Claude.ai
 
-1. Go to **Settings** -> **Integrations** -> **Add Integration**
+1. Go to **Settings** -> **Connectors** -> **Add Custom Connector**
 2. Enter the server URL: `https://lastfm-mcp.com/mcp`
-3. Click **Connect**, sign in to Last.fm when prompted
+3. Sign in to Last.fm when prompted
 
 ### Claude Desktop
 
