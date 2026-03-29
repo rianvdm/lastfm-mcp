@@ -1,47 +1,22 @@
-# 🎵 Last.fm MCP Server
+# Last.fm MCP Server
 
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![TypeScript](https://img.shields.io/badge/TypeScript-007ACC?logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
-[![Cloudflare Workers](https://img.shields.io/badge/Cloudflare-Workers-F38020?logo=cloudflare&logoColor=white)](https://workers.cloudflare.com/)
-[![Last.fm](https://img.shields.io/badge/Last.fm-API-D51007?logo=last.fm&logoColor=white)](https://www.last.fm/api)
-[![MCP](https://img.shields.io/badge/MCP-2024--11--05-blue)](https://github.com/modelcontextprotocol)
-[![CI](https://github.com/rianvdm/lastfm-mcp/actions/workflows/ci.yml/badge.svg)](https://github.com/rianvdm/lastfm-mcp/actions/workflows/ci.yml)
+A [Model Context Protocol](https://modelcontextprotocol.io/) (MCP) server for Last.fm. Gives AI assistants access to your listening history, music discovery, and detailed track/artist/album information.
 
-A **Model Context Protocol (MCP) server** that provides seamless access to Last.fm listening data and music information via AI assistants like Claude.
+Runs on Cloudflare Workers. Authenticates via OAuth 2.0. Public tools (track info, artist info, similar artists) work without authentication -- sign in to access your personal listening data.
 
-## ✨ Features
-
-- 🎧 **Personal Listening Data**: Recent tracks, top artists, albums, loved tracks
-- 🎵 **Music Information**: Detailed track, artist, and album information
-- 🔍 **Music Discovery**: Similar artists/tracks, personalized recommendations
-- 📊 **Listening Statistics**: Comprehensive stats and listening habits analysis
-- 🔐 **OAuth 2.0 Authentication**: Industry-standard auth with session persistence
-- ⚡ **Smart Caching**: Intelligent caching with optimized TTLs for performance
-- 🛡️ **Rate Limiting**: Built-in rate limiting respecting Last.fm API limits
-- 🌐 **Production Ready**: Deployed on Cloudflare Workers with global edge
-
-## 🚀 Quick Start
+## Quick start
 
 ### Claude.ai
 
-1. Go to **Settings** → **Integrations** → **Add Integration**
-2. Enter the MCP server URL:
-   ```
-   https://lastfm-mcp.com/mcp
-   ```
-3. Click **Connect** - your browser will open to Last.fm
-4. Sign in and authorize the app
-5. Done! Your session persists across conversations.
+1. Go to **Settings** -> **Integrations** -> **Add Integration**
+2. Enter the server URL: `https://lastfm-mcp.com/mcp`
+3. Click **Connect**, sign in to Last.fm when prompted
 
 ### Claude Desktop
 
-1. Open Claude Desktop → **Settings** → **Integrations**
-2. Click **Add Integration**
-3. Enter the URL:
-   ```
-   https://lastfm-mcp.com/mcp
-   ```
-4. Click **Add** - authenticate with Last.fm when prompted
+1. Open **Settings** -> **Integrations** -> **Add Integration**
+2. Enter `https://lastfm-mcp.com/mcp`
+3. Click **Add**, authenticate when prompted
 
 ### Claude Code
 
@@ -49,112 +24,81 @@ A **Model Context Protocol (MCP) server** that provides seamless access to Last.
 claude mcp add --transport http lastfm "https://lastfm-mcp.com/mcp"
 ```
 
-When you first use a Last.fm tool, you'll be prompted to authenticate.
-
 ### Windsurf
 
-Add to your Windsurf MCP config (`~/.codeium/windsurf/mcp_config.json`):
+Add to `~/.codeium/windsurf/mcp_config.json`:
 
 ```json
 {
-	"mcpServers": {
-		"lastfm": {
-			"serverUrl": "https://lastfm-mcp.com/mcp"
-		}
-	}
+  "mcpServers": {
+    "lastfm": {
+      "serverUrl": "https://lastfm-mcp.com/mcp"
+    }
+  }
 }
 ```
 
-### MCP Inspector (Testing)
+### Other MCP clients
+
+For clients that don't support remote servers directly (Continue.dev, Zed, etc.), use `mcp-remote`:
+
+```json
+{
+  "mcpServers": {
+    "lastfm": {
+      "command": "npx",
+      "args": ["-y", "mcp-remote", "https://lastfm-mcp.com/mcp"]
+    }
+  }
+}
+```
+
+### MCP Inspector
 
 ```bash
 npx @modelcontextprotocol/inspector https://lastfm-mcp.com/mcp
 ```
 
-### Other MCP Clients
+## Available tools
 
-**Continue.dev (VS Code/JetBrains):**
+### Public (no auth required)
 
-```json
-{
-	"mcpServers": {
-		"lastfm": {
-			"command": "npx",
-			"args": ["-y", "mcp-remote", "https://lastfm-mcp.com/mcp"]
-		}
-	}
-}
-```
+| Tool | Description |
+| ---- | ----------- |
+| `get_track_info` | Detailed information about a track |
+| `get_artist_info` | Artist information and bio |
+| `get_album_info` | Album details and track listing |
+| `get_similar_artists` | Artists similar to a given artist |
+| `get_similar_tracks` | Tracks similar to a given track |
+| `ping` | Test connectivity |
+| `server_info` | Server status and capabilities |
+| `lastfm_auth_status` | Check authentication status |
 
-**Zed Editor:**
+### Personal (auth required)
 
-```json
-{
-	"context_servers": {
-		"lastfm": {
-			"command": "npx",
-			"args": ["-y", "mcp-remote", "https://lastfm-mcp.com/mcp"]
-		}
-	}
-}
-```
+| Tool | Description |
+| ---- | ----------- |
+| `get_recent_tracks` | Recent listening history (paginated) |
+| `get_top_artists` | Top artists by time period |
+| `get_top_albums` | Top albums by time period |
+| `get_loved_tracks` | Loved/favorited tracks |
+| `get_user_info` | Last.fm profile information |
+| `get_listening_stats` | Listening statistics |
+| `get_music_recommendations` | Personalized recommendations |
 
-## 🔐 Authentication
+### Temporal queries (auth required)
 
-This server uses **OAuth 2.0** for authentication. When you connect from any supported client:
+| Tool | Description |
+| ---- | ----------- |
+| `get_weekly_chart_list` | Available historical time periods |
+| `get_weekly_artist_chart` | Artist charts for a specific time period |
+| `get_weekly_track_chart` | Track charts for a specific time period |
 
-1. The client detects the 401 response with OAuth metadata
-2. Your browser opens to Last.fm for authentication
-3. After authorizing, tokens are stored and persist across sessions
+These are useful for questions like "when did I start listening to Led Zeppelin?" or "what was I into last March?"
 
-All major MCP clients (Claude.ai, Claude Desktop, Claude Code, Windsurf) support OAuth.
+## Resources
 
-**Note:** Public tools (track info, artist info, similar artists, etc.) work without authentication. You only need to sign in to access your personal listening data.
-
-## 🛠️ Available Tools
-
-### 🔓 **Public Tools** (No Authentication Required)
-
-| Tool                  | Description                              |
-| --------------------- | ---------------------------------------- |
-| `get_track_info`      | Get detailed information about any track |
-| `get_artist_info`     | Get detailed artist information and bio  |
-| `get_album_info`      | Get album details and track listings     |
-| `get_similar_artists` | Find artists similar to a given artist   |
-| `get_similar_tracks`  | Find tracks similar to a given track     |
-| `ping`                | Test server connectivity                 |
-| `server_info`         | Get server status and capabilities       |
-| `lastfm_auth_status`  | Check your authentication status         |
-
-### 🔐 **Personal Tools** (Authentication Required)
-
-| Tool                        | Description                                         |
-| --------------------------- | --------------------------------------------------- |
-| `get_recent_tracks`         | Your recent listening history (supports pagination) |
-| `get_top_artists`           | Your top artists by time period                     |
-| `get_top_albums`            | Your top albums by time period                      |
-| `get_loved_tracks`          | Your loved/favorite tracks                          |
-| `get_user_info`             | Your Last.fm profile information                    |
-| `get_listening_stats`       | Comprehensive listening statistics                  |
-| `get_music_recommendations` | Personalized music recommendations                  |
-
-### 🕰️ **Temporal Query Tools** (Authentication Required)
-
-| Tool                      | Description                                                 |
-| ------------------------- | ----------------------------------------------------------- |
-| `get_weekly_chart_list`   | Get available historical time periods for temporal analysis |
-| `get_weekly_artist_chart` | Get artist listening data for specific time periods         |
-| `get_weekly_track_chart`  | Get track listening data for specific time periods          |
-
-**Perfect for questions like:**
-
-- "When did I start listening to Led Zeppelin?"
-- "What was I listening to in March 2023?"
-- "How has my music taste evolved over time?"
-
-## 📚 MCP Resources
-
-Access Last.fm data via standardized MCP resource URIs:
+The server exposes MCP resource URIs:
 
 ```
 lastfm://user/{username}/recent          # Recent tracks
@@ -169,209 +113,109 @@ lastfm://artist/{artist}/similar         # Similar artists
 lastfm://track/{artist}/{track}/similar  # Similar tracks
 ```
 
-## 🤖 MCP Prompts
+## Prompts
 
-Rich AI prompts for music analysis and discovery:
+| Prompt | Description | Arguments |
+| ------ | ----------- | --------- |
+| `listening_insights` | Analyze listening habits and patterns | `username`, `period?` |
+| `music_discovery` | Discover music based on listening history | `username`, `genre?` |
+| `track_analysis` | Detailed analysis of a track | `artist`, `track` |
+| `album_analysis` | Detailed analysis of an album | `artist`, `album` |
+| `artist_analysis` | Detailed analysis of an artist | `artist` |
+| `listening_habits` | Summarize listening habits | `username`, `timeframe?` |
 
-| Prompt               | Description                                   | Arguments                |
-| -------------------- | --------------------------------------------- | ------------------------ |
-| `listening_insights` | Analyze user's listening habits and patterns  | `username`, `period?`    |
-| `music_discovery`    | Discover new music based on listening history | `username`, `genre?`     |
-| `track_analysis`     | Get detailed analysis of a specific track     | `artist`, `track`        |
-| `album_analysis`     | Get detailed analysis of a specific album     | `artist`, `album`        |
-| `artist_analysis`    | Get detailed analysis of a specific artist    | `artist`                 |
-| `listening_habits`   | Analyze and summarize user's listening habits | `username`, `timeframe?` |
+## Authentication
 
-These prompts generate contextual messages that guide AI assistants to provide meaningful music insights using the available Last.fm tools and data.
+The server uses OAuth 2.0. When you connect from a supported client:
 
-## 🏗️ Development
+1. The client gets a 401 with OAuth metadata
+2. Your browser opens to Last.fm for authorization
+3. Tokens are stored and persist across sessions
+
+Public tools work without signing in.
+
+## Development
 
 ### Prerequisites
 
 - Node.js 18+
 - Cloudflare Workers account
-- Last.fm API credentials ([Get them here](https://www.last.fm/api/account/create))
+- Last.fm API key ([create one here](https://www.last.fm/api/account/create))
 
-### Local Setup
-
-1. **Clone and install**:
-
-   ```bash
-   git clone https://github.com/rianvdm/lastfm-mcp.git
-   cd lastfm-mcp
-   npm install
-   ```
-
-2. **Configure environment** (`.dev.vars`):
-
-   ```env
-   LASTFM_API_KEY=your_api_key_here
-   LASTFM_SHARED_SECRET=your_shared_secret_here
-   JWT_SECRET=your_secure_jwt_secret
-   ```
-
-3. **Start development server**:
-
-   ```bash
-   npm run dev
-   ```
-
-4. **Test with MCP Inspector**:
-
-   ```bash
-   npx @modelcontextprotocol/inspector http://localhost:8787/mcp
-   ```
-
-5. **Test authentication locally**:
-   - Visit `http://localhost:8787/login` to authenticate
-   - Use the session ID in your local testing
-
-### 🚀 Deployment
-
-1. **Set production secrets**:
-
-   ```bash
-   echo "your_api_key" | wrangler secret put LASTFM_API_KEY --env production
-   echo "your_shared_secret" | wrangler secret put LASTFM_SHARED_SECRET --env production
-   echo "your_jwt_secret" | wrangler secret put JWT_SECRET --env production
-   ```
-
-2. **Deploy**:
-
-   ```bash
-   npm run deploy:prod
-   ```
-
-3. **Verify deployment**:
-   ```bash
-   curl https://lastfm-mcp.com/
-   ```
-
-## 📋 Example Usage
-
-### 🎵 Public Music Data (No Authentication)
-
-**Get track information:**
+### Local setup
 
 ```bash
-curl -X POST https://lastfm-mcp.com/mcp \
-  -H "Content-Type: application/json" \
-  -d '{
-    "jsonrpc": "2.0",
-    "id": 1,
-    "method": "tools/call",
-    "params": {
-      "name": "get_track_info",
-      "arguments": {
-        "artist": "Radiohead",
-        "track": "Paranoid Android"
-      }
-    }
-  }'
+git clone https://github.com/rianvdm/lastfm-mcp.git
+cd lastfm-mcp
+npm install
 ```
 
-**Find similar artists:**
+Create `.dev.vars`:
 
-```bash
-curl -X POST https://lastfm-mcp.com/mcp \
-  -H "Content-Type: application/json" \
-  -d '{
-    "jsonrpc": "2.0",
-    "id": 1,
-    "method": "tools/call",
-    "params": {
-      "name": "get_similar_artists",
-      "arguments": {
-        "artist": "Pink Floyd",
-        "limit": 10
-      }
-    }
-  }'
+```
+LASTFM_API_KEY=your_api_key
+LASTFM_SHARED_SECRET=your_shared_secret
+JWT_SECRET=your_jwt_secret
 ```
 
-### 🔐 Personal Data (Requires Authentication)
-
-For authenticated requests, use the session_id parameter:
-
 ```bash
-curl -X POST "https://lastfm-mcp.com/mcp?session_id=YOUR_SESSION_ID" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "jsonrpc": "2.0",
-    "id": 1,
-    "method": "tools/call",
-    "params": {
-      "name": "get_recent_tracks",
-      "arguments": {
-        "limit": 10
-      }
-    }
-  }'
+npm run dev
 ```
 
-### 🤖 AI Assistant Examples
-
-With Claude or other AI assistants, you can now ask natural language questions like:
-
-- _"When did I start listening to Led Zeppelin?"_
-- _"What was I obsessed with in summer 2023?"_
-- _"Show me how my music taste has evolved over the years"_
-- _"Find artists similar to my current favorites"_
-- _"What tracks should I check out based on my listening history?"_
-
-## 🏗️ Architecture
-
-- **🌐 Runtime**: Cloudflare Workers (global edge deployment)
-- **📡 Protocol**: Model Context Protocol (MCP) 2024-11-05 / 2025-06-18
-- **🔐 Authentication**: OAuth 2.0 (RFC 9728) + Session ID fallback
-- **💾 Storage**: Cloudflare KV (sessions, OAuth tokens, caching)
-- **🎵 API**: Last.fm Web API v2.0
-- **⚡ Performance**: Smart caching, rate limiting, retry logic
-
-### API Endpoints
-
-| Endpoint                                  | Purpose                        |
-| ----------------------------------------- | ------------------------------ |
-| `/mcp`                                    | MCP JSON-RPC endpoint          |
-| `/login`                                  | Manual authentication (legacy) |
-| `/authorize`                              | OAuth 2.0 authorization        |
-| `/.well-known/oauth-authorization-server` | OAuth server metadata          |
-| `/.well-known/oauth-protected-resource`   | OAuth resource metadata        |
-
-## 🧪 Testing
+Test with the inspector:
 
 ```bash
-# Run tests
+npx @modelcontextprotocol/inspector http://localhost:8787/mcp
+```
+
+### Deployment
+
+Set production secrets:
+
+```bash
+echo "your_api_key" | wrangler secret put LASTFM_API_KEY --env production
+echo "your_shared_secret" | wrangler secret put LASTFM_SHARED_SECRET --env production
+echo "your_jwt_secret" | wrangler secret put JWT_SECRET --env production
+```
+
+Deploy:
+
+```bash
+npm run deploy:prod
+```
+
+### Testing
+
+```bash
 npm test
-
-# Type checking
 npm run typecheck
-
-# Linting
 npm run lint
-
-# Build check
-npm run build
 ```
 
-## 🤝 Contributing
+## Architecture
 
-1. **Fork** the repository
-2. **Create** a feature branch (`git checkout -b feature/amazing-feature`)
-3. **Commit** your changes (`git commit -m 'Add amazing feature'`)
-4. **Push** to the branch (`git push origin feature/amazing-feature`)
-5. **Open** a Pull Request
+- Runtime: Cloudflare Workers
+- Protocol: MCP (streamable HTTP)
+- Auth: OAuth 2.0 (RFC 9728)
+- Storage: Cloudflare KV for sessions, tokens, and caching
+- API: Last.fm Web API v2.0
 
-## 📝 License
+### Endpoints
 
-MIT License - see [LICENSE](LICENSE) file for details.
+| Endpoint | Purpose |
+| -------- | ------- |
+| `/mcp` | MCP JSON-RPC endpoint |
+| `/authorize` | OAuth 2.0 authorization |
+| `/.well-known/oauth-authorization-server` | OAuth server metadata |
+| `/.well-known/oauth-protected-resource` | OAuth resource metadata |
 
-## 🙏 Acknowledgments
+## Contributing
 
-- [Last.fm](https://last.fm) for the comprehensive music API
-- [Model Context Protocol](https://github.com/modelcontextprotocol) for the MCP specification
-- [Cloudflare Workers](https://workers.cloudflare.com) for the serverless runtime
+1. Fork the repo
+2. Create a feature branch
+3. Commit your changes
+4. Open a pull request
 
----
+## License
 
-**🎵 Built with ❤️ for music lovers and AI enthusiasts**
+MIT
