@@ -2,21 +2,21 @@
 
 A [Model Context Protocol](https://modelcontextprotocol.io/) (MCP) server for Last.fm. Gives AI assistants access to your listening history, music discovery, and detailed track/artist/album information.
 
-Runs on Cloudflare Workers. Authenticates via OAuth 2.0. Public tools (track info, artist info, similar artists) work without authentication -- sign in to access your personal listening data.
+Runs on Cloudflare Workers with OAuth 2.0 authentication. Public tools (track info, artist info, similar artists) work without signing in -- connect your Last.fm account to access personal listening data.
 
 ## Quick start
 
 ### Claude.ai
 
 1. Go to **Settings** -> **Connectors** -> **Add Custom Connector**
-2. Enter the server URL: `https://lastfm-mcp.com/mcp`
+2. Enter `https://lastfm-mcp.com/mcp`
 3. Sign in to Last.fm when prompted
 
 ### Claude Desktop
 
 1. Open **Settings** -> **Connectors** -> **Add Custom Connector**
 2. Enter `https://lastfm-mcp.com/mcp`
-3. Authenticate with Last.fm when prompted
+3. Sign in to Last.fm when prompted
 
 ### Claude Code
 
@@ -59,9 +59,15 @@ For clients that don't support remote servers directly (Continue.dev, Zed, etc.)
 npx @modelcontextprotocol/inspector https://lastfm-mcp.com/mcp
 ```
 
+## Authentication
+
+The server uses OAuth 2.0. When you connect from a supported client, your browser opens to Last.fm to authorize access. Tokens persist across sessions.
+
+Public tools work without signing in. You only need to connect your account for personal listening data.
+
 ## Available tools
 
-### Public (no auth required)
+### Public tools
 
 | Tool | Description |
 | ---- | ----------- |
@@ -74,7 +80,7 @@ npx @modelcontextprotocol/inspector https://lastfm-mcp.com/mcp
 | `server_info` | Server status and capabilities |
 | `lastfm_auth_status` | Check authentication status |
 
-### Personal (auth required)
+### Personal tools (requires sign-in)
 
 | Tool | Description |
 | ---- | ----------- |
@@ -86,7 +92,7 @@ npx @modelcontextprotocol/inspector https://lastfm-mcp.com/mcp
 | `get_listening_stats` | Listening statistics |
 | `get_music_recommendations` | Personalized recommendations |
 
-### Temporal queries (auth required)
+### Temporal queries (requires sign-in)
 
 | Tool | Description |
 | ---- | ----------- |
@@ -94,7 +100,7 @@ npx @modelcontextprotocol/inspector https://lastfm-mcp.com/mcp
 | `get_weekly_artist_chart` | Artist charts for a specific time period |
 | `get_weekly_track_chart` | Track charts for a specific time period |
 
-These are useful for questions like "when did I start listening to Led Zeppelin?" or "what was I into last March?"
+Good for questions like "when did I start listening to Led Zeppelin?" or "what was I into last March?"
 
 ## Resources
 
@@ -123,16 +129,6 @@ lastfm://track/{artist}/{track}/similar  # Similar tracks
 | `album_analysis` | Detailed analysis of an album | `artist`, `album` |
 | `artist_analysis` | Detailed analysis of an artist | `artist` |
 | `listening_habits` | Summarize listening habits | `username`, `timeframe?` |
-
-## Authentication
-
-The server uses OAuth 2.0. When you connect from a supported client:
-
-1. The client gets a 401 with OAuth metadata
-2. Your browser opens to Last.fm for authorization
-3. Tokens are stored and persist across sessions
-
-Public tools work without signing in.
 
 ## Development
 
