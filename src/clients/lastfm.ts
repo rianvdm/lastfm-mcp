@@ -359,7 +359,6 @@ type LastfmApiResponse<T> = T | LastfmError
 export class LastfmClient {
 	private apiKey: string
 	private baseUrl = 'https://ws.audioscrobbler.com/2.0/'
-	private lastRequestTime = 0
 
 	// Last.fm specific retry configuration
 	private readonly lastfmRetryOptions: RetryOptions = {
@@ -370,23 +369,8 @@ export class LastfmClient {
 		jitterFactor: 0.1,
 	}
 
-	// Minimum delay between requests to respect rate limits (~5 req/sec)
-	private readonly REQUEST_DELAY_MS = 250 // 250ms to stay under 5 req/sec
-
 	constructor(apiKey: string) {
 		this.apiKey = apiKey
-	}
-
-	/**
-	 * Add delay between requests to respect Last.fm rate limits
-	 */
-	private async throttleRequest(): Promise<void> {
-		const timeSinceLastRequest = Date.now() - this.lastRequestTime
-		if (timeSinceLastRequest < this.REQUEST_DELAY_MS) {
-			const delayNeeded = this.REQUEST_DELAY_MS - timeSinceLastRequest
-			await new Promise((resolve) => setTimeout(resolve, delayNeeded))
-		}
-		this.lastRequestTime = Date.now()
 	}
 
 	/**
@@ -398,8 +382,6 @@ export class LastfmClient {
 			format: 'json',
 			...params,
 		})
-
-		await this.throttleRequest()
 
 		const response = await fetchWithRetry(
 			`${this.baseUrl}?${searchParams.toString()}`,
