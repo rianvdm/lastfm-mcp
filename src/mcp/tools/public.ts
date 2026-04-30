@@ -214,6 +214,72 @@ ${!username ? '*Note: Sign in to see your personal listening stats for this albu
 		},
 	)
 
+	// get_artist_top_tracks - An artist's globally most-played tracks
+	server.tool(
+		'get_artist_top_tracks',
+		"Get an artist's globally most-played tracks on Last.fm (not user-specific) - No authentication required. Useful for finding canonical / signature songs by an artist.",
+		{
+			artist: z.string().describe('Artist name'),
+			limit: z.number().min(1).max(50).optional().default(10).describe('Number of tracks to return (1-50)'),
+			mbid: z.string().optional().describe('MusicBrainz ID of the artist (optional, more reliable than name)'),
+		},
+		async ({ artist, limit, mbid }) => {
+			try {
+				const data = await client.getArtistTopTracks(artist, limit, mbid)
+
+				const tracks = data.toptracks.track.slice(0, limit)
+				const trackList = tracks
+					.map((track, index) => `${index + 1}. ${track.name} (${track.playcount} plays, ${track.listeners} listeners)`)
+					.join('\n')
+
+				return {
+					content: [
+						{
+							type: 'text',
+							text: `🎵 **Top Tracks by ${artist}**
+
+${trackList}`,
+						},
+					],
+				}
+			} catch (error) {
+				return toolError('get_artist_top_tracks', error)
+			}
+		},
+	)
+
+	// get_artist_top_albums - An artist's globally most-played albums
+	server.tool(
+		'get_artist_top_albums',
+		"Get an artist's globally most-played albums on Last.fm (not user-specific) - No authentication required. Useful for finding the canonical record by an artist.",
+		{
+			artist: z.string().describe('Artist name'),
+			limit: z.number().min(1).max(50).optional().default(10).describe('Number of albums to return (1-50)'),
+			mbid: z.string().optional().describe('MusicBrainz ID of the artist (optional, more reliable than name)'),
+		},
+		async ({ artist, limit, mbid }) => {
+			try {
+				const data = await client.getArtistTopAlbums(artist, limit, mbid)
+
+				const albums = data.topalbums.album.slice(0, limit)
+				const albumList = albums.map((album, index) => `${index + 1}. ${album.name} (${album.playcount} plays)`).join('\n')
+
+				return {
+					content: [
+						{
+							type: 'text',
+							text: `💿 **Top Albums by ${artist}**
+
+${albumList}`,
+						},
+					],
+				}
+			} catch (error) {
+				return toolError('get_artist_top_albums', error)
+			}
+		},
+	)
+
 	// get_similar_artists - Find similar artists
 	server.tool(
 		'get_similar_artists',

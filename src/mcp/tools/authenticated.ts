@@ -335,6 +335,51 @@ Total albums: ${data.topalbums['@attr'].total}`,
 		},
 	)
 
+	// get_top_tracks - Get user's most listened to tracks
+	server.tool(
+		'get_top_tracks',
+		"Get user's most listened to tracks from Last.fm - REQUIRES AUTHENTICATION. Specify time period like '7day', '1month', '6month', 'overall'.",
+		{
+			username: z.string().optional().describe('Last.fm username (defaults to authenticated user)'),
+			period: z.enum(PERIOD_VALUES).optional().default('overall').describe('Time period for top tracks'),
+			limit: z.number().min(1).max(1000).optional().default(50).describe('Number of tracks to return (1-1000)'),
+		},
+		async ({ username, period, limit }) => {
+			const session = getSession()
+			if (!session) {
+				return { content: [{ type: 'text', text: authMessages.requiresAuth() }] }
+			}
+
+			try {
+				const effectiveUsername = username || session.username
+				const data = await client.getTopTracks(effectiveUsername, period as Period, limit)
+
+				const tracks = data.toptracks.track.slice(0, limit)
+				const trackList = tracks
+					.map((track, index) => {
+						const artistName = track.artist['#text'] || (track.artist as unknown as { name: string }).name
+						return `${index + 1}. ${artistName} - ${track.name} (${track.playcount} plays)`
+					})
+					.join('\n')
+
+				return {
+					content: [
+						{
+							type: 'text',
+							text: `🎵 **Top Tracks for ${effectiveUsername}** (${period})
+
+${trackList}
+
+Total tracks: ${data.toptracks['@attr'].total}`,
+						},
+					],
+				}
+			} catch (error) {
+				return toolError('get_top_tracks', error)
+			}
+		},
+	)
+
 	// get_loved_tracks - Get user's loved/favorite tracks
 	server.tool(
 		'get_loved_tracks',

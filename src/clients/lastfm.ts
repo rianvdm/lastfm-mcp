@@ -176,6 +176,60 @@ export interface LastfmTopAlbumsResponse {
 	}
 }
 
+export interface LastfmTopTracksResponse {
+	toptracks: {
+		track: Array<
+			LastfmTrack & {
+				duration?: string
+				playcount: string
+				'@attr'?: {
+					rank: string
+				}
+			}
+		>
+		'@attr': {
+			user: string
+			totalPages: string
+			page: string
+			perPage: string
+			total: string
+		}
+	}
+}
+
+export interface LastfmArtistTopTracksResponse {
+	toptracks: {
+		track: Array<
+			LastfmTrack & {
+				listeners: string
+				playcount: string
+				'@attr'?: {
+					rank: string
+				}
+			}
+		>
+		'@attr': {
+			artist: string
+		}
+	}
+}
+
+export interface LastfmArtistTopAlbumsResponse {
+	topalbums: {
+		album: Array<
+			LastfmAlbum & {
+				playcount: string
+				'@attr'?: {
+					rank: string
+				}
+			}
+		>
+		'@attr': {
+			artist: string
+		}
+	}
+}
+
 export interface LastfmLovedTracksResponse {
 	lovedtracks: {
 		track: LastfmTrack[]
@@ -450,6 +504,48 @@ export class LastfmClient {
 			period,
 			limit: limit.toString(),
 		})
+	}
+
+	/**
+	 * Get user's top tracks
+	 */
+	async getTopTracks(
+		username: string,
+		period: '7day' | '1month' | '3month' | '6month' | '12month' | 'overall' = 'overall',
+		limit = 50,
+	): Promise<LastfmTopTracksResponse> {
+		return this.makeRequest<LastfmTopTracksResponse>({
+			method: 'user.getTopTracks',
+			user: username,
+			period,
+			limit: limit.toString(),
+		})
+	}
+
+	/**
+	 * Get an artist's most-played tracks (global, not user-specific)
+	 */
+	async getArtistTopTracks(artist: string, limit = 10, mbid?: string): Promise<LastfmArtistTopTracksResponse> {
+		const params: Record<string, string> = {
+			method: 'artist.getTopTracks',
+			artist,
+			limit: limit.toString(),
+		}
+		if (mbid) params.mbid = mbid
+		return this.makeRequest<LastfmArtistTopTracksResponse>(params)
+	}
+
+	/**
+	 * Get an artist's most-played albums (global, not user-specific)
+	 */
+	async getArtistTopAlbums(artist: string, limit = 10, mbid?: string): Promise<LastfmArtistTopAlbumsResponse> {
+		const params: Record<string, string> = {
+			method: 'artist.getTopAlbums',
+			artist,
+			limit: limit.toString(),
+		}
+		if (mbid) params.mbid = mbid
+		return this.makeRequest<LastfmArtistTopAlbumsResponse>(params)
 	}
 
 	/**

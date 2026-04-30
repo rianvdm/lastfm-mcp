@@ -6,6 +6,9 @@ import {
 	type LastfmRecentTracksResponse,
 	type LastfmTopArtistsResponse,
 	type LastfmTopAlbumsResponse,
+	type LastfmTopTracksResponse,
+	type LastfmArtistTopTracksResponse,
+	type LastfmArtistTopAlbumsResponse,
 	type LastfmLovedTracksResponse,
 	type LastfmTrackInfoResponse,
 	type LastfmArtistInfoResponse,
@@ -61,6 +64,37 @@ export class CachedLastfmClient {
 		const cacheKey = CacheKeys.userTopAlbums(username, period, limit)
 
 		return this.cache.getOrFetch('userTopAlbums', cacheKey, () => this.client.getTopAlbums(username, period, limit))
+	}
+
+	/**
+	 * Get user's top tracks with caching
+	 */
+	async getTopTracks(
+		username: string,
+		period: '7day' | '1month' | '3month' | '6month' | '12month' | 'overall' = 'overall',
+		limit = 50,
+	): Promise<LastfmTopTracksResponse> {
+		const cacheKey = CacheKeys.userTopTracks(username, period, limit)
+
+		return this.cache.getOrFetch('userTopTracks', cacheKey, () => this.client.getTopTracks(username, period, limit))
+	}
+
+	/**
+	 * Get an artist's top tracks (global) with caching
+	 */
+	async getArtistTopTracks(artist: string, limit = 10, mbid?: string): Promise<LastfmArtistTopTracksResponse> {
+		const cacheKey = CacheKeys.artistTopTracks(artist, limit)
+
+		return this.cache.getOrFetch('artistTopTracks', cacheKey, () => this.client.getArtistTopTracks(artist, limit, mbid))
+	}
+
+	/**
+	 * Get an artist's top albums (global) with caching
+	 */
+	async getArtistTopAlbums(artist: string, limit = 10, mbid?: string): Promise<LastfmArtistTopAlbumsResponse> {
+		const cacheKey = CacheKeys.artistTopAlbums(artist, limit)
+
+		return this.cache.getOrFetch('artistTopAlbums', cacheKey, () => this.client.getArtistTopAlbums(artist, limit, mbid))
 	}
 
 	/**
