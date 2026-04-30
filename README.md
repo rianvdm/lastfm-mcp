@@ -68,6 +68,8 @@ Public tools work without signing in. You only need to connect your account for 
 | `get_track_info` | Detailed information about a track |
 | `get_artist_info` | Artist information and bio |
 | `get_album_info` | Album details and track listing |
+| `get_artist_top_tracks` | An artist's globally most-played tracks |
+| `get_artist_top_albums` | An artist's globally most-played albums |
 | `get_similar_artists` | Artists similar to a given artist |
 | `get_similar_tracks` | Tracks similar to a given track |
 | `ping` | Test connectivity |
@@ -81,6 +83,7 @@ Public tools work without signing in. You only need to connect your account for 
 | `get_recent_tracks` | Recent listening history (paginated) |
 | `get_top_artists` | Top artists by time period |
 | `get_top_albums` | Top albums by time period |
+| `get_top_tracks` | Top tracks by time period |
 | `get_loved_tracks` | Loved/favorited tracks |
 | `get_user_info` | Last.fm profile information |
 | `get_listening_stats` | Listening statistics |

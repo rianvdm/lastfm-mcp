@@ -788,6 +788,8 @@ export const MARKETING_PAGE_HTML = `<!DOCTYPE html>
                             <li>get_track_info</li>
                             <li>get_artist_info</li>
                             <li>get_album_info</li>
+                            <li>get_artist_top_tracks</li>
+                            <li>get_artist_top_albums</li>
                             <li>get_similar_artists</li>
                             <li>get_similar_tracks</li>
                         </ul>
@@ -798,6 +800,7 @@ export const MARKETING_PAGE_HTML = `<!DOCTYPE html>
                             <li>get_recent_tracks</li>
                             <li>get_top_artists</li>
                             <li>get_top_albums</li>
+                            <li>get_top_tracks</li>
                             <li>get_loved_tracks</li>
                             <li>get_listening_stats</li>
                             <li>get_music_recommendations</li>
