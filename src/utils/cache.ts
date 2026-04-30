@@ -16,6 +16,7 @@ export interface CacheConfig {
 	userRecentTracks: number // 5 minutes
 	userTopArtists: number // 1 hour
 	userTopAlbums: number // 1 hour
+	userTopTracks: number // 1 hour
 	userLovedTracks: number // 30 minutes
 	userInfo: number // 6 hours
 	userListeningStats: number // 1 hour
@@ -30,6 +31,8 @@ export interface CacheConfig {
 	trackInfo: number // 24 hours
 	artistInfo: number // 24 hours
 	albumInfo: number // 24 hours
+	artistTopTracks: number // 24 hours
+	artistTopAlbums: number // 24 hours
 	similarArtists: number // 7 days
 	similarTracks: number // 7 days
 }
@@ -39,6 +42,7 @@ export const DEFAULT_CACHE_CONFIG: CacheConfig = {
 	userRecentTracks: 5 * 60, // 5 minutes in seconds
 	userTopArtists: 60 * 60, // 1 hour in seconds
 	userTopAlbums: 60 * 60, // 1 hour in seconds
+	userTopTracks: 60 * 60, // 1 hour in seconds
 	userLovedTracks: 30 * 60, // 30 minutes in seconds
 	userInfo: 6 * 60 * 60, // 6 hours in seconds
 	userListeningStats: 60 * 60, // 1 hour in seconds
@@ -53,6 +57,8 @@ export const DEFAULT_CACHE_CONFIG: CacheConfig = {
 	trackInfo: 24 * 60 * 60, // 24 hours in seconds
 	artistInfo: 24 * 60 * 60, // 24 hours in seconds
 	albumInfo: 24 * 60 * 60, // 24 hours in seconds
+	artistTopTracks: 24 * 60 * 60, // 24 hours in seconds
+	artistTopAlbums: 24 * 60 * 60, // 24 hours in seconds
 	similarArtists: 7 * 24 * 60 * 60, // 7 days in seconds
 	similarTracks: 7 * 24 * 60 * 60, // 7 days in seconds
 }
@@ -312,6 +318,8 @@ export const CacheKeys = {
 
 	userTopAlbums: (username: string, period?: string, limit?: number) => `${username}:${period || 'overall'}:${limit || 50}`,
 
+	userTopTracks: (username: string, period?: string, limit?: number) => `${username}:${period || 'overall'}:${limit || 50}`,
+
 	userLovedTracks: (username: string, limit?: number) => `${username}:${limit || 50}`,
 
 	userInfo: (username: string) => username,
@@ -328,6 +336,10 @@ export const CacheKeys = {
 
 	albumInfo: (artist: string, album: string, username?: string) =>
 		`${encodeURIComponent(artist)}:${encodeURIComponent(album)}:${username || 'global'}`,
+
+	artistTopTracks: (artist: string, limit?: number) => `${encodeURIComponent(artist)}:${limit || 10}`,
+
+	artistTopAlbums: (artist: string, limit?: number) => `${encodeURIComponent(artist)}:${limit || 10}`,
 
 	similarArtists: (artist: string, limit?: number) => `${encodeURIComponent(artist)}:${limit || 30}`,
 
@@ -379,6 +391,7 @@ export function createLastfmCache(kv?: KVNamespace): SmartCache {
 		userRecentTracks: 5 * 60, // Recent tracks change frequently
 		userTopArtists: 60 * 60, // Top artists change slower
 		userTopAlbums: 60 * 60, // Top albums change slower
+		userTopTracks: 60 * 60, // Top tracks change slower
 		userLovedTracks: 30 * 60, // Loved tracks change occasionally
 		userInfo: 6 * 60 * 60, // User profiles rarely change
 		userListeningStats: 60 * 60, // Stats can be cached for an hour
@@ -393,6 +406,8 @@ export function createLastfmCache(kv?: KVNamespace): SmartCache {
 		trackInfo: 24 * 60 * 60, // Track data is mostly static
 		artistInfo: 24 * 60 * 60, // Artist data is mostly static
 		albumInfo: 24 * 60 * 60, // Album data is mostly static
+		artistTopTracks: 24 * 60 * 60, // Artist top tracks change slowly
+		artistTopAlbums: 24 * 60 * 60, // Artist top albums change slowly
 		similarArtists: 7 * 24 * 60 * 60, // Similar artists rarely change
 		similarTracks: 7 * 24 * 60 * 60, // Similar tracks rarely change
 	})
