@@ -5,7 +5,9 @@ import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { z } from 'zod'
 
 import { CachedLastfmClient } from '../../clients/cachedLastfm'
+import { AUTHENTICATED_TOOL_CATALOG, PUBLIC_TOOL_CATALOG, renderToolList } from './catalog'
 import { toolError } from './error-handler'
+import { formatArtist } from './formatters'
 import { formatTimestamp, getDayBoundsUTC } from '../../utils/dateFormat'
 
 /**
@@ -68,14 +70,7 @@ You are not currently authenticated with Last.fm. To access your personal listen
 • Analyze your listening patterns and statistics
 
 **Available without authentication:**
-• \`ping\` - Test server connectivity
-• \`server_info\` - Get server information
-• \`lastfm_auth_status\` - Check authentication status (this tool)
-• \`get_track_info\` - Get basic track information
-• \`get_artist_info\` - Get basic artist information  
-• \`get_album_info\` - Get basic album information
-• \`get_similar_artists\` - Find similar artists
-• \`get_similar_tracks\` - Find similar tracks`
+${renderToolList(PUBLIC_TOOL_CATALOG)}`
 		},
 		requiresAuth: () => {
 			const baseUrl = getBaseUrl()
@@ -108,14 +103,7 @@ You are not currently authenticated with Last.fm.
 Your MCP client should automatically prompt you to authenticate. If not, try disconnecting and reconnecting to this server.
 
 **Available without authentication:**
-• \`ping\` - Test server connectivity
-• \`server_info\` - Get server information
-• \`lastfm_auth_status\` - Check authentication status (this tool)
-• \`get_track_info\` - Get basic track information
-• \`get_artist_info\` - Get basic artist information
-• \`get_album_info\` - Get basic album information
-• \`get_similar_artists\` - Find similar artists
-• \`get_similar_tracks\` - Find similar tracks`,
+${renderToolList(PUBLIC_TOOL_CATALOG)}`,
 		requiresAuth: () =>
 			`🔐 **Authentication Required**
 
@@ -164,21 +152,7 @@ export function registerAuthenticatedTools(
 🎵 **Connected to:** Last.fm
 
 **Available Last.fm tools:**
-• \`get_recent_tracks\` - Get your recent listening history
-• \`get_top_artists\` - Get your top artists by time period
-• \`get_top_albums\` - Get your top albums by time period
-• \`get_loved_tracks\` - Get your loved/favorite tracks
-• \`get_track_info\` - Get detailed track information
-• \`get_artist_info\` - Get detailed artist information
-• \`get_album_info\` - Get detailed album information
-• \`get_user_info\` - Get your profile information
-• \`get_similar_artists\` - Find similar artists
-• \`get_similar_tracks\` - Find similar tracks
-• \`get_listening_stats\` - Get listening statistics
-• \`get_music_recommendations\` - Get personalized recommendations
-• \`get_weekly_chart_list\` - Get available historical time periods
-• \`get_weekly_artist_chart\` - Get artist listening data for specific periods
-• \`get_weekly_track_chart\` - Get track listening data for specific periods
+${renderToolList(AUTHENTICATED_TOOL_CATALOG)}
 
 **Examples to try:**
 - "Get my recent tracks"
@@ -339,8 +313,7 @@ Total artists: ${data.topartists['@attr'].total}`,
 				const albums = data.topalbums.album.slice(0, limit)
 				const albumList = albums
 					.map((album, index) => {
-						const artist = typeof album.artist === 'string' ? album.artist : album.artist.name
-						return `${index + 1}. ${artist} - ${album.name} (${album.playcount} plays)`
+						return `${index + 1}. ${formatArtist(album.artist)} - ${album.name} (${album.playcount} plays)`
 					})
 					.join('\n')
 

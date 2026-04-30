@@ -5,6 +5,7 @@ import { z } from 'zod'
 
 import { CachedLastfmClient } from '../../clients/cachedLastfm'
 import { toolError } from './error-handler'
+import { formatArtist } from './formatters'
 
 /**
  * Register all public (non-authenticated) tools with the MCP server.
@@ -189,7 +190,7 @@ ${!username ? '*Note: Sign in to see your personal listening stats for this arti
 							text: `💿 **Album Information**
 
 **Album:** ${data.album.name}
-**Artist:** ${data.album.artist}
+**Artist:** ${formatArtist(data.album.artist)}
 
 **Stats:**
 • Total plays: ${data.album.playcount}

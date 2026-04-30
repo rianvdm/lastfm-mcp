@@ -33,7 +33,6 @@ export class LastfmAuth {
 	private sharedSecret: string
 	private baseUrl = 'https://ws.audioscrobbler.com/2.0/'
 	private authUrl = 'https://www.last.fm/api/auth/'
-	private lastRequestTime = 0
 
 	// Last.fm specific retry configuration
 	private readonly lastfmRetryOptions: RetryOptions = {
@@ -42,21 +41,6 @@ export class LastfmAuth {
 		maxDelayMs: 15000,
 		backoffMultiplier: 2,
 		jitterFactor: 0.1,
-	}
-
-	// Minimum delay between requests to respect rate limits (~5 req/sec)
-	private readonly REQUEST_DELAY_MS = 250 // 250ms to stay under 5 req/sec
-
-	/**
-	 * Add delay between requests to respect Last.fm rate limits
-	 */
-	private async throttleRequest(): Promise<void> {
-		const timeSinceLastRequest = Date.now() - this.lastRequestTime
-		if (timeSinceLastRequest < this.REQUEST_DELAY_MS) {
-			const delayNeeded = this.REQUEST_DELAY_MS - timeSinceLastRequest
-			await new Promise((resolve) => setTimeout(resolve, delayNeeded))
-		}
-		this.lastRequestTime = Date.now()
 	}
 
 	constructor(apiKey: string, sharedSecret: string) {
@@ -123,7 +107,6 @@ export class LastfmAuth {
 		})
 
 		try {
-			await this.throttleRequest()
 			const response = await fetchWithRetry(
 				this.baseUrl,
 				{
@@ -194,7 +177,6 @@ export class LastfmAuth {
 			const params = await this.createSignedParams('user.getInfo', sessionKey)
 			const formData = new URLSearchParams(params)
 
-			await this.throttleRequest()
 			const response = await fetchWithRetry(
 				this.baseUrl,
 				{
