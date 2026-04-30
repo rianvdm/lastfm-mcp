@@ -1,4 +1,6 @@
-# AGENTS.md — lastfm-mcp
+# CLAUDE.md
+
+This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
 Cloudflare Worker implementing a Model Context Protocol (MCP) server that connects AI assistants to Last.fm listening data. Runs on workerd with KV-backed persistence for sessions, caching, rate limits, and logs.
 
@@ -12,7 +14,7 @@ npm run deploy:prod      # Deploy to production
 npm run lint             # ESLint (src/**/*.ts)
 npm run format           # Prettier --write
 npm run format:check     # Prettier --check (CI)
-npm run cf-typegen       # Regenerate Worker type bindings (run after changing wrangler.toml)
+npm run cf-typegen       # Regenerate Worker type bindings (run after changing wrangler.toml; produces worker-configuration.d.ts — generated, do not edit by hand)
 ```
 
 ### Running Tests
@@ -23,7 +25,7 @@ Test runner: **vitest** with `@cloudflare/vitest-pool-workers` (runs in workerd/
 npm test                                    # All tests
 npx vitest run                              # All tests, exit when done
 npx vitest run test/utils/retry.test.ts     # Single file
-npx vitest run -t "should succeed"          # Single test by name
+npx vitest run -t "should succeed"          # Single test by name (matches against full describe → it path)
 npx vitest run test/protocol/               # All tests in a directory
 ```
 
@@ -100,8 +102,7 @@ Four patterns used at different layers:
 
 1. **HTTP handlers** — try/catch, log with `console.error`, return `Response` with status code
 2. **MCP tools** — try/catch, return `toolError('tool_name', error)` from `src/mcp/tools/error-handler.ts`
-3. **Protocol layer** — `mapErrorToJSONRPC()` maps error messages to JSON-RPC error codes
-4. **Non-critical systems** — fail open (e.g., rate limiter returns `{ allowed: true }` if KV is down)
+3. **Non-critical systems** — fail open (e.g., rate limiter returns `{ allowed: true }` if KV is down)
 
 Always use `error instanceof Error ? error.message : 'Unknown error'` when stringifying caught errors.
 
@@ -135,18 +136,15 @@ describe('Feature', () => {
 
 ```
 src/
-  index-oauth.ts        # Primary entry point (OAuth 2.1 + session hybrid auth)
-  index.ts              # Legacy entry point (session-only auth)
+  index-oauth.ts        # Sole Worker entry point (OAuth 2.1 + session hybrid auth)
   marketing-page.ts     # Landing page HTML (served at /)
   auth/                 # JWT, Last.fm auth flow, OAuth 2.1 handler
   clients/              # Last.fm API client + caching decorator
   mcp/                  # MCP SDK server, tools (public + authenticated), prompts, resources
-  protocol/             # Legacy hand-rolled JSON-RPC handlers (backward compat)
-  transport/            # Deprecated SSE transport
-  types/                # Shared types: Env, JSON-RPC, MCP protocol, Last.fm catalogs
+  types/                # Shared types: Env, MCP protocol, Last.fm catalogs
   utils/                # Cache, rate limiting, retry, logging, security, mood mapping
 ```
 
-Two entry points configured in `wrangler.toml`: default uses `index-oauth.ts` (production), `env.legacy` uses `index.ts`.
+Single Worker entry point configured in `wrangler.toml`: `main = "src/index-oauth.ts"`. The `[env.production]` block points to the same entry — it only renames the deployed Worker.
 
 **Key dependencies:** `@modelcontextprotocol/sdk`, `@cloudflare/workers-oauth-provider`, `agents` (Cloudflare Agents SDK), `zod`.
