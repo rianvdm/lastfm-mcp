@@ -8,10 +8,6 @@ enabled = true
 
 # Development environment (default)
 [[kv_namespaces]]
-binding = "MCP_LOGS"
-id = "b0c83f4b63a94c7490a609095e35b84f"
-
-[[kv_namespaces]]
 binding = "MCP_RL"
 id = "b4caaaa688cc45d2a9a85fe67ba53bfc"
 
@@ -26,10 +22,6 @@ id = "e04a5ec5441949ebb6e84281bf6598c3"
 # Production environment
 [env.production]
 name = "lastfm-mcp-prod"
-
-[[env.production.kv_namespaces]]
-binding = "MCP_LOGS"
-id = "768f383bd9a54f8c837decbaeb869b68"
 
 [[env.production.kv_namespaces]]
 binding = "MCP_RL"

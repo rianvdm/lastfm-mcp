@@ -8,8 +8,8 @@ export interface Env {
 	// JWT secret for signing session cookies
 	JWT_SECRET: string
 
-	// KV namespaces for logging, rate limiting, and sessions
-	MCP_LOGS: KVNamespace
+	// KV namespaces for rate limiting and sessions.
+	// Logging goes to Workers Observability (configured in wrangler.toml), not KV.
 	MCP_RL: KVNamespace
 	MCP_SESSIONS: KVNamespace
 

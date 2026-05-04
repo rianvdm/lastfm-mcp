@@ -10,6 +10,7 @@ import { createMcpServer } from './mcp/server'
 import { buildOAuthAuthMessages } from './mcp/tools'
 import { PROTOCOL_VERSION } from './types/mcp'
 import type { Env } from './types/env'
+import { buildRateLimitResponse, checkRateLimit, rateLimitKeyFromRequest } from './utils/rateLimit'
 
 // Server metadata
 const SERVER_VERSION = '1.0.0'
@@ -306,6 +307,13 @@ Sitemap: https://lastfm-mcp.com/sitemap.xml`,
 
 		// Check if this is an MCP request
 		if (url.pathname === '/mcp') {
+			// Per-IP rate limit guards the shared LASTFM_API_KEY budget against abuse.
+			// 60 req/min/IP is well above any legitimate interactive client; tune from logs.
+			const rlResult = await checkRateLimit(env.MCP_RL, rateLimitKeyFromRequest(request))
+			if (!rlResult.allowed) {
+				return buildRateLimitResponse(rlResult)
+			}
+
 			const sessionId = url.searchParams.get('session_id')
 
 			if (sessionId) {
