@@ -8,12 +8,12 @@ import { LastfmOAuthHandler, type LastfmUserProps } from './auth/oauth-handler'
 import { MARKETING_PAGE_HTML } from './marketing-page'
 import { createMcpServer } from './mcp/server'
 import { buildOAuthAuthMessages } from './mcp/tools'
-import { PROTOCOL_VERSION } from './types/mcp'
 import type { Env } from './types/env'
 import { buildRateLimitResponse, checkRateLimit, rateLimitKeyFromRequest } from './utils/rateLimit'
 
 // Server metadata
 const SERVER_VERSION = '1.0.0'
+const PROTOCOL_VERSION = '2024-11-05'
 
 /**
  * Session data stored in KV from manual login
