@@ -50,10 +50,25 @@ export interface McpServerWithContext {
  * @param options - Optional configuration (e.g. OAuth mode for auth messages)
  */
 export function createMcpServer(env: Env, initialBaseUrl: string, options?: { authMessages?: AuthMessageConfig }): McpServerWithContext {
-	const server = new McpServer({
-		name: SERVER_NAME,
-		version: SERVER_VERSION,
-	})
+	const server = new McpServer(
+		{
+			name: SERVER_NAME,
+			version: SERVER_VERSION,
+		},
+		{
+			instructions: [
+				'Recommended path:',
+				'- Artist questions: `get_artist_info` → `get_artist_top_tracks` / `get_artist_top_albums` / `get_similar_artists`.',
+				'- Album / track lookups: `get_album_info` / `get_track_info` → `get_similar_tracks` for "more like this".',
+				"- The user's listening history (auth required): `get_recent_tracks` for the live feed; `get_top_artists` / `get_top_albums` / `get_top_tracks` for period summaries; `get_loved_tracks` for favorites; `get_listening_stats` for shape.",
+				'- Personalized picks (auth required): `get_music_recommendations`.',
+				'- Historical week-by-week: `get_weekly_chart_list` first to discover periods → `get_weekly_artist_chart` / `get_weekly_track_chart` with a specific `from`/`to`.',
+				'- Profile and diagnostics: `get_user_info`, `lastfm_auth_status`, `server_info`, `ping`.',
+				'',
+				'Most tool responses end with a "Next steps" block listing the most likely follow-up calls and the exact argument shape — copy those verbatim when chaining.',
+			].join('\n'),
+		},
+	)
 
 	// Create Last.fm client with caching
 	const lastfmClient = new LastfmClient(env.LASTFM_API_KEY)

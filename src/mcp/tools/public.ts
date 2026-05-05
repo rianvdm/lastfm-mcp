@@ -4,6 +4,7 @@ import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { z } from 'zod'
 
 import { CachedLastfmClient } from '../../clients/cachedLastfm'
+import { buildNextSteps } from '../../utils/breadcrumb'
 import { toolError } from './error-handler'
 import { formatArtist } from './formatters'
 
@@ -20,11 +21,15 @@ export function registerPublicTools(server: McpServer, client: CachedLastfmClien
 		},
 		async ({ message }) => {
 			const echoMessage = message || 'Hello from Last.fm MCP!'
+			const nextSteps = buildNextSteps([
+				{ tool: 'server_info', args: '', hint: 'see server version and feature list' },
+				{ tool: 'lastfm_auth_status', args: '', hint: 'check whether you are authenticated for personal listening data' },
+			])
 			return {
 				content: [
 					{
 						type: 'text',
-						text: `Pong! You said: ${echoMessage}`,
+						text: `Pong! You said: ${echoMessage}${nextSteps}`,
 					},
 				],
 			}
@@ -35,6 +40,11 @@ export function registerPublicTools(server: McpServer, client: CachedLastfmClien
 	server.tool('server_info', 'Get Last.fm MCP server information and available capabilities', {}, async () => {
 		const baseUrl = getBaseUrl()
 		const authUrl = `${baseUrl}/login`
+
+		const nextSteps = buildNextSteps([
+			{ tool: 'lastfm_auth_status', args: '', hint: 'check whether the current session is authenticated' },
+			{ tool: 'ping', args: '', hint: 'test connectivity' },
+		])
 
 		return {
 			content: [
@@ -49,7 +59,7 @@ Features:
 - Authentication: Last.fm Web Auth
 - Rate Limiting: Enabled
 
-To get started, authenticate at ${authUrl}`,
+To get started, authenticate at ${authUrl}${nextSteps}`,
 				},
 			],
 		}
@@ -77,6 +87,13 @@ To get started, authenticate at ${authUrl}`,
 				const userStats = username && data.track.userplaycount ? `• Your plays: ${data.track.userplaycount}` : ''
 				const loved = data.track.userloved === '1' ? ' ❤️' : ''
 
+				const trackArtist = data.track.artist['#text'] || (data.track.artist as unknown as { name: string }).name
+				const nextSteps = buildNextSteps([
+					{ tool: 'get_similar_tracks', args: `artist="${trackArtist}", track="${data.track.name}"`, hint: 'find more like this track' },
+					{ tool: 'get_artist_info', args: `artist="${trackArtist}"`, hint: 'pull bio, tags, and similar artists' },
+					{ tool: 'get_album_info', args: `artist="${trackArtist}", album="${data.track.album?.['#text'] || ''}"`, hint: 'pull tracklist and album-level stats' },
+				])
+
 				return {
 					content: [
 						{
@@ -84,7 +101,7 @@ To get started, authenticate at ${authUrl}`,
 							text: `🎵 **Track Information**
 
 **Track:** ${data.track.name}${loved}
-**Artist:** ${data.track.artist['#text'] || (data.track.artist as unknown as { name: string }).name}
+**Artist:** ${trackArtist}
 **Album:** ${data.track.album?.['#text'] || 'Unknown'}
 
 **Stats:**
@@ -96,7 +113,7 @@ ${userStats}
 
 ${data.track.wiki?.summary ? `**Description:** ${data.track.wiki.summary.replace(/<[^>]*>/g, '')}` : ''}
 
-${!username ? '*Note: Sign in to see your personal listening stats for this track*' : ''}`,
+${!username ? '*Note: Sign in to see your personal listening stats for this track*' : ''}${nextSteps}`,
 						},
 					],
 				}
@@ -130,6 +147,12 @@ ${!username ? '*Note: Sign in to see your personal listening stats for this trac
 						.join(', ') || 'None'
 				const userStats = username && data.artist.stats.userplaycount ? `• Your plays: ${data.artist.stats.userplaycount}` : ''
 
+				const nextSteps = buildNextSteps([
+					{ tool: 'get_artist_top_tracks', args: `artist="${data.artist.name}"`, hint: 'see this artist\'s most-played tracks' },
+					{ tool: 'get_artist_top_albums', args: `artist="${data.artist.name}"`, hint: 'see this artist\'s most-played albums' },
+					{ tool: 'get_similar_artists', args: `artist="${data.artist.name}"`, hint: 'find similar artists' },
+				])
+
 				return {
 					content: [
 						{
@@ -148,7 +171,7 @@ ${userStats}
 
 ${data.artist.bio?.summary ? `**Bio:** ${data.artist.bio.summary.replace(/<[^>]*>/g, '')}` : ''}
 
-${!username ? '*Note: Sign in to see your personal listening stats for this artist*' : ''}`,
+${!username ? '*Note: Sign in to see your personal listening stats for this artist*' : ''}${nextSteps}`,
 						},
 					],
 				}
@@ -183,6 +206,13 @@ ${!username ? '*Note: Sign in to see your personal listening stats for this arti
 						.join('\n') || 'Track listing not available'
 				const userStats = username && data.album.userplaycount ? `• Your plays: ${data.album.userplaycount}` : ''
 
+				const albumArtist = formatArtist(data.album.artist)
+				const nextSteps = buildNextSteps([
+					{ tool: 'get_artist_info', args: `artist="${albumArtist}"`, hint: 'pull bio, tags, and similar artists' },
+					{ tool: 'get_artist_top_albums', args: `artist="${albumArtist}"`, hint: 'see what else is canonical from this artist' },
+					{ tool: 'get_track_info', args: `artist="${albumArtist}", track="<TRACK NAME>"`, hint: 'expand a track from the listing above' },
+				])
+
 				return {
 					content: [
 						{
@@ -190,7 +220,7 @@ ${!username ? '*Note: Sign in to see your personal listening stats for this arti
 							text: `💿 **Album Information**
 
 **Album:** ${data.album.name}
-**Artist:** ${formatArtist(data.album.artist)}
+**Artist:** ${albumArtist}
 
 **Stats:**
 • Total plays: ${data.album.playcount}
@@ -204,7 +234,7 @@ ${tracks}
 
 ${data.album.wiki?.summary ? `**Description:** ${data.album.wiki.summary.replace(/<[^>]*>/g, '')}` : ''}
 
-${!username ? '*Note: Sign in to see your personal listening stats for this album*' : ''}`,
+${!username ? '*Note: Sign in to see your personal listening stats for this album*' : ''}${nextSteps}`,
 						},
 					],
 				}
@@ -232,13 +262,19 @@ ${!username ? '*Note: Sign in to see your personal listening stats for this albu
 					.map((track, index) => `${index + 1}. ${track.name} (${track.playcount} plays, ${track.listeners} listeners)`)
 					.join('\n')
 
+				const nextSteps = buildNextSteps([
+					{ tool: 'get_track_info', args: `artist="${artist}", track="<TRACK NAME>"`, hint: 'expand one of these tracks' },
+					{ tool: 'get_similar_tracks', args: `artist="${artist}", track="<TRACK NAME>"`, hint: 'find more like a specific track' },
+					{ tool: 'get_artist_top_albums', args: `artist="${artist}"`, hint: 'pivot to canonical albums by this artist' },
+				])
+
 				return {
 					content: [
 						{
 							type: 'text',
 							text: `🎵 **Top Tracks by ${artist}**
 
-${trackList}`,
+${trackList}${nextSteps}`,
 						},
 					],
 				}
@@ -264,13 +300,19 @@ ${trackList}`,
 				const albums = data.topalbums.album.slice(0, limit)
 				const albumList = albums.map((album, index) => `${index + 1}. ${album.name} (${album.playcount} plays)`).join('\n')
 
+				const nextSteps = buildNextSteps([
+					{ tool: 'get_album_info', args: `artist="${artist}", album="<ALBUM NAME>"`, hint: 'pull tracklist and stats for one of these albums' },
+					{ tool: 'get_artist_top_tracks', args: `artist="${artist}"`, hint: 'pivot to canonical tracks by this artist' },
+					{ tool: 'get_similar_artists', args: `artist="${artist}"`, hint: 'find similar artists' },
+				])
+
 				return {
 					content: [
 						{
 							type: 'text',
 							text: `💿 **Top Albums by ${artist}**
 
-${albumList}`,
+${albumList}${nextSteps}`,
 						},
 					],
 				}
@@ -295,13 +337,18 @@ ${albumList}`,
 				const artists = data.similarartists.artist.slice(0, limit)
 				const artistList = artists.map((a) => `• ${a.name} (${Math.round(parseFloat(a.match) * 100)}% match)`).join('\n')
 
+				const nextSteps = buildNextSteps([
+					{ tool: 'get_artist_info', args: 'artist="<NAME FROM LIST>"', hint: 'expand one of the similar artists' },
+					{ tool: 'get_artist_top_tracks', args: 'artist="<NAME FROM LIST>"', hint: 'jump straight to canonical tracks for one of them' },
+				])
+
 				return {
 					content: [
 						{
 							type: 'text',
 							text: `🎤 **Artists Similar to ${artist}**
 
-${artistList}`,
+${artistList}${nextSteps}`,
 						},
 					],
 				}
@@ -332,13 +379,18 @@ ${artistList}`,
 					})
 					.join('\n')
 
+				const nextSteps = buildNextSteps([
+					{ tool: 'get_track_info', args: 'artist="<ARTIST FROM LIST>", track="<TRACK FROM LIST>"', hint: 'expand one of the similar tracks' },
+					{ tool: 'get_artist_info', args: 'artist="<ARTIST FROM LIST>"', hint: 'pivot to one of the artists from the list' },
+				])
+
 				return {
 					content: [
 						{
 							type: 'text',
 							text: `🎵 **Tracks Similar to ${track} by ${artist}**
 
-${trackList}`,
+${trackList}${nextSteps}`,
 						},
 					],
 				}

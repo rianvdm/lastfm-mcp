@@ -8,6 +8,7 @@ import { CachedLastfmClient } from '../../clients/cachedLastfm'
 import { AUTHENTICATED_TOOL_CATALOG, PUBLIC_TOOL_CATALOG, renderToolList } from './catalog'
 import { toolError } from './error-handler'
 import { formatArtist } from './formatters'
+import { buildNextSteps } from '../../utils/breadcrumb'
 import { formatTimestamp, getDayBoundsUTC } from '../../utils/dateFormat'
 
 /**
@@ -142,6 +143,13 @@ export function registerAuthenticatedTools(
 				}
 			}
 
+			const nextSteps = buildNextSteps([
+				{ tool: 'get_recent_tracks', args: '', hint: 'see what you\'ve been listening to lately' },
+				{ tool: 'get_top_artists', args: 'period="1month"', hint: 'top artists for a recent window' },
+				{ tool: 'get_listening_stats', args: '', hint: 'shape of your overall scrobble history' },
+				{ tool: 'get_music_recommendations', args: '', hint: 'personalized picks based on your history' },
+			])
+
 			return {
 				content: [
 					{
@@ -159,7 +167,7 @@ ${renderToolList(AUTHENTICATED_TOOL_CATALOG)}
 - "Show me my top artists from the last month"
 - "Find similar artists to Radiohead"
 - "Get my listening statistics"
-- "When did I start listening to Led Zeppelin?"`,
+- "When did I start listening to Led Zeppelin?"${nextSteps}`,
 					},
 				],
 			}
@@ -226,6 +234,12 @@ ${renderToolList(AUTHENTICATED_TOOL_CATALOG)}
 						? `from ${formatTimestamp(effectiveFrom, effectiveTimezone)}`
 						: `most recent (server time: ${nowStr})`
 
+				const nextSteps = buildNextSteps([
+					{ tool: 'get_track_info', args: 'artist="<ARTIST FROM LIST>", track="<TRACK FROM LIST>"', hint: 'expand a track from the feed' },
+					{ tool: 'get_artist_info', args: 'artist="<ARTIST FROM LIST>"', hint: 'expand an artist from the feed' },
+					{ tool: 'get_top_artists', args: 'period="7day"', hint: 'aggregate the recent feed into a 7-day top list' },
+				])
+
 				return {
 					content: [
 						{
@@ -241,7 +255,7 @@ ${renderToolList(AUTHENTICATED_TOOL_CATALOG)}
 ${trackList}
 
 ${currentPage < totalPages ? `\n💡 **Next page:** Use \`page: ${currentPage + 1}\` to get more tracks` : ''}
-${currentPage > 1 ? `\n⬅️ **Previous page:** Use \`page: ${currentPage - 1}\` to go back` : ''}`,
+${currentPage > 1 ? `\n⬅️ **Previous page:** Use \`page: ${currentPage - 1}\` to go back` : ''}${nextSteps}`,
 						},
 					],
 				}
@@ -273,6 +287,12 @@ ${currentPage > 1 ? `\n⬅️ **Previous page:** Use \`page: ${currentPage - 1}\
 				const artists = data.topartists.artist.slice(0, limit)
 				const artistList = artists.map((artist, index) => `${index + 1}. ${artist.name} (${artist.playcount} plays)`).join('\n')
 
+				const nextSteps = buildNextSteps([
+					{ tool: 'get_artist_info', args: 'artist="<NAME FROM LIST>"', hint: 'expand one of your top artists' },
+					{ tool: 'get_artist_top_tracks', args: 'artist="<NAME FROM LIST>"', hint: 'see canonical tracks for one of them' },
+					{ tool: 'get_top_albums', args: `period="${period}"`, hint: 'pivot to top albums for the same period' },
+				])
+
 				return {
 					content: [
 						{
@@ -281,7 +301,7 @@ ${currentPage > 1 ? `\n⬅️ **Previous page:** Use \`page: ${currentPage - 1}\
 
 ${artistList}
 
-Total artists: ${data.topartists['@attr'].total}`,
+Total artists: ${data.topartists['@attr'].total}${nextSteps}`,
 						},
 					],
 				}
@@ -317,6 +337,12 @@ Total artists: ${data.topartists['@attr'].total}`,
 					})
 					.join('\n')
 
+				const nextSteps = buildNextSteps([
+					{ tool: 'get_album_info', args: 'artist="<ARTIST FROM LIST>", album="<ALBUM FROM LIST>"', hint: 'expand one of your top albums' },
+					{ tool: 'get_top_tracks', args: `period="${period}"`, hint: 'pivot to top tracks for the same period' },
+					{ tool: 'get_top_artists', args: `period="${period}"`, hint: 'pivot to top artists for the same period' },
+				])
+
 				return {
 					content: [
 						{
@@ -325,7 +351,7 @@ Total artists: ${data.topartists['@attr'].total}`,
 
 ${albumList}
 
-Total albums: ${data.topalbums['@attr'].total}`,
+Total albums: ${data.topalbums['@attr'].total}${nextSteps}`,
 						},
 					],
 				}
@@ -362,6 +388,12 @@ Total albums: ${data.topalbums['@attr'].total}`,
 					})
 					.join('\n')
 
+				const nextSteps = buildNextSteps([
+					{ tool: 'get_track_info', args: 'artist="<ARTIST FROM LIST>", track="<TRACK FROM LIST>"', hint: 'expand one of your top tracks' },
+					{ tool: 'get_similar_tracks', args: 'artist="<ARTIST FROM LIST>", track="<TRACK FROM LIST>"', hint: 'find more like one of your favorites' },
+					{ tool: 'get_top_albums', args: `period="${period}"`, hint: 'pivot to top albums for the same period' },
+				])
+
 				return {
 					content: [
 						{
@@ -370,7 +402,7 @@ Total albums: ${data.topalbums['@attr'].total}`,
 
 ${trackList}
 
-Total tracks: ${data.toptracks['@attr'].total}`,
+Total tracks: ${data.toptracks['@attr'].total}${nextSteps}`,
 						},
 					],
 				}
@@ -406,6 +438,12 @@ Total tracks: ${data.toptracks['@attr'].total}`,
 					})
 					.join('\n')
 
+				const nextSteps = buildNextSteps([
+					{ tool: 'get_track_info', args: 'artist="<ARTIST FROM LIST>", track="<TRACK FROM LIST>"', hint: 'expand one of your loved tracks' },
+					{ tool: 'get_similar_tracks', args: 'artist="<ARTIST FROM LIST>", track="<TRACK FROM LIST>"', hint: 'find more like a loved track' },
+					{ tool: 'get_music_recommendations', args: '', hint: 'personalized picks based on your history' },
+				])
+
 				return {
 					content: [
 						{
@@ -414,7 +452,7 @@ Total tracks: ${data.toptracks['@attr'].total}`,
 
 ${trackList}
 
-Total loved tracks: ${data.lovedtracks['@attr'].total}`,
+Total loved tracks: ${data.lovedtracks['@attr'].total}${nextSteps}`,
 						},
 					],
 				}
@@ -444,6 +482,12 @@ Total loved tracks: ${data.lovedtracks['@attr'].total}`,
 
 				const registrationDate = formatTimestamp(parseInt(user.registered.unixtime))
 
+				const nextSteps = buildNextSteps([
+					{ tool: 'get_listening_stats', args: '', hint: 'aggregate stats across the full scrobble history' },
+					{ tool: 'get_top_artists', args: 'period="overall"', hint: 'all-time top artists' },
+					{ tool: 'get_recent_tracks', args: '', hint: 'see what they\'ve been listening to lately' },
+				])
+
 				return {
 					content: [
 						{
@@ -459,7 +503,7 @@ Total loved tracks: ${data.lovedtracks['@attr'].total}`,
 • Member since: ${registrationDate}
 • Subscriber: ${user.subscriber === '1' ? 'Yes' : 'No'}
 
-**Profile URL:** ${user.url}`,
+**Profile URL:** ${user.url}${nextSteps}`,
 						},
 					],
 				}
@@ -487,6 +531,12 @@ Total loved tracks: ${data.lovedtracks['@attr'].total}`,
 				const effectiveUsername = username || session.username
 				const stats = await client.getListeningStats(effectiveUsername, period as Period)
 
+				const nextSteps = buildNextSteps([
+					{ tool: 'get_top_artists', args: `period="${period}"`, hint: 'see top artists for the same period' },
+					{ tool: 'get_top_albums', args: `period="${period}"`, hint: 'see top albums for the same period' },
+					{ tool: 'get_top_tracks', args: `period="${period}"`, hint: 'see top tracks for the same period' },
+				])
+
 				return {
 					content: [
 						{
@@ -500,7 +550,7 @@ Total loved tracks: ${data.lovedtracks['@attr'].total}`,
 • Top albums tracked: ${stats.topAlbumsCount}
 
 **Activity:**
-• Recent activity level: ${stats.listeningTrends.recentActivity} tracked items`,
+• Recent activity level: ${stats.listeningTrends.recentActivity} tracked items${nextSteps}`,
 						},
 					],
 				}
@@ -532,6 +582,12 @@ Total loved tracks: ${data.lovedtracks['@attr'].total}`,
 				const artistRecs = recommendations.recommendedArtists.slice(0, 8)
 				const artistList = artistRecs.map((rec) => `• ${rec.name} (${rec.reason})`).join('\n')
 
+				const nextSteps = buildNextSteps([
+					{ tool: 'get_artist_info', args: 'artist="<NAME FROM LIST>"', hint: 'expand a recommendation' },
+					{ tool: 'get_artist_top_tracks', args: 'artist="<NAME FROM LIST>"', hint: 'jump to canonical tracks for one of the picks' },
+					{ tool: 'get_similar_artists', args: 'artist="<NAME FROM LIST>"', hint: 'fan out further from a recommendation' },
+				])
+
 				return {
 					content: [
 						{
@@ -542,7 +598,7 @@ ${genre ? `**Genre Filter:** ${genre}\n` : ''}
 
 ${artistList}
 
-*Based on your listening history and similar user preferences*`,
+*Based on your listening history and similar user preferences*${nextSteps}`,
 						},
 					],
 				}
@@ -580,6 +636,13 @@ ${artistList}
 					})
 					.join('\n')
 
+				const sampleFrom = charts[charts.length - 1]?.from
+				const sampleTo = charts[charts.length - 1]?.to
+				const nextSteps = buildNextSteps([
+					{ tool: 'get_weekly_artist_chart', args: `from=${sampleFrom}, to=${sampleTo}`, hint: 'top artists for a specific week (substitute from/to from any row above)' },
+					{ tool: 'get_weekly_track_chart', args: `from=${sampleFrom}, to=${sampleTo}`, hint: 'top tracks for a specific week (substitute from/to from any row above)' },
+				])
+
 				return {
 					content: [
 						{
@@ -590,12 +653,7 @@ ${artistList}
 
 ${chartList}
 
-💡 **Usage:** Use the 'from' and 'to' timestamps with \`get_weekly_artist_chart\` or \`get_weekly_track_chart\` to explore specific time periods.
-
-📊 **Total periods available:** ${charts.length}
-
-**Example:** To see what artists you were listening to during a specific week:
-\`get_weekly_artist_chart\` with from: ${charts[charts.length - 1]?.from} and to: ${charts[charts.length - 1]?.to}`,
+📊 **Total periods available:** ${charts.length}${nextSteps}`,
 						},
 					],
 				}
@@ -633,6 +691,12 @@ ${chartList}
 					.map((artist, index) => `${index + 1}. ${artist.name} (${artist.playcount} plays)`)
 					.join('\n')
 
+				const nextSteps = buildNextSteps([
+					{ tool: 'get_weekly_track_chart', args: `from=${from}, to=${to}`, hint: 'see top tracks for the same week' },
+					{ tool: 'get_artist_info', args: 'artist="<NAME FROM LIST>"', hint: 'expand one of the artists from this week' },
+					{ tool: 'get_weekly_chart_list', args: '', hint: 'pick a different week to explore' },
+				])
+
 				return {
 					content: [
 						{
@@ -643,9 +707,7 @@ ${chartList}
 ${artistList}
 
 📊 **Total artists in this period:** ${artists.length}
-${artists.length > 30 ? '\n📝 **Note:** Showing top 30 artists only' : ''}
-
-💡 **Tip:** Use \`get_weekly_chart_list\` to find other time periods to explore!`,
+${artists.length > 30 ? '\n📝 **Note:** Showing top 30 artists only' : ''}${nextSteps}`,
 						},
 					],
 				}
@@ -683,6 +745,12 @@ ${artists.length > 30 ? '\n📝 **Note:** Showing top 30 artists only' : ''}
 					.map((track, index) => `${index + 1}. ${track.artist['#text']} - ${track.name} (${track.playcount} plays)`)
 					.join('\n')
 
+				const nextSteps = buildNextSteps([
+					{ tool: 'get_weekly_artist_chart', args: `from=${from}, to=${to}`, hint: 'see top artists for the same week' },
+					{ tool: 'get_track_info', args: 'artist="<ARTIST FROM LIST>", track="<TRACK FROM LIST>"', hint: 'expand a track from this week' },
+					{ tool: 'get_weekly_chart_list', args: '', hint: 'pick a different week to explore' },
+				])
+
 				return {
 					content: [
 						{
@@ -693,9 +761,7 @@ ${artists.length > 30 ? '\n📝 **Note:** Showing top 30 artists only' : ''}
 ${trackList}
 
 📊 **Total tracks in this period:** ${tracks.length}
-${tracks.length > 30 ? '\n📝 **Note:** Showing top 30 tracks only' : ''}
-
-💡 **Tip:** Use \`get_weekly_chart_list\` to find other time periods to explore!`,
+${tracks.length > 30 ? '\n📝 **Note:** Showing top 30 tracks only' : ''}${nextSteps}`,
 						},
 					],
 				}
