@@ -234,8 +234,12 @@ ${renderToolList(AUTHENTICATED_TOOL_CATALOG)}
 						? `from ${formatTimestamp(effectiveFrom, effectiveTimezone)}`
 						: `most recent (server time: ${nowStr})`
 
+				const topTrack = tracks[0]
+				const topArtist = topTrack ? (topTrack.artist['#text'] || (topTrack.artist as unknown as { name: string }).name) : null
 				const nextSteps = buildNextSteps([
-					{ tool: 'get_track_info', args: 'artist="<ARTIST FROM LIST>", track="<TRACK FROM LIST>"', hint: 'expand a track from the feed' },
+					topTrack && topArtist
+						? { tool: 'get_track_info', args: `artist=${JSON.stringify(topArtist)}, track=${JSON.stringify(topTrack.name)}`, hint: 'expand the most recent track' }
+						: { tool: 'get_track_info', args: 'artist="<ARTIST FROM LIST>", track="<TRACK FROM LIST>"', hint: 'expand a track from the feed' },
 					{ tool: 'get_artist_info', args: 'artist="<ARTIST FROM LIST>"', hint: 'expand an artist from the feed' },
 					{ tool: 'get_top_artists', args: 'period="7day"', hint: 'aggregate the recent feed into a 7-day top list' },
 				])
@@ -287,8 +291,11 @@ ${currentPage > 1 ? `\n⬅️ **Previous page:** Use \`page: ${currentPage - 1}\
 				const artists = data.topartists.artist.slice(0, limit)
 				const artistList = artists.map((artist, index) => `${index + 1}. ${artist.name} (${artist.playcount} plays)`).join('\n')
 
+				const topArtistName = artists[0]?.name
 				const nextSteps = buildNextSteps([
-					{ tool: 'get_artist_info', args: 'artist="<NAME FROM LIST>"', hint: 'expand one of your top artists' },
+					topArtistName
+						? { tool: 'get_artist_info', args: `artist=${JSON.stringify(topArtistName)}`, hint: 'expand your top artist' }
+						: { tool: 'get_artist_info', args: 'artist="<NAME FROM LIST>"', hint: 'expand one of your top artists' },
 					{ tool: 'get_artist_top_tracks', args: 'artist="<NAME FROM LIST>"', hint: 'see canonical tracks for one of them' },
 					{ tool: 'get_top_albums', args: `period="${period}"`, hint: 'pivot to top albums for the same period' },
 				])
@@ -337,8 +344,11 @@ Total artists: ${data.topartists['@attr'].total}${nextSteps}`,
 					})
 					.join('\n')
 
+				const topAlbum = albums[0]
 				const nextSteps = buildNextSteps([
-					{ tool: 'get_album_info', args: 'artist="<ARTIST FROM LIST>", album="<ALBUM FROM LIST>"', hint: 'expand one of your top albums' },
+					topAlbum
+						? { tool: 'get_album_info', args: `artist=${JSON.stringify(formatArtist(topAlbum.artist))}, album=${JSON.stringify(topAlbum.name)}`, hint: 'expand your top album' }
+						: { tool: 'get_album_info', args: 'artist="<ARTIST FROM LIST>", album="<ALBUM FROM LIST>"', hint: 'expand one of your top albums' },
 					{ tool: 'get_top_tracks', args: `period="${period}"`, hint: 'pivot to top tracks for the same period' },
 					{ tool: 'get_top_artists', args: `period="${period}"`, hint: 'pivot to top artists for the same period' },
 				])
@@ -388,8 +398,12 @@ Total albums: ${data.topalbums['@attr'].total}${nextSteps}`,
 					})
 					.join('\n')
 
+				const topTrack = tracks[0]
+				const topTrackArtist = topTrack ? (topTrack.artist['#text'] || (topTrack.artist as unknown as { name: string }).name) : null
 				const nextSteps = buildNextSteps([
-					{ tool: 'get_track_info', args: 'artist="<ARTIST FROM LIST>", track="<TRACK FROM LIST>"', hint: 'expand one of your top tracks' },
+					topTrack && topTrackArtist
+						? { tool: 'get_track_info', args: `artist=${JSON.stringify(topTrackArtist)}, track=${JSON.stringify(topTrack.name)}`, hint: 'expand your top track' }
+						: { tool: 'get_track_info', args: 'artist="<ARTIST FROM LIST>", track="<TRACK FROM LIST>"', hint: 'expand one of your top tracks' },
 					{ tool: 'get_similar_tracks', args: 'artist="<ARTIST FROM LIST>", track="<TRACK FROM LIST>"', hint: 'find more like one of your favorites' },
 					{ tool: 'get_top_albums', args: `period="${period}"`, hint: 'pivot to top albums for the same period' },
 				])
@@ -438,8 +452,12 @@ Total tracks: ${data.toptracks['@attr'].total}${nextSteps}`,
 					})
 					.join('\n')
 
+				const topLoved = tracks[0]
+				const topLovedArtist = topLoved ? (topLoved.artist['#text'] || (topLoved.artist as unknown as { name: string }).name) : null
 				const nextSteps = buildNextSteps([
-					{ tool: 'get_track_info', args: 'artist="<ARTIST FROM LIST>", track="<TRACK FROM LIST>"', hint: 'expand one of your loved tracks' },
+					topLoved && topLovedArtist
+						? { tool: 'get_track_info', args: `artist=${JSON.stringify(topLovedArtist)}, track=${JSON.stringify(topLoved.name)}`, hint: 'expand your most-recently-loved track' }
+						: { tool: 'get_track_info', args: 'artist="<ARTIST FROM LIST>", track="<TRACK FROM LIST>"', hint: 'expand one of your loved tracks' },
 					{ tool: 'get_similar_tracks', args: 'artist="<ARTIST FROM LIST>", track="<TRACK FROM LIST>"', hint: 'find more like a loved track' },
 					{ tool: 'get_music_recommendations', args: '', hint: 'personalized picks based on your history' },
 				])
@@ -582,8 +600,11 @@ Total loved tracks: ${data.lovedtracks['@attr'].total}${nextSteps}`,
 				const artistRecs = recommendations.recommendedArtists.slice(0, 8)
 				const artistList = artistRecs.map((rec) => `• ${rec.name} (${rec.reason})`).join('\n')
 
+				const topRec = artistRecs[0]?.name
 				const nextSteps = buildNextSteps([
-					{ tool: 'get_artist_info', args: 'artist="<NAME FROM LIST>"', hint: 'expand a recommendation' },
+					topRec
+						? { tool: 'get_artist_info', args: `artist=${JSON.stringify(topRec)}`, hint: 'expand the top recommendation' }
+						: { tool: 'get_artist_info', args: 'artist="<NAME FROM LIST>"', hint: 'expand a recommendation' },
 					{ tool: 'get_artist_top_tracks', args: 'artist="<NAME FROM LIST>"', hint: 'jump to canonical tracks for one of the picks' },
 					{ tool: 'get_similar_artists', args: 'artist="<NAME FROM LIST>"', hint: 'fan out further from a recommendation' },
 				])
@@ -691,9 +712,12 @@ ${chartList}
 					.map((artist, index) => `${index + 1}. ${artist.name} (${artist.playcount} plays)`)
 					.join('\n')
 
+				const topWeekArtist = artists[0]?.name
 				const nextSteps = buildNextSteps([
 					{ tool: 'get_weekly_track_chart', args: `from=${from}, to=${to}`, hint: 'see top tracks for the same week' },
-					{ tool: 'get_artist_info', args: 'artist="<NAME FROM LIST>"', hint: 'expand one of the artists from this week' },
+					topWeekArtist
+						? { tool: 'get_artist_info', args: `artist=${JSON.stringify(topWeekArtist)}`, hint: 'expand the top artist from this week' }
+						: { tool: 'get_artist_info', args: 'artist="<NAME FROM LIST>"', hint: 'expand one of the artists from this week' },
 					{ tool: 'get_weekly_chart_list', args: '', hint: 'pick a different week to explore' },
 				])
 
@@ -745,9 +769,12 @@ ${artists.length > 30 ? '\n📝 **Note:** Showing top 30 artists only' : ''}${ne
 					.map((track, index) => `${index + 1}. ${track.artist['#text']} - ${track.name} (${track.playcount} plays)`)
 					.join('\n')
 
+				const topWeekTrack = tracks[0]
 				const nextSteps = buildNextSteps([
 					{ tool: 'get_weekly_artist_chart', args: `from=${from}, to=${to}`, hint: 'see top artists for the same week' },
-					{ tool: 'get_track_info', args: 'artist="<ARTIST FROM LIST>", track="<TRACK FROM LIST>"', hint: 'expand a track from this week' },
+					topWeekTrack
+						? { tool: 'get_track_info', args: `artist=${JSON.stringify(topWeekTrack.artist['#text'])}, track=${JSON.stringify(topWeekTrack.name)}`, hint: 'expand the top track from this week' }
+						: { tool: 'get_track_info', args: 'artist="<ARTIST FROM LIST>", track="<TRACK FROM LIST>"', hint: 'expand a track from this week' },
 					{ tool: 'get_weekly_chart_list', args: '', hint: 'pick a different week to explore' },
 				])
 

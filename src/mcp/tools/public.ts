@@ -337,8 +337,11 @@ ${albumList}${nextSteps}`,
 				const artists = data.similarartists.artist.slice(0, limit)
 				const artistList = artists.map((a) => `• ${a.name} (${Math.round(parseFloat(a.match) * 100)}% match)`).join('\n')
 
+				const topSimilar = artists[0]?.name
 				const nextSteps = buildNextSteps([
-					{ tool: 'get_artist_info', args: 'artist="<NAME FROM LIST>"', hint: 'expand one of the similar artists' },
+					topSimilar
+						? { tool: 'get_artist_info', args: `artist=${JSON.stringify(topSimilar)}`, hint: 'expand the closest match' }
+						: { tool: 'get_artist_info', args: 'artist="<NAME FROM LIST>"', hint: 'expand one of the similar artists' },
 					{ tool: 'get_artist_top_tracks', args: 'artist="<NAME FROM LIST>"', hint: 'jump straight to canonical tracks for one of them' },
 				])
 
