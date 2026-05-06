@@ -180,11 +180,11 @@ ${renderToolList(AUTHENTICATED_TOOL_CATALOG)}
 		"Get user's recent Last.fm listening history - REQUIRES AUTHENTICATION. Use lastfm_auth_status first to check login status.",
 		{
 			username: z.string().optional().describe('Last.fm username (defaults to authenticated user)'),
-			limit: z.number().min(1).max(1000).optional().default(50).describe('Number of tracks to return per page (1-1000)'),
-			page: z.number().min(1).optional().default(1).describe('Page number for pagination (starts at 1)'),
+			limit: z.coerce.number().min(1).max(1000).optional().default(50).describe('Number of tracks to return per page (1-1000)'),
+			page: z.coerce.number().min(1).optional().default(1).describe('Page number for pagination (starts at 1)'),
 			date: z.string().optional().describe('Calendar date in YYYY-MM-DD format (e.g. "2026-03-16"). The server computes correct UTC day boundaries using the timezone param. Prefer this over from/to when querying "today", "yesterday", or a specific date.'),
-			from: z.number().optional().describe('Start timestamp (Unix timestamp). Ignored if date is provided.'),
-			to: z.number().optional().describe('End timestamp (Unix timestamp). Ignored if date is provided.'),
+			from: z.coerce.number().optional().describe('Start timestamp (Unix timestamp). Ignored if date is provided.'),
+			to: z.coerce.number().optional().describe('End timestamp (Unix timestamp). Ignored if date is provided.'),
 			timezone: z.string().optional().default('UTC')
 				.describe('IANA timezone name (e.g. "America/New_York"). Defaults to UTC. Required for date param to work correctly — always pass when the user\'s timezone is known.'),
 		},
@@ -276,7 +276,7 @@ ${currentPage > 1 ? `\n⬅️ **Previous page:** Use \`page: ${currentPage - 1}\
 		{
 			username: z.string().optional().describe('Last.fm username (defaults to authenticated user)'),
 			period: z.enum(PERIOD_VALUES).optional().default('overall').describe('Time period for top artists'),
-			limit: z.number().min(1).max(1000).optional().default(50).describe('Number of artists to return (1-1000)'),
+			limit: z.coerce.number().min(1).max(1000).optional().default(50).describe('Number of artists to return (1-1000)'),
 		},
 		async ({ username, period, limit }) => {
 			const session = getSession()
@@ -325,7 +325,7 @@ Total artists: ${data.topartists['@attr'].total}${nextSteps}`,
 		{
 			username: z.string().optional().describe('Last.fm username (defaults to authenticated user)'),
 			period: z.enum(PERIOD_VALUES).optional().default('overall').describe('Time period for top albums'),
-			limit: z.number().min(1).max(1000).optional().default(50).describe('Number of albums to return (1-1000)'),
+			limit: z.coerce.number().min(1).max(1000).optional().default(50).describe('Number of albums to return (1-1000)'),
 		},
 		async ({ username, period, limit }) => {
 			const session = getSession()
@@ -378,7 +378,7 @@ Total albums: ${data.topalbums['@attr'].total}${nextSteps}`,
 		{
 			username: z.string().optional().describe('Last.fm username (defaults to authenticated user)'),
 			period: z.enum(PERIOD_VALUES).optional().default('overall').describe('Time period for top tracks'),
-			limit: z.number().min(1).max(1000).optional().default(50).describe('Number of tracks to return (1-1000)'),
+			limit: z.coerce.number().min(1).max(1000).optional().default(50).describe('Number of tracks to return (1-1000)'),
 		},
 		async ({ username, period, limit }) => {
 			const session = getSession()
@@ -432,7 +432,7 @@ Total tracks: ${data.toptracks['@attr'].total}${nextSteps}`,
 		"Get user's loved/favorite tracks from Last.fm - REQUIRES AUTHENTICATION. Shows tracks the user has marked as favorites.",
 		{
 			username: z.string().optional().describe('Last.fm username (defaults to authenticated user)'),
-			limit: z.number().min(1).max(1000).optional().default(50).describe('Number of tracks to return (1-1000)'),
+			limit: z.coerce.number().min(1).max(1000).optional().default(50).describe('Number of tracks to return (1-1000)'),
 		},
 		async ({ username, limit }) => {
 			const session = getSession()
@@ -584,7 +584,7 @@ Total loved tracks: ${data.lovedtracks['@attr'].total}${nextSteps}`,
 		'Get personalized music recommendations from Last.fm based on listening history - REQUIRES AUTHENTICATION',
 		{
 			username: z.string().optional().describe('Last.fm username (defaults to authenticated user)'),
-			limit: z.number().min(1).max(50).optional().default(20).describe('Number of recommendations to return (1-50)'),
+			limit: z.coerce.number().min(1).max(50).optional().default(20).describe('Number of recommendations to return (1-50)'),
 			genre: z.string().optional().describe('Optional genre filter for recommendations'),
 		},
 		async ({ username, limit, genre }) => {
@@ -690,8 +690,8 @@ ${chartList}
 		'Get artist listening data for a specific time period - REQUIRES AUTHENTICATION. Perfect for temporal queries like "what artists was I into in 2023".',
 		{
 			username: z.string().optional().describe('Last.fm username (defaults to authenticated user)'),
-			from: z.number().optional().describe('Start timestamp (Unix timestamp) - get from weekly_chart_list'),
-			to: z.number().optional().describe('End timestamp (Unix timestamp) - get from weekly_chart_list'),
+			from: z.coerce.number().optional().describe('Start timestamp (Unix timestamp) - get from weekly_chart_list'),
+			to: z.coerce.number().optional().describe('End timestamp (Unix timestamp) - get from weekly_chart_list'),
 		},
 		async ({ username, from, to }) => {
 			const session = getSession()
@@ -747,8 +747,8 @@ ${artists.length > 30 ? '\n📝 **Note:** Showing top 30 artists only' : ''}${ne
 		'Get track listening data for a specific time period - REQUIRES AUTHENTICATION. Perfect for temporal queries like "what songs was I obsessed with in summer 2023".',
 		{
 			username: z.string().optional().describe('Last.fm username (defaults to authenticated user)'),
-			from: z.number().optional().describe('Start timestamp (Unix timestamp) - get from weekly_chart_list'),
-			to: z.number().optional().describe('End timestamp (Unix timestamp) - get from weekly_chart_list'),
+			from: z.coerce.number().optional().describe('Start timestamp (Unix timestamp) - get from weekly_chart_list'),
+			to: z.coerce.number().optional().describe('End timestamp (Unix timestamp) - get from weekly_chart_list'),
 		},
 		async ({ username, from, to }) => {
 			const session = getSession()

@@ -250,7 +250,7 @@ ${!username ? '*Note: Sign in to see your personal listening stats for this albu
 		"Get an artist's globally most-played tracks on Last.fm (not user-specific) - No authentication required. Useful for finding canonical / signature songs by an artist.",
 		{
 			artist: z.string().describe('Artist name'),
-			limit: z.number().min(1).max(50).optional().default(10).describe('Number of tracks to return (1-50)'),
+			limit: z.coerce.number().min(1).max(50).optional().default(10).describe('Number of tracks to return (1-50)'),
 			mbid: z.string().optional().describe('MusicBrainz ID of the artist (optional, more reliable than name)'),
 		},
 		async ({ artist, limit, mbid }) => {
@@ -290,7 +290,7 @@ ${trackList}${nextSteps}`,
 		"Get an artist's globally most-played albums on Last.fm (not user-specific) - No authentication required. Useful for finding the canonical record by an artist.",
 		{
 			artist: z.string().describe('Artist name'),
-			limit: z.number().min(1).max(50).optional().default(10).describe('Number of albums to return (1-50)'),
+			limit: z.coerce.number().min(1).max(50).optional().default(10).describe('Number of albums to return (1-50)'),
 			mbid: z.string().optional().describe('MusicBrainz ID of the artist (optional, more reliable than name)'),
 		},
 		async ({ artist, limit, mbid }) => {
@@ -328,7 +328,7 @@ ${albumList}${nextSteps}`,
 		'Find artists similar to any artist using Last.fm data - No authentication required',
 		{
 			artist: z.string().describe('Artist name'),
-			limit: z.number().min(1).max(100).optional().default(30).describe('Number of similar artists to return (1-100)'),
+			limit: z.coerce.number().min(1).max(100).optional().default(30).describe('Number of similar artists to return (1-100)'),
 		},
 		async ({ artist, limit }) => {
 			try {
@@ -368,7 +368,7 @@ ${artistList}${nextSteps}`,
 		{
 			artist: z.string().describe('Artist name'),
 			track: z.string().describe('Track name'),
-			limit: z.number().min(1).max(100).optional().default(30).describe('Number of similar tracks to return (1-100)'),
+			limit: z.coerce.number().min(1).max(100).optional().default(30).describe('Number of similar tracks to return (1-100)'),
 		},
 		async ({ artist, track, limit }) => {
 			try {
