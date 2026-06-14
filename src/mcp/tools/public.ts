@@ -6,7 +6,7 @@ import { z } from 'zod'
 import { CachedLastfmClient } from '../../clients/cachedLastfm'
 import { buildNextSteps } from '../../utils/breadcrumb'
 import { toolError } from './error-handler'
-import { formatArtist } from './formatters'
+import { formatArtist, toArray } from './formatters'
 
 /**
  * Register all public (non-authenticated) tools with the MCP server.
@@ -79,7 +79,7 @@ To get started, authenticate at ${authUrl}${nextSteps}`,
 				const data = await client.getTrackInfo(artist, track, username)
 
 				const tags =
-					data.track.toptags?.tag
+					toArray(data.track.toptags?.tag)
 						.slice(0, 5)
 						.map((tag) => tag.name)
 						.join(', ') || 'None'
@@ -136,12 +136,12 @@ ${!username ? '*Note: Sign in to see your personal listening stats for this trac
 				const data = await client.getArtistInfo(artist, username)
 
 				const tags =
-					data.artist.tags?.tag
+					toArray(data.artist.tags?.tag)
 						.slice(0, 5)
 						.map((tag) => tag.name)
 						.join(', ') || 'None'
 				const similar =
-					data.artist.similar?.artist
+					toArray(data.artist.similar?.artist)
 						.slice(0, 5)
 						.map((a) => a.name)
 						.join(', ') || 'None'
@@ -195,12 +195,12 @@ ${!username ? '*Note: Sign in to see your personal listening stats for this arti
 				const data = await client.getAlbumInfo(artist, album, username)
 
 				const tags =
-					data.album.tags?.tag
+					toArray(data.album.tags?.tag)
 						.slice(0, 5)
 						.map((tag) => tag.name)
 						.join(', ') || 'None'
 				const tracks =
-					data.album.tracks?.track
+					toArray(data.album.tracks?.track)
 						.slice(0, 10)
 						.map((track, i) => `${i + 1}. ${track.name}`)
 						.join('\n') || 'Track listing not available'
