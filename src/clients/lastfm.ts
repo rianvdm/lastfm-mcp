@@ -31,6 +31,25 @@ export interface LastfmTrack {
 	loved?: string
 }
 
+export interface LastfmTag {
+	name: string
+	url: string
+	count?: number
+}
+
+export interface LastfmAlbumTrack {
+	name: string
+	duration?: string
+	'@attr': {
+		rank: string
+	}
+	artist: {
+		name: string
+		mbid?: string
+		url?: string
+	}
+}
+
 export interface LastfmArtist {
 	name: string
 	playcount: string
@@ -56,14 +75,10 @@ export interface LastfmArtist {
 		content: string
 	}
 	similar?: {
-		artist: LastfmArtist[]
+		artist?: LastfmArtist | LastfmArtist[]
 	}
 	tags?: {
-		tag: Array<{
-			name: string
-			url: string
-			count?: number
-		}>
+		tag?: LastfmTag | LastfmTag[]
 	}
 }
 
@@ -250,12 +265,10 @@ export interface LastfmTrackInfoResponse {
 		playcount: string
 		userplaycount?: string
 		userloved?: string
+		// Last.fm returns `tag` as an array for many tags, a bare object for one,
+		// or omits it entirely. See toArray() in mcp/tools/formatters.ts.
 		toptags?: {
-			tag: Array<{
-				name: string
-				count: number
-				url: string
-			}>
+			tag?: LastfmTag | LastfmTag[]
 		}
 		wiki?: {
 			published: string
@@ -263,7 +276,7 @@ export interface LastfmTrackInfoResponse {
 			content: string
 		}
 		similar?: {
-			track: LastfmTrack[]
+			track?: LastfmTrack | LastfmTrack[]
 		}
 	}
 }
@@ -275,15 +288,11 @@ export interface LastfmArtistInfoResponse {
 			playcount: string
 			userplaycount?: string
 		}
-		similar: {
-			artist: LastfmArtist[]
+		similar?: {
+			artist?: LastfmArtist | LastfmArtist[]
 		}
-		tags: {
-			tag: Array<{
-				name: string
-				url: string
-				count?: number
-			}>
+		tags?: {
+			tag?: LastfmTag | LastfmTag[]
 		}
 		bio: {
 			published: string
@@ -298,26 +307,13 @@ export interface LastfmAlbumInfoResponse {
 		listeners: string
 		playcount: string
 		userplaycount?: string
-		tracks: {
-			track: Array<{
-				name: string
-				duration?: string
-				'@attr': {
-					rank: string
-				}
-				artist: {
-					name: string
-					mbid?: string
-					url?: string
-				}
-			}>
+		// Last.fm returns `track`/`tag` as an array for many, a bare object for
+		// one, or omits it entirely. See toArray() in mcp/tools/formatters.ts.
+		tracks?: {
+			track?: LastfmAlbumTrack | LastfmAlbumTrack[]
 		}
-		tags: {
-			tag: Array<{
-				name: string
-				url: string
-				count?: number
-			}>
+		tags?: {
+			tag?: LastfmTag | LastfmTag[]
 		}
 		wiki?: {
 			published: string
