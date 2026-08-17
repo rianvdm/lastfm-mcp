@@ -131,7 +131,7 @@ lastfm://track/{artist}/{track}/similar  # Similar tracks
 
 ### Prerequisites
 
-- Node.js 18+
+- Node.js 20 or newer (CI runs 20)
 - Cloudflare Workers account
 - Last.fm API key ([create one here](https://www.last.fm/api/account/create))
 
@@ -143,12 +143,11 @@ cd lastfm-mcp
 npm install
 ```
 
-Create `.dev.vars`:
+Create `.dev.vars` (or copy `.dev.vars.example`):
 
 ```
 LASTFM_API_KEY=your_api_key
 LASTFM_SHARED_SECRET=your_shared_secret
-JWT_SECRET=your_jwt_secret
 ```
 
 ```bash
@@ -163,12 +162,11 @@ npx @modelcontextprotocol/inspector http://localhost:8787/mcp
 
 ### Deployment
 
-Set production secrets:
+Set production secrets (or run `npm run setup:prod`, which creates the KV namespaces and prompts for these):
 
 ```bash
 echo "your_api_key" | wrangler secret put LASTFM_API_KEY --env production
 echo "your_shared_secret" | wrangler secret put LASTFM_SHARED_SECRET --env production
-echo "your_jwt_secret" | wrangler secret put JWT_SECRET --env production
 ```
 
 Deploy:
@@ -180,27 +178,33 @@ npm run deploy:prod
 ### Testing
 
 ```bash
-npm test
-npm run typecheck
+npm test          # vitest, in workerd via @cloudflare/vitest-pool-workers
 npm run lint
+npm run build     # wrangler deploy --dry-run: catches type and binding errors
 ```
 
 ## Architecture
 
 - Runtime: Cloudflare Workers
 - Protocol: MCP (streamable HTTP)
-- Auth: OAuth 2.0 (RFC 9728)
-- Storage: Cloudflare KV for sessions, tokens, and caching
+- Auth: OAuth 2.0 (RFC 9728) via `@cloudflare/workers-oauth-provider`; the provider owns sessions and tokens
+- Storage: Cloudflare KV for OAuth state, sessions, caching, and rate-limit counters
+- Rate limiting: per-IP on `/mcp`, so one client can't exhaust the shared Last.fm API key's budget
 - API: Last.fm Web API v2.0
 
 ### Endpoints
 
 | Endpoint | Purpose |
 | -------- | ------- |
-| `/mcp` | MCP JSON-RPC endpoint |
+| `/mcp` | MCP JSON-RPC endpoint (rate-limited per IP) |
 | `/authorize` | OAuth 2.0 authorization |
+| `/oauth/token` | OAuth 2.0 token exchange |
+| `/oauth/register` | OAuth 2.0 dynamic client registration |
 | `/.well-known/oauth-authorization-server` | OAuth server metadata |
 | `/.well-known/oauth-protected-resource` | OAuth resource metadata |
+| `/.well-known/mcp.json` | MCP server card (name, version, transport) |
+| `/health` | Health check |
+| `/` | Landing page |
 
 ## Contributing
 

@@ -5,9 +5,6 @@ export interface Env {
 	LASTFM_API_KEY: string
 	LASTFM_SHARED_SECRET: string
 
-	// JWT secret for signing session cookies
-	JWT_SECRET: string
-
 	// KV namespaces for rate limiting and sessions.
 	// Logging goes to Workers Observability (configured in wrangler.toml), not KV.
 	MCP_RL: KVNamespace

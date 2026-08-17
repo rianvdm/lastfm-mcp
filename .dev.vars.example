@@ -1,0 +1,10 @@
+# Local development secrets. Copy to .dev.vars and fill in real values:
+#
+#   cp .dev.vars.example .dev.vars
+#
+# Both come from your Last.fm API account: https://www.last.fm/api/account/create
+# Production uses the same two names via `wrangler secret put ... --env production`
+# (or `npm run setup:prod`). No other secrets are required.
+
+LASTFM_API_KEY=
+LASTFM_SHARED_SECRET=
