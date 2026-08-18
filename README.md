@@ -1,3 +1,5 @@
+[![MseeP.ai Security Assessment Badge](https://mseep.net/pr/rianvdm-lastfm-mcp-badge.png)](https://mseep.ai/app/rianvdm-lastfm-mcp)
+
 # Last.fm MCP Server
 
 A [Model Context Protocol](https://modelcontextprotocol.io/) (MCP) server for Last.fm. Gives AI assistants access to your listening history, music discovery, and detailed track/artist/album information.
