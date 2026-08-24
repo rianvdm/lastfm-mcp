@@ -211,10 +211,15 @@ export class SmartCache {
 			timestamp: Date.now(),
 		})
 
-		// Clean up pending request when done (success or failure)
-		promise.finally(() => {
-			this.pendingRequests.delete(dedupeKey)
-		})
+		// Clean up pending request when done (success or failure).
+		// `.finally()` returns a derived promise that rejects whenever `promise`
+		// does. The caller handles rejection through the returned `promise`, so
+		// swallow it here or every failed fetch also raises an unhandled rejection.
+		promise
+			.finally(() => {
+				this.pendingRequests.delete(dedupeKey)
+			})
+			.catch(() => {})
 
 		return promise
 	}
