@@ -1,7 +1,6 @@
 // ABOUTME: Authenticated MCP tools that require Last.fm authentication to access personal user data.
 // ABOUTME: Provides a single registration function with pluggable session getter for both OAuth and session-based auth.
-import { getMcpAuthContext } from 'agents/mcp'
-import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
+import { McpServer } from '@modelcontextprotocol/server'
 import { z } from 'zod'
 
 import { CachedLastfmClient } from '../../clients/cachedLastfm'
@@ -134,7 +133,7 @@ export function registerAuthenticatedTools(
 		'lastfm_auth_status',
 		{
 			description: 'Check if user is authenticated with Last.fm - Use this to verify login status before accessing personal music data',
-			inputSchema: {},
+			inputSchema: z.object({}),
 		},
 		async () => {
 			const session = getSession()
@@ -181,7 +180,7 @@ ${renderToolList(AUTHENTICATED_TOOL_CATALOG)}
 		'get_recent_tracks',
 		{
 			description: "Get user's recent Last.fm listening history - REQUIRES AUTHENTICATION. Use lastfm_auth_status first to check login status.",
-			inputSchema: {
+			inputSchema: z.object({
 				username: z.string().optional().describe('Last.fm username (defaults to authenticated user)'),
 				limit: z.coerce.number().min(1).max(1000).optional().default(50).describe('Number of tracks to return per page (1-1000)'),
 				page: z.coerce.number().min(1).optional().default(1).describe('Page number for pagination (starts at 1)'),
@@ -190,7 +189,7 @@ ${renderToolList(AUTHENTICATED_TOOL_CATALOG)}
 				to: z.coerce.number().optional().describe('End timestamp (Unix timestamp). Ignored if date is provided.'),
 				timezone: z.string().optional().default('UTC')
 					.describe('IANA timezone name (e.g. "America/New_York"). Defaults to UTC. Required for date param to work correctly — always pass when the user\'s timezone is known.'),
-			},
+			}),
 		},
 		async ({ username, limit, page, date, from, to, timezone }) => {
 			const session = getSession()
@@ -278,11 +277,11 @@ ${currentPage > 1 ? `\n⬅️ **Previous page:** Use \`page: ${currentPage - 1}\
 		'get_top_artists',
 		{
 			description: "Get user's most listened to artists from Last.fm - REQUIRES AUTHENTICATION. Specify time period like '7day', '1month', '6month', 'overall'.",
-			inputSchema: {
+			inputSchema: z.object({
 				username: z.string().optional().describe('Last.fm username (defaults to authenticated user)'),
 				period: z.enum(PERIOD_VALUES).optional().default('overall').describe('Time period for top artists'),
 				limit: z.coerce.number().min(1).max(1000).optional().default(50).describe('Number of artists to return (1-1000)'),
-			},
+			}),
 		},
 		async ({ username, period, limit }) => {
 			const session = getSession()
@@ -329,11 +328,11 @@ Total artists: ${data.topartists['@attr'].total}${nextSteps}`,
 		'get_top_albums',
 		{
 			description: "Get user's most listened to albums from Last.fm - REQUIRES AUTHENTICATION. Specify time period like '7day', '1month', '6month', 'overall'.",
-			inputSchema: {
+			inputSchema: z.object({
 				username: z.string().optional().describe('Last.fm username (defaults to authenticated user)'),
 				period: z.enum(PERIOD_VALUES).optional().default('overall').describe('Time period for top albums'),
 				limit: z.coerce.number().min(1).max(1000).optional().default(50).describe('Number of albums to return (1-1000)'),
-			},
+			}),
 		},
 		async ({ username, period, limit }) => {
 			const session = getSession()
@@ -384,11 +383,11 @@ Total albums: ${data.topalbums['@attr'].total}${nextSteps}`,
 		'get_top_tracks',
 		{
 			description: "Get user's most listened to tracks from Last.fm - REQUIRES AUTHENTICATION. Specify time period like '7day', '1month', '6month', 'overall'.",
-			inputSchema: {
+			inputSchema: z.object({
 				username: z.string().optional().describe('Last.fm username (defaults to authenticated user)'),
 				period: z.enum(PERIOD_VALUES).optional().default('overall').describe('Time period for top tracks'),
 				limit: z.coerce.number().min(1).max(1000).optional().default(50).describe('Number of tracks to return (1-1000)'),
-			},
+			}),
 		},
 		async ({ username, period, limit }) => {
 			const session = getSession()
@@ -441,10 +440,10 @@ Total tracks: ${data.toptracks['@attr'].total}${nextSteps}`,
 		'get_loved_tracks',
 		{
 			description: "Get user's loved/favorite tracks from Last.fm - REQUIRES AUTHENTICATION. Shows tracks the user has marked as favorites.",
-			inputSchema: {
+			inputSchema: z.object({
 				username: z.string().optional().describe('Last.fm username (defaults to authenticated user)'),
 				limit: z.coerce.number().min(1).max(1000).optional().default(50).describe('Number of tracks to return (1-1000)'),
-			},
+			}),
 		},
 		async ({ username, limit }) => {
 			const session = getSession()
@@ -497,9 +496,9 @@ Total loved tracks: ${data.lovedtracks['@attr'].total}${nextSteps}`,
 		'get_user_info',
 		{
 			description: 'Get Last.fm user profile information and listening statistics - REQUIRES AUTHENTICATION for private profiles',
-			inputSchema: {
+			inputSchema: z.object({
 				username: z.string().optional().describe('Last.fm username (defaults to authenticated user)'),
-			},
+			}),
 		},
 		async ({ username }) => {
 			const session = getSession()
@@ -550,10 +549,10 @@ Total loved tracks: ${data.lovedtracks['@attr'].total}${nextSteps}`,
 		'get_listening_stats',
 		{
 			description: 'Get comprehensive Last.fm listening statistics and analytics - REQUIRES AUTHENTICATION. Shows detailed insights about music habits.',
-			inputSchema: {
+			inputSchema: z.object({
 				username: z.string().optional().describe('Last.fm username (defaults to authenticated user)'),
 				period: z.enum(PERIOD_VALUES).optional().default('overall').describe('Time period for statistics'),
-			},
+			}),
 		},
 		async ({ username, period }) => {
 			const session = getSession()
@@ -599,11 +598,11 @@ Total loved tracks: ${data.lovedtracks['@attr'].total}${nextSteps}`,
 		'get_music_recommendations',
 		{
 			description: 'Get personalized music recommendations from Last.fm based on listening history - REQUIRES AUTHENTICATION',
-			inputSchema: {
+			inputSchema: z.object({
 				username: z.string().optional().describe('Last.fm username (defaults to authenticated user)'),
 				limit: z.coerce.number().min(1).max(50).optional().default(20).describe('Number of recommendations to return (1-50)'),
 				genre: z.string().optional().describe('Optional genre filter for recommendations'),
-			},
+			}),
 		},
 		async ({ username, limit, genre }) => {
 			const session = getSession()
@@ -652,9 +651,9 @@ ${artistList}
 		'get_weekly_chart_list',
 		{
 			description: 'Get available weekly chart date ranges for user\'s listening history - REQUIRES AUTHENTICATION. Use this to find historical time periods for temporal queries like "when did I start listening to X".',
-			inputSchema: {
+			inputSchema: z.object({
 				username: z.string().optional().describe('Last.fm username (defaults to authenticated user)'),
-			},
+			}),
 		},
 		async ({ username }) => {
 			const session = getSession()
@@ -709,11 +708,11 @@ ${chartList}
 		'get_weekly_artist_chart',
 		{
 			description: 'Get artist listening data for a specific time period - REQUIRES AUTHENTICATION. Perfect for temporal queries like "what artists was I into in 2023".',
-			inputSchema: {
+			inputSchema: z.object({
 				username: z.string().optional().describe('Last.fm username (defaults to authenticated user)'),
 				from: z.coerce.number().optional().describe('Start timestamp (Unix timestamp) - get from weekly_chart_list'),
 				to: z.coerce.number().optional().describe('End timestamp (Unix timestamp) - get from weekly_chart_list'),
-			},
+			}),
 		},
 		async ({ username, from, to }) => {
 			const session = getSession()
@@ -768,11 +767,11 @@ ${artists.length > 30 ? '\n📝 **Note:** Showing top 30 artists only' : ''}${ne
 		'get_weekly_track_chart',
 		{
 			description: 'Get track listening data for a specific time period - REQUIRES AUTHENTICATION. Perfect for temporal queries like "what songs was I obsessed with in summer 2023".',
-			inputSchema: {
+			inputSchema: z.object({
 				username: z.string().optional().describe('Last.fm username (defaults to authenticated user)'),
 				from: z.coerce.number().optional().describe('Start timestamp (Unix timestamp) - get from weekly_chart_list'),
 				to: z.coerce.number().optional().describe('End timestamp (Unix timestamp) - get from weekly_chart_list'),
-			},
+			}),
 		},
 		async ({ username, from, to }) => {
 			const session = getSession()
@@ -821,34 +820,4 @@ ${tracks.length > 30 ? '\n📝 **Note:** Showing top 30 tracks only' : ''}${next
 			}
 		},
 	)
-}
-
-/**
- * Get session from OAuth context.
- * Used as the session getter when tools are registered via the OAuth path.
- */
-function getOAuthSession(): AuthSession | null {
-	const auth = getMcpAuthContext()
-	if (!auth?.props) {
-		return null
-	}
-
-	const props = auth.props as unknown as LastfmOAuthProps
-	if (!props.sessionKey || !props.username) {
-		return null
-	}
-	return {
-		username: props.username,
-		sessionKey: props.sessionKey,
-	}
-}
-
-/**
- * Register authenticated tools using OAuth-based session management.
- *
- * Thin wrapper that provides an OAuth-aware session getter and auth messages,
- * then delegates to the single registerAuthenticatedTools implementation.
- */
-export function registerAuthenticatedToolsWithOAuth(server: McpServer, client: CachedLastfmClient, _getBaseUrl: () => string): void {
-	registerAuthenticatedTools(server, client, getOAuthSession, buildOAuthAuthMessages())
 }

@@ -5,7 +5,6 @@ export { registerPublicTools } from './public'
 export { toolError } from './error-handler'
 export {
 	registerAuthenticatedTools,
-	registerAuthenticatedToolsWithOAuth,
 	buildSessionAuthMessages,
 	buildOAuthAuthMessages,
 	type AuthSession,

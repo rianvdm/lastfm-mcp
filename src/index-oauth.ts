@@ -2,10 +2,11 @@
 // ABOUTME: Routes requests to MCP handler or legacy session auth based on client type.
 import { OAuthProvider } from '@cloudflare/workers-oauth-provider'
 import type { ExecutionContext } from '@cloudflare/workers-types'
-import { createMcpHandler } from 'agents/mcp'
+import { createMcpHandler, type CreateMcpHandlerOptions } from 'agents/mcp/server'
 
 import { LastfmOAuthHandler, type LastfmUserProps } from './auth/oauth-handler'
 import { MARKETING_PAGE_HTML } from './marketing-page'
+import { PROTOCOL_VERSION } from './mcp/protocol'
 import { createMcpServer } from './mcp/server'
 import { buildOAuthAuthMessages } from './mcp/tools'
 import type { Env } from './types/env'
@@ -13,7 +14,22 @@ import { buildRateLimitResponse, checkRateLimit, rateLimitKeyFromRequest } from 
 
 // Server metadata
 const SERVER_VERSION = '1.0.0'
-const PROTOCOL_VERSION = '2024-11-05'
+
+/**
+ * Options shared by both MCP handler call sites.
+ *
+ * Non-browser clients (Claude.ai, Claude Code, Claude Desktop) send no Origin
+ * and are always accepted. Browser-based clients must come from the custom
+ * domain or local dev tooling (the MCP inspector against `wrangler dev`).
+ * Setting this option replaces the handler's defaults rather than extending
+ * them, which is why localhost is listed explicitly. Host validation is left
+ * to Cloudflare routing: the handler only checks Host on localhost and
+ * workers.dev endpoints, and lastfm-mcp.com is configured in the dashboard,
+ * not in wrangler.toml.
+ */
+const MCP_HANDLER_OPTIONS: CreateMcpHandlerOptions = {
+	allowedOriginHostnames: ['lastfm-mcp.com', 'localhost', '127.0.0.1'],
+}
 
 /**
  * Session data stored in KV from manual login
@@ -78,22 +94,10 @@ async function handleSessionBasedMcp(request: Request, env: Env, ctx: ExecutionC
 		},
 	})
 
-	// Handle the MCP request
-	const handler = createMcpHandler(server)
-	const response = await handler(request, env, ctx)
-
-	// Add session ID to response headers
-	const newHeaders = new Headers(response.headers)
-	newHeaders.set('Mcp-Session-Id', sessionId)
-	newHeaders.set('Access-Control-Expose-Headers', 'Mcp-Session-Id')
-
-	return new Response(response.body, {
-		status: response.status,
-		statusText: response.statusText,
-		headers: newHeaders,
-	})
+	// Handle the MCP request. The server is built per request above, so the
+	// factory can hand back the already-configured instance.
+	return createMcpHandler(() => server, MCP_HANDLER_OPTIONS)(request, env, ctx)
 }
-
 
 /**
  * Create the OAuth provider instance
@@ -120,7 +124,7 @@ const oauthProvider = new OAuthProvider({
 				})
 			}
 
-			return createMcpHandler(server)(request, env, ctx)
+			return createMcpHandler(() => server, MCP_HANDLER_OPTIONS)(request, env, ctx)
 		},
 	},
 	authorizeEndpoint: '/authorize',
@@ -128,39 +132,6 @@ const oauthProvider = new OAuthProvider({
 	clientRegistrationEndpoint: '/oauth/register',
 	defaultHandler: LastfmOAuthHandler,
 })
-
-/**
- * Strip the 'resource' parameter from a request body to prevent audience mismatch.
- * workers-oauth-provider validates audience against ${protocol}//${host} (no path),
- * but Claude.ai sends the full MCP endpoint URL as resource (with /mcp path).
- */
-async function stripResourceFromRequest(request: Request): Promise<Request> {
-	if (request.method !== 'POST') return request
-
-	const contentType = request.headers.get('content-type') || ''
-	if (!contentType.includes('application/x-www-form-urlencoded')) return request
-
-	const body = await request.text()
-	const params = new URLSearchParams(body)
-
-	if (params.has('resource')) {
-		console.log(`[OAUTH] Stripping resource param from token request: ${params.get('resource')}`)
-		params.delete('resource')
-
-		return new Request(request.url, {
-			method: request.method,
-			headers: request.headers,
-			body: params.toString(),
-		})
-	}
-
-	// Re-create request with same body (since we consumed it)
-	return new Request(request.url, {
-		method: request.method,
-		headers: request.headers,
-		body: body,
-	})
-}
 
 /**
  * Main entry point - checks for session_id before deferring to OAuth
@@ -177,8 +148,8 @@ export default {
 				headers: {
 					'Access-Control-Allow-Origin': '*',
 					'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
-					'Access-Control-Allow-Headers': 'Content-Type, Authorization, X-Connection-ID, Mcp-Session-Id, Cookie',
-					'Access-Control-Expose-Headers': 'Mcp-Session-Id',
+					'Access-Control-Allow-Headers':
+						'Content-Type, Authorization, X-Connection-ID, Cookie, MCP-Protocol-Version, Mcp-Method, Mcp-Name',
 					'Access-Control-Max-Age': '86400',
 				},
 			})
@@ -317,28 +288,15 @@ Sitemap: https://lastfm-mcp.com/sitemap.xml`,
 			const sessionId = url.searchParams.get('session_id')
 
 			if (sessionId) {
-				// Explicit session_id param → session-based auth
+				// Explicit session_id param → session-based auth. This is the repo's own
+				// parameter from the manual /login flow, not protocol session state
+				// (MCP 2026-07-28 has no Mcp-Session-Id header).
 				return handleSessionBasedMcp(request, env, ctx, sessionId)
 			}
 
-			// Check for existing session via Mcp-Session-Id header
-			// (clients that previously authenticated via manual /login flow)
-			const mcpSessionId = request.headers.get('Mcp-Session-Id')
-			if (mcpSessionId) {
-				const sessionDataStr = await env.MCP_SESSIONS.get(`session:${mcpSessionId}`)
-				if (sessionDataStr) {
-					return handleSessionBasedMcp(request, env, ctx, mcpSessionId)
-				}
-			}
-
-			// No valid session → fall through to OAuth provider
+			// No session → fall through to OAuth provider
 			// - Valid bearer token: OAuth provider authenticates and serves MCP
 			// - No bearer token: OAuth provider returns 401 + WWW-Authenticate (triggers browser OAuth flow)
-		}
-
-		// Strip resource parameter from token requests to prevent audience mismatch
-		if (url.pathname === '/oauth/token') {
-			request = await stripResourceFromRequest(request)
 		}
 
 		// Use OAuth provider for everything else

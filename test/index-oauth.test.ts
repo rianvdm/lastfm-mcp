@@ -1,6 +1,7 @@
 // ABOUTME: Tests for the OAuth entry point (src/index-oauth.ts).
 // ABOUTME: Covers unauthenticated 401 routing, session-based auth, OAuth routing, and regression for copy-paste URL bug.
 import { env, createExecutionContext, waitOnExecutionContext } from 'cloudflare:test'
+import { Client, StreamableHTTPClientTransport } from '@modelcontextprotocol/client'
 import { describe, it, expect } from 'vitest'
 import worker from '../src/index-oauth'
 
@@ -49,17 +50,16 @@ describe('Last.fm MCP Server (OAuth Entry Point)', () => {
 			expect(response.status).toBe(401)
 			const wwwAuth = response.headers.get('WWW-Authenticate')
 			expect(wwwAuth).not.toBeNull()
-			expect(wwwAuth).toContain(
-				'Bearer resource_metadata="http://example.com/.well-known/oauth-protected-resource"',
-			)
+			expect(wwwAuth).toContain('Bearer resource_metadata="http://example.com/.well-known/oauth-protected-resource"')
 		})
 
-		it('should return 401 when Mcp-Session-Id header has no matching KV session', async () => {
-			// An unknown Mcp-Session-Id (not in KV) must fall through to OAuth → 401.
+		it('should ignore a legacy Mcp-Session-Id header and fall through to OAuth', async () => {
+			// MCP 2026-07-28 removed protocol sessions. A stale header from an old
+			// manual-login client must not be honoured, so this is a plain 401.
 			const request = new Request('http://example.com/mcp', {
 				method: 'POST',
 				body: initBody,
-				headers: { ...mcpHeaders, 'Mcp-Session-Id': 'unknown-session-not-in-kv' },
+				headers: { ...mcpHeaders, 'Mcp-Session-Id': 'legacy-header-no-longer-routed' },
 			})
 
 			const ctx = createExecutionContext()
@@ -67,10 +67,7 @@ describe('Last.fm MCP Server (OAuth Entry Point)', () => {
 			await waitOnExecutionContext(ctx)
 
 			expect(response.status).toBe(401)
-			const wwwAuth = response.headers.get('WWW-Authenticate')
-			expect(wwwAuth).toContain(
-				'Bearer resource_metadata="http://example.com/.well-known/oauth-protected-resource"',
-			)
+			expect(response.headers.get('Mcp-Session-Id')).toBeNull()
 		})
 
 		it('should not include a /login?session_id= URL in the response body', async () => {
@@ -159,89 +156,13 @@ describe('Last.fm MCP Server (OAuth Entry Point)', () => {
 			await waitOnExecutionContext(ctx)
 
 			expect(response.status).toBe(200)
-			expect(response.headers.get('Mcp-Session-Id')).toBe(sessionId)
-		})
-	})
-
-	describe('/mcp endpoint - Mcp-Session-Id header routing', () => {
-		const initBody = JSON.stringify({
-			jsonrpc: '2.0',
-			method: 'initialize',
-			params: {
-				protocolVersion: '2024-11-05',
-				capabilities: {},
-				clientInfo: { name: 'TestClient', version: '1.0.0' },
-			},
-			id: 1,
+			// No protocol session under 2026-07-28: the server must not mint or echo one.
+			expect(response.headers.get('Mcp-Session-Id')).toBeNull()
 		})
 
-		it('should use session-based auth when Mcp-Session-Id header has a valid KV session', async () => {
-			const sessionId = 'test-mcp-header-valid-session'
-			await env.MCP_SESSIONS.put(
-				`session:${sessionId}`,
-				JSON.stringify({
-					userId: 'testuser',
-					sessionKey: 'test-session-key',
-					username: 'testuser',
-					timestamp: Date.now(),
-					expiresAt: Date.now() + 30 * 24 * 60 * 60 * 1000,
-					sessionId,
-				}),
-			)
-
-			const request = new Request('http://example.com/mcp', {
-				method: 'POST',
-				body: initBody,
-				headers: {
-					'Content-Type': 'application/json',
-					Accept: 'application/json, text/event-stream',
-					'Mcp-Session-Id': sessionId,
-				},
-			})
-
-			const ctx = createExecutionContext()
-			const response = await worker.fetch(request, env, ctx)
-			await waitOnExecutionContext(ctx)
-
-			expect(response.status).toBe(200)
-			expect(response.headers.get('Mcp-Session-Id')).toBe(sessionId)
-		})
-
-		it('should expose Mcp-Session-Id in Access-Control-Expose-Headers for session-based responses', async () => {
-			const sessionId = 'test-mcp-header-expose-session'
-			await env.MCP_SESSIONS.put(
-				`session:${sessionId}`,
-				JSON.stringify({
-					userId: 'testuser',
-					sessionKey: 'test-session-key',
-					username: 'testuser',
-					timestamp: Date.now(),
-					expiresAt: Date.now() + 30 * 24 * 60 * 60 * 1000,
-					sessionId,
-				}),
-			)
-
-			const request = new Request('http://example.com/mcp', {
-				method: 'POST',
-				body: initBody,
-				headers: {
-					'Content-Type': 'application/json',
-					Accept: 'application/json, text/event-stream',
-					'Mcp-Session-Id': sessionId,
-				},
-			})
-
-			const ctx = createExecutionContext()
-			const response = await worker.fetch(request, env, ctx)
-			await waitOnExecutionContext(ctx)
-
-			expect(response.status).toBe(200)
-			expect(response.headers.get('Access-Control-Expose-Headers')?.toLowerCase()).toContain('mcp-session-id')
-		})
-
-		it('should return 401 when Mcp-Session-Id header session is expired', async () => {
+		it('should return 401 when the session_id session is expired', async () => {
 			// handleSessionBasedMcp checks expiresAt and returns 401 with error: 'session_expired'
-			const sessionId = 'test-mcp-header-expired-session'
+			const sessionId = 'test-session-param-expired'
 			await env.MCP_SESSIONS.put(
 				`session:${sessionId}`,
 				JSON.stringify({
@@ -254,13 +175,21 @@ describe('Last.fm MCP Server (OAuth Entry Point)', () => {
 				}),
 			)
 
-			const request = new Request('http://example.com/mcp', {
+			const request = new Request(`http://example.com/mcp?session_id=${sessionId}`, {
 				method: 'POST',
-				body: initBody,
+				body: JSON.stringify({
+					jsonrpc: '2.0',
+					method: 'initialize',
+					params: {
+						protocolVersion: '2024-11-05',
+						capabilities: {},
+						clientInfo: { name: 'TestClient', version: '1.0.0' },
+					},
+					id: 1,
+				}),
 				headers: {
 					'Content-Type': 'application/json',
 					Accept: 'application/json, text/event-stream',
-					'Mcp-Session-Id': sessionId,
 				},
 			})
 
@@ -271,6 +200,149 @@ describe('Last.fm MCP Server (OAuth Entry Point)', () => {
 			expect(response.status).toBe(401)
 			const result = (await response.json()) as { error: string }
 			expect(result.error).toBe('session_expired')
+		})
+	})
+
+	describe('/mcp endpoint - browser Origin policy', () => {
+		const sessionId = 'test-session-origin-policy'
+		const initBody = JSON.stringify({
+			jsonrpc: '2.0',
+			method: 'initialize',
+			params: {
+				protocolVersion: '2024-11-05',
+				capabilities: {},
+				clientInfo: { name: 'TestClient', version: '1.0.0' },
+			},
+			id: 1,
+		})
+
+		async function postWithOrigin(origin?: string): Promise<Response> {
+			await env.MCP_SESSIONS.put(
+				`session:${sessionId}`,
+				JSON.stringify({
+					userId: 'testuser',
+					sessionKey: 'test-session-key',
+					username: 'testuser',
+					timestamp: Date.now(),
+					expiresAt: Date.now() + 30 * 24 * 60 * 60 * 1000,
+					sessionId,
+				}),
+			)
+			const headers: Record<string, string> = {
+				'Content-Type': 'application/json',
+				Accept: 'application/json, text/event-stream',
+			}
+			if (origin) headers.Origin = origin
+			const request = new Request(`https://lastfm-mcp.com/mcp?session_id=${sessionId}`, {
+				method: 'POST',
+				body: initBody,
+				headers,
+			})
+			const ctx = createExecutionContext()
+			const response = await worker.fetch(request, env, ctx)
+			await waitOnExecutionContext(ctx)
+			return response
+		}
+
+		it('should accept requests with no Origin (non-browser MCP clients)', async () => {
+			expect((await postWithOrigin()).status).toBe(200)
+		})
+
+		it('should accept browser requests from the custom domain', async () => {
+			expect((await postWithOrigin('https://lastfm-mcp.com')).status).toBe(200)
+		})
+
+		it('should reject browser requests from an unknown Origin', async () => {
+			expect((await postWithOrigin('https://evil.example')).status).toBe(403)
+		})
+
+		it('should accept localhost Origins for local dev tooling such as the MCP inspector', async () => {
+			expect((await postWithOrigin('http://localhost:6274')).status).toBe(200)
+		})
+	})
+
+	describe('/mcp endpoint - protocol lanes through the session path', () => {
+		interface WireRecord {
+			httpMethod: string
+			rpcMethod: string | null
+			mcpMethodHeader: string | null
+			versionHeader: string | null
+		}
+
+		/**
+		 * Connect a real SDK v2 client to worker.fetch and record every request it
+		 * makes, so assertions are on the actual wire shape rather than a hand-rolled one.
+		 */
+		async function connectRecordingClient(sessionId: string, versionMode: 'legacy' | { pin: string }) {
+			await env.MCP_SESSIONS.put(
+				`session:${sessionId}`,
+				JSON.stringify({
+					userId: 'testuser',
+					sessionKey: 'test-session-key',
+					username: 'testuser',
+					timestamp: Date.now(),
+					expiresAt: Date.now() + 30 * 24 * 60 * 60 * 1000,
+					sessionId,
+				}),
+			)
+
+			const seen: WireRecord[] = []
+			const transport = new StreamableHTTPClientTransport(new URL(`https://lastfm-mcp.com/mcp?session_id=${sessionId}`), {
+				fetch: async (input, init) => {
+					const request = new Request(input, init)
+					const body = typeof init?.body === 'string' ? (JSON.parse(init.body) as { method?: string }) : {}
+					seen.push({
+						httpMethod: request.method,
+						rpcMethod: body.method ?? null,
+						mcpMethodHeader: request.headers.get('Mcp-Method'),
+						versionHeader: request.headers.get('MCP-Protocol-Version'),
+					})
+					const ctx = createExecutionContext()
+					const response = await worker.fetch(request, env, ctx)
+					await waitOnExecutionContext(ctx)
+					return response
+				},
+			})
+			const client = new Client({ name: 'lane-test', version: '0.0.0' }, { versionNegotiation: { mode: versionMode } })
+			await client.connect(transport)
+			return { client, seen }
+		}
+
+		async function exerciseTools(client: Client) {
+			const { tools } = await client.listTools()
+			expect(tools.map((t) => t.name)).toContain('get_recent_tracks')
+
+			const pong = await client.callTool({ name: 'ping', arguments: { message: 'lane check' } })
+			expect(JSON.stringify(pong.content)).toContain('Pong! You said: lane check')
+		}
+
+		it('should serve a 2026-07-28 client on the stateless lane (server/discover, no initialize)', async () => {
+			// Pinning makes the client fail loudly if the server cannot offer 2026-07-28,
+			// so this test cannot pass by silently falling back to the legacy lane.
+			const { client, seen } = await connectRecordingClient('test-session-modern-lane', { pin: '2026-07-28' })
+			await exerciseTools(client)
+
+			expect(seen[0]?.rpcMethod).toBe('server/discover')
+			expect(seen.some((r) => r.rpcMethod === 'initialize')).toBe(false)
+			const posts = seen.filter((r) => r.httpMethod === 'POST')
+			expect(posts.every((r) => r.versionHeader === '2026-07-28')).toBe(true)
+			expect(posts.every((r) => r.mcpMethodHeader === r.rpcMethod)).toBe(true)
+			expect(seen.map((r) => r.rpcMethod)).toContain('tools/call')
+
+			await client.close()
+		})
+
+		it('should still serve a legacy 2025 client through the compatibility fallback (initialize)', async () => {
+			// Published Claude clients still negotiate the initialize-era protocol. The
+			// handler's default `legacy: "stateless"` lane must keep serving them.
+			const { client, seen } = await connectRecordingClient('test-session-legacy-lane', 'legacy')
+			await exerciseTools(client)
+
+			expect(seen[0]?.rpcMethod).toBe('initialize')
+			expect(seen.some((r) => r.rpcMethod === 'server/discover')).toBe(false)
+			expect(seen.map((r) => r.rpcMethod)).toContain('tools/call')
+
+			await client.close()
 		})
 	})
 
@@ -335,9 +407,7 @@ describe('Last.fm MCP Server (OAuth Entry Point)', () => {
 
 			expect(response.status).toBe(401)
 			const wwwAuth = response.headers.get('WWW-Authenticate')
-			expect(wwwAuth).toContain(
-				'Bearer resource_metadata="http://example.com/.well-known/oauth-protected-resource"',
-			)
+			expect(wwwAuth).toContain('Bearer resource_metadata="http://example.com/.well-known/oauth-protected-resource"')
 		})
 
 		it.todo('should return 200 when valid bearer token provided — covered by oauth-roundtrip integration test')
@@ -425,9 +495,11 @@ describe('Last.fm MCP Server (OAuth Entry Point)', () => {
 
 			expect(response.status).toBe(200)
 			const result = (await response.json()) as {
+				protocolVersion: string
 				serverInfo: { name: string }
 				transport: { endpoint: string }
 			}
+			expect(result.protocolVersion).toBe('2026-07-28')
 			expect(result.serverInfo.name).toBe('lastfm-mcp')
 			expect(result.transport.endpoint).toBe('/mcp')
 		})
