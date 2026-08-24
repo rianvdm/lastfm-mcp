@@ -8,12 +8,14 @@ import { z } from 'zod'
  */
 export function registerPrompts(server: McpServer): void {
 	// listening_insights - Get insights about user's listening habits
-	server.prompt(
+	server.registerPrompt(
 		'listening_insights',
-		"Get insights about user's listening habits and patterns",
 		{
-			username: z.string().describe('Last.fm username to analyze'),
-			period: z.string().optional().describe('Time period for analysis (7day, 1month, 3month, 6month, 12month, overall)'),
+			description: "Get insights about user's listening habits and patterns",
+			argsSchema: {
+				username: z.string().describe('Last.fm username to analyze'),
+				period: z.string().optional().describe('Time period for analysis (7day, 1month, 3month, 6month, 12month, overall)'),
+			},
 		},
 		async ({ username, period }) => {
 			const periodText = period ? ` over the ${period} period` : ''
@@ -32,12 +34,14 @@ export function registerPrompts(server: McpServer): void {
 	)
 
 	// music_discovery - Discover new music based on listening history
-	server.prompt(
+	server.registerPrompt(
 		'music_discovery',
-		'Discover new music based on listening history',
 		{
-			username: z.string().describe('Last.fm username for personalized recommendations'),
-			genre: z.string().optional().describe('Optional genre preference for recommendations'),
+			description: 'Discover new music based on listening history',
+			argsSchema: {
+				username: z.string().describe('Last.fm username for personalized recommendations'),
+				genre: z.string().optional().describe('Optional genre preference for recommendations'),
+			},
 		},
 		async ({ username, genre }) => {
 			const genreText = genre ? ` focusing on ${genre} music` : ''
@@ -56,12 +60,14 @@ export function registerPrompts(server: McpServer): void {
 	)
 
 	// track_analysis - Get detailed analysis of a specific track
-	server.prompt(
+	server.registerPrompt(
 		'track_analysis',
-		'Get detailed analysis of a specific track',
 		{
-			artist: z.string().describe('Artist name'),
-			track: z.string().describe('Track name'),
+			description: 'Get detailed analysis of a specific track',
+			argsSchema: {
+				artist: z.string().describe('Artist name'),
+				track: z.string().describe('Track name'),
+			},
 		},
 		async ({ artist, track }) => {
 			return {
@@ -79,12 +85,14 @@ export function registerPrompts(server: McpServer): void {
 	)
 
 	// album_analysis - Get detailed analysis of a specific album
-	server.prompt(
+	server.registerPrompt(
 		'album_analysis',
-		'Get detailed analysis of a specific album',
 		{
-			artist: z.string().describe('Artist name'),
-			album: z.string().describe('Album name'),
+			description: 'Get detailed analysis of a specific album',
+			argsSchema: {
+				artist: z.string().describe('Artist name'),
+				album: z.string().describe('Album name'),
+			},
 		},
 		async ({ artist, album }) => {
 			return {
@@ -102,11 +110,13 @@ export function registerPrompts(server: McpServer): void {
 	)
 
 	// artist_analysis - Get detailed analysis of a specific artist
-	server.prompt(
+	server.registerPrompt(
 		'artist_analysis',
-		'Get detailed analysis of a specific artist',
 		{
-			artist: z.string().describe('Artist name'),
+			description: 'Get detailed analysis of a specific artist',
+			argsSchema: {
+				artist: z.string().describe('Artist name'),
+			},
 		},
 		async ({ artist }) => {
 			return {
@@ -124,12 +134,14 @@ export function registerPrompts(server: McpServer): void {
 	)
 
 	// listening_habits - Analyze and summarize user's listening habits
-	server.prompt(
+	server.registerPrompt(
 		'listening_habits',
-		"Analyze and summarize user's listening habits",
 		{
-			username: z.string().describe('Last.fm username to analyze'),
-			timeframe: z.string().optional().describe('Optional timeframe for analysis (recent, historical, comparative)'),
+			description: "Analyze and summarize user's listening habits",
+			argsSchema: {
+				username: z.string().describe('Last.fm username to analyze'),
+				timeframe: z.string().optional().describe('Optional timeframe for analysis (recent, historical, comparative)'),
+			},
 		},
 		async ({ username, timeframe }) => {
 			const timeframeText = timeframe ? ` with a focus on ${timeframe} listening` : ''
