@@ -19,7 +19,7 @@ npm run cf-typegen       # Regenerate Worker type bindings (run after changing w
 
 ### Running Tests
 
-Test runner: **vitest** with `@cloudflare/vitest-pool-workers` (runs in workerd/miniflare).
+Test runner: **vitest 4** with `@cloudflare/vitest-pool-workers` ≥0.15 (runs in workerd/miniflare). Requires **Node 22** (see `.nvmrc`); the config uses the `cloudflareTest()` plugin shape, not the removed `defineWorkersConfig`.
 
 ```bash
 npm test                                    # All tests

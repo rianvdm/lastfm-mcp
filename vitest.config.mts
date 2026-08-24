@@ -1,10 +1,13 @@
-import { defineWorkersConfig } from '@cloudflare/vitest-pool-workers/config'
-import path from 'path'
-import { fileURLToPath } from 'url'
+import { cloudflareTest } from '@cloudflare/vitest-pool-workers'
+import { defineConfig } from 'vitest/config'
+import path from 'node:path'
 
-const __dirname = path.dirname(fileURLToPath(import.meta.url))
-
-export default defineWorkersConfig({
+export default defineConfig({
+	plugins: [
+		cloudflareTest({
+			wrangler: { configPath: './wrangler.toml' },
+		}),
+	],
 	resolve: {
 		// Redirect 'ajv' imports to an ESM-compatible stub that avoids loading the
 		// nested CJS ajv package inside @modelcontextprotocol/sdk. workerd cannot
@@ -12,8 +15,8 @@ export default defineWorkersConfig({
 		// The MCP SDK uses ajv only for JSON Schema validation; tools validation
 		// still works via zod schemas, so the no-op stub is safe for tests.
 		alias: {
-			ajv: path.resolve(__dirname, 'test/stubs/ajv-stub.js'),
-			'ajv-formats': path.resolve(__dirname, 'test/stubs/ajv-formats-stub.js'),
+			ajv: path.resolve(import.meta.dirname, 'test/stubs/ajv-stub.js'),
+			'ajv-formats': path.resolve(import.meta.dirname, 'test/stubs/ajv-formats-stub.js'),
 		},
 	},
 	test: {
@@ -24,10 +27,5 @@ export default defineWorkersConfig({
 			// Exclude worktrees to prevent duplicate test discovery when running from repo root
 			'**/.worktrees/**',
 		],
-		poolOptions: {
-			workers: {
-				wrangler: { configPath: './wrangler.toml' },
-			},
-		},
 	},
 })

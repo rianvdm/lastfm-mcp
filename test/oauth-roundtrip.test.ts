@@ -7,18 +7,20 @@ import worker from '../src/index-oauth'
 // Mock Last.fm auth to avoid real HTTP calls during the callback simulation.
 // getAuthUrl passes the callbackUrl through so the real stateToken is preserved in the URL.
 // getSessionKey avoids the actual Last.fm API call for the token exchange.
+// The source does `new LastfmAuth(...)`, and vitest 4 honours `new` on mocks, so the
+// implementation must be a class (an arrow function throws "is not a constructor").
 vi.mock('../src/auth/lastfm', () => ({
-	LastfmAuth: vi.fn().mockImplementation(() => ({
-		getAuthUrl: vi.fn().mockImplementation((callbackUrl?: string) => {
+	LastfmAuth: class {
+		getAuthUrl = vi.fn().mockImplementation((callbackUrl?: string) => {
 			const params = new URLSearchParams({ api_key: 'test-key' })
 			if (callbackUrl) params.set('cb', callbackUrl)
 			return `https://www.last.fm/api/auth/?${params.toString()}`
-		}),
-		getSessionKey: vi.fn().mockResolvedValue({
+		})
+		getSessionKey = vi.fn().mockResolvedValue({
 			sessionKey: 'mock-session-key',
 			username: 'testuser',
-		}),
-	})),
+		})
+	},
 }))
 
 const BASE_URL = 'https://lastfm-mcp.com'
