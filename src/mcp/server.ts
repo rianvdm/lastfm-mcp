@@ -1,6 +1,6 @@
 // ABOUTME: Creates and configures the McpServer instance using the official MCP SDK.
 // ABOUTME: Registers tools, prompts, and resources, and manages per-request auth context.
-import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
+import { McpServer } from '@modelcontextprotocol/server'
 
 import { CachedLastfmClient } from '../clients/cachedLastfm'
 import { LastfmClient } from '../clients/lastfm'

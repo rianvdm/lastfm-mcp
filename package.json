@@ -30,6 +30,7 @@
 	"devDependencies": {
 		"@cloudflare/vitest-pool-workers": "^0.22.0",
 		"@cloudflare/workers-types": "^4.20250607.0",
+		"@modelcontextprotocol/client": "2.0.0",
 		"@types/node": "^22.20.1",
 		"@typescript-eslint/eslint-plugin": "^8.33.1",
 		"@typescript-eslint/parser": "^8.33.1",
@@ -41,9 +42,9 @@
 		"wrangler": "^4.19.1"
 	},
 	"dependencies": {
-		"@cloudflare/workers-oauth-provider": "^0.1.0",
-		"@modelcontextprotocol/sdk": "^1.24.3",
-		"agents": "^0.2.31",
+		"@cloudflare/workers-oauth-provider": "^0.10.3",
+		"@modelcontextprotocol/server": "2.0.0",
+		"agents": "^0.21.0",
 		"zod": "^4.1.13"
 	}
 }

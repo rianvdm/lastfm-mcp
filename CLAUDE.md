@@ -61,7 +61,7 @@ npx vitest run test/protocol/               # All tests in a directory
 3. Relative project imports
 
 ```typescript
-import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
+import { McpServer } from '@modelcontextprotocol/server'
 import { z } from 'zod'
 
 import type { Env } from '../types/env'
@@ -70,7 +70,7 @@ import { toolError } from './error-handler'
 
 - Use `import type` for type-only imports
 - No file extensions on relative imports (Wrangler bundles them)
-- Exception: MCP SDK uses `.js` extensions (`@modelcontextprotocol/sdk/server/mcp.js`)
+- MCP SDK v2: server code imports from `@modelcontextprotocol/server`, tests use `@modelcontextprotocol/client`; the handler comes from `agents/mcp/server`
 - No path aliases — all relative paths
 
 ### Naming Conventions

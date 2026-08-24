@@ -1,8 +1,7 @@
 // ABOUTME: Registration smoke test for the MCP server built by createMcpServer.
 // ABOUTME: Snapshots the advertised tools, prompts, and resources so a bad registration change cannot pass silently.
 import { env } from 'cloudflare:test'
-import { Client } from '@modelcontextprotocol/sdk/client/index.js'
-import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js'
+import { Client, InMemoryTransport } from '@modelcontextprotocol/client'
 import { describe, it, expect, beforeAll } from 'vitest'
 
 import { createMcpServer } from '../../src/mcp/server'

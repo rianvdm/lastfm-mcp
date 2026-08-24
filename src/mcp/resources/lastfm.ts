@@ -1,6 +1,6 @@
 // ABOUTME: MCP resource templates for accessing Last.fm data via URI patterns.
 // ABOUTME: Registers resources like recent tracks, top artists, and loved tracks with the server.
-import { McpServer, ResourceTemplate } from '@modelcontextprotocol/sdk/server/mcp.js'
+import { McpServer, ResourceTemplate } from '@modelcontextprotocol/server'
 
 import { CachedLastfmClient } from '../../clients/cachedLastfm'
 import type { AuthSession } from '../tools/authenticated'

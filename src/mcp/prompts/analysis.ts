@@ -1,6 +1,6 @@
 // ABOUTME: Prompt templates for Last.fm listening analysis tasks.
 // ABOUTME: Registers prompt definitions (listening insights, music taste, discovery) with the MCP server.
-import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
+import { McpServer } from '@modelcontextprotocol/server'
 import { z } from 'zod'
 
 /**
@@ -12,10 +12,10 @@ export function registerPrompts(server: McpServer): void {
 		'listening_insights',
 		{
 			description: "Get insights about user's listening habits and patterns",
-			argsSchema: {
+			argsSchema: z.object({
 				username: z.string().describe('Last.fm username to analyze'),
 				period: z.string().optional().describe('Time period for analysis (7day, 1month, 3month, 6month, 12month, overall)'),
-			},
+			}),
 		},
 		async ({ username, period }) => {
 			const periodText = period ? ` over the ${period} period` : ''
@@ -38,10 +38,10 @@ export function registerPrompts(server: McpServer): void {
 		'music_discovery',
 		{
 			description: 'Discover new music based on listening history',
-			argsSchema: {
+			argsSchema: z.object({
 				username: z.string().describe('Last.fm username for personalized recommendations'),
 				genre: z.string().optional().describe('Optional genre preference for recommendations'),
-			},
+			}),
 		},
 		async ({ username, genre }) => {
 			const genreText = genre ? ` focusing on ${genre} music` : ''
@@ -64,10 +64,10 @@ export function registerPrompts(server: McpServer): void {
 		'track_analysis',
 		{
 			description: 'Get detailed analysis of a specific track',
-			argsSchema: {
+			argsSchema: z.object({
 				artist: z.string().describe('Artist name'),
 				track: z.string().describe('Track name'),
-			},
+			}),
 		},
 		async ({ artist, track }) => {
 			return {
@@ -89,10 +89,10 @@ export function registerPrompts(server: McpServer): void {
 		'album_analysis',
 		{
 			description: 'Get detailed analysis of a specific album',
-			argsSchema: {
+			argsSchema: z.object({
 				artist: z.string().describe('Artist name'),
 				album: z.string().describe('Album name'),
-			},
+			}),
 		},
 		async ({ artist, album }) => {
 			return {
@@ -114,9 +114,9 @@ export function registerPrompts(server: McpServer): void {
 		'artist_analysis',
 		{
 			description: 'Get detailed analysis of a specific artist',
-			argsSchema: {
+			argsSchema: z.object({
 				artist: z.string().describe('Artist name'),
-			},
+			}),
 		},
 		async ({ artist }) => {
 			return {
@@ -138,10 +138,10 @@ export function registerPrompts(server: McpServer): void {
 		'listening_habits',
 		{
 			description: "Analyze and summarize user's listening habits",
-			argsSchema: {
+			argsSchema: z.object({
 				username: z.string().describe('Last.fm username to analyze'),
 				timeframe: z.string().optional().describe('Optional timeframe for analysis (recent, historical, comparative)'),
-			},
+			}),
 		},
 		async ({ username, timeframe }) => {
 			const timeframeText = timeframe ? ` with a focus on ${timeframe} listening` : ''
