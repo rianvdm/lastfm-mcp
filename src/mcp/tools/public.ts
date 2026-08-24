@@ -13,11 +13,13 @@ import { formatArtist, toArray } from './formatters'
  */
 export function registerPublicTools(server: McpServer, client: CachedLastfmClient, getBaseUrl: () => string): void {
 	// ping - Test server connectivity
-	server.tool(
+	server.registerTool(
 		'ping',
-		'Test Last.fm MCP server connectivity - Use this to verify the server is working',
 		{
-			message: z.string().optional().describe('Optional message to echo back'),
+			description: 'Test Last.fm MCP server connectivity - Use this to verify the server is working',
+			inputSchema: {
+				message: z.string().optional().describe('Optional message to echo back'),
+			},
 		},
 		async ({ message }) => {
 			const echoMessage = message || 'Hello from Last.fm MCP!'
@@ -37,20 +39,26 @@ export function registerPublicTools(server: McpServer, client: CachedLastfmClien
 	)
 
 	// server_info - Get server information
-	server.tool('server_info', 'Get Last.fm MCP server information and available capabilities', {}, async () => {
-		const baseUrl = getBaseUrl()
-		const authUrl = `${baseUrl}/login`
+	server.registerTool(
+		'server_info',
+		{
+			description: 'Get Last.fm MCP server information and available capabilities',
+			inputSchema: {},
+		},
+		async () => {
+			const baseUrl = getBaseUrl()
+			const authUrl = `${baseUrl}/login`
 
-		const nextSteps = buildNextSteps([
-			{ tool: 'lastfm_auth_status', args: '', hint: 'check whether the current session is authenticated' },
-			{ tool: 'ping', args: '', hint: 'test connectivity' },
-		])
+			const nextSteps = buildNextSteps([
+				{ tool: 'lastfm_auth_status', args: '', hint: 'check whether the current session is authenticated' },
+				{ tool: 'ping', args: '', hint: 'test connectivity' },
+			])
 
-		return {
-			content: [
-				{
-					type: 'text',
-					text: `Last.fm MCP Server v1.0.0
+			return {
+				content: [
+					{
+						type: 'text',
+						text: `Last.fm MCP Server v1.0.0
 
 Status: Running
 Protocol: MCP 2024-11-05
@@ -60,19 +68,22 @@ Features:
 - Rate Limiting: Enabled
 
 To get started, authenticate at ${authUrl}${nextSteps}`,
-				},
-			],
-		}
-	})
+					},
+				],
+			}
+		},
+	)
 
 	// get_track_info - Get detailed track information (public data)
-	server.tool(
+	server.registerTool(
 		'get_track_info',
-		'Get detailed Last.fm information about any track (artist, album, play count, tags, similar tracks) - No authentication required',
 		{
-			artist: z.string().describe('Artist name'),
-			track: z.string().describe('Track name'),
-			username: z.string().optional().describe('Last.fm username (optional, for user-specific data)'),
+			description: 'Get detailed Last.fm information about any track (artist, album, play count, tags, similar tracks) - No authentication required',
+			inputSchema: {
+				artist: z.string().describe('Artist name'),
+				track: z.string().describe('Track name'),
+				username: z.string().optional().describe('Last.fm username (optional, for user-specific data)'),
+			},
 		},
 		async ({ artist, track, username }) => {
 			try {
@@ -124,12 +135,14 @@ ${!username ? '*Note: Sign in to see your personal listening stats for this trac
 	)
 
 	// get_artist_info - Get detailed artist information (public data)
-	server.tool(
+	server.registerTool(
 		'get_artist_info',
-		'Get detailed Last.fm information about any artist (biography, tags, similar artists, top tracks) - No authentication required',
 		{
-			artist: z.string().describe('Artist name'),
-			username: z.string().optional().describe('Last.fm username (optional, for user-specific data)'),
+			description: 'Get detailed Last.fm information about any artist (biography, tags, similar artists, top tracks) - No authentication required',
+			inputSchema: {
+				artist: z.string().describe('Artist name'),
+				username: z.string().optional().describe('Last.fm username (optional, for user-specific data)'),
+			},
 		},
 		async ({ artist, username }) => {
 			try {
@@ -182,13 +195,15 @@ ${!username ? '*Note: Sign in to see your personal listening stats for this arti
 	)
 
 	// get_album_info - Get detailed album information (public data)
-	server.tool(
+	server.registerTool(
 		'get_album_info',
-		'Get detailed Last.fm information about any album (track listing, tags, play counts) - No authentication required',
 		{
-			artist: z.string().describe('Artist name'),
-			album: z.string().describe('Album name'),
-			username: z.string().optional().describe('Last.fm username (optional, for user-specific data)'),
+			description: 'Get detailed Last.fm information about any album (track listing, tags, play counts) - No authentication required',
+			inputSchema: {
+				artist: z.string().describe('Artist name'),
+				album: z.string().describe('Album name'),
+				username: z.string().optional().describe('Last.fm username (optional, for user-specific data)'),
+			},
 		},
 		async ({ artist, album, username }) => {
 			try {
@@ -245,13 +260,15 @@ ${!username ? '*Note: Sign in to see your personal listening stats for this albu
 	)
 
 	// get_artist_top_tracks - An artist's globally most-played tracks
-	server.tool(
+	server.registerTool(
 		'get_artist_top_tracks',
-		"Get an artist's globally most-played tracks on Last.fm (not user-specific) - No authentication required. Useful for finding canonical / signature songs by an artist.",
 		{
-			artist: z.string().describe('Artist name'),
-			limit: z.coerce.number().min(1).max(50).optional().default(10).describe('Number of tracks to return (1-50)'),
-			mbid: z.string().optional().describe('MusicBrainz ID of the artist (optional, more reliable than name)'),
+			description: "Get an artist's globally most-played tracks on Last.fm (not user-specific) - No authentication required. Useful for finding canonical / signature songs by an artist.",
+			inputSchema: {
+				artist: z.string().describe('Artist name'),
+				limit: z.coerce.number().min(1).max(50).optional().default(10).describe('Number of tracks to return (1-50)'),
+				mbid: z.string().optional().describe('MusicBrainz ID of the artist (optional, more reliable than name)'),
+			},
 		},
 		async ({ artist, limit, mbid }) => {
 			try {
@@ -285,13 +302,15 @@ ${trackList}${nextSteps}`,
 	)
 
 	// get_artist_top_albums - An artist's globally most-played albums
-	server.tool(
+	server.registerTool(
 		'get_artist_top_albums',
-		"Get an artist's globally most-played albums on Last.fm (not user-specific) - No authentication required. Useful for finding the canonical record by an artist.",
 		{
-			artist: z.string().describe('Artist name'),
-			limit: z.coerce.number().min(1).max(50).optional().default(10).describe('Number of albums to return (1-50)'),
-			mbid: z.string().optional().describe('MusicBrainz ID of the artist (optional, more reliable than name)'),
+			description: "Get an artist's globally most-played albums on Last.fm (not user-specific) - No authentication required. Useful for finding the canonical record by an artist.",
+			inputSchema: {
+				artist: z.string().describe('Artist name'),
+				limit: z.coerce.number().min(1).max(50).optional().default(10).describe('Number of albums to return (1-50)'),
+				mbid: z.string().optional().describe('MusicBrainz ID of the artist (optional, more reliable than name)'),
+			},
 		},
 		async ({ artist, limit, mbid }) => {
 			try {
@@ -323,12 +342,14 @@ ${albumList}${nextSteps}`,
 	)
 
 	// get_similar_artists - Find similar artists
-	server.tool(
+	server.registerTool(
 		'get_similar_artists',
-		'Find artists similar to any artist using Last.fm data - No authentication required',
 		{
-			artist: z.string().describe('Artist name'),
-			limit: z.coerce.number().min(1).max(100).optional().default(30).describe('Number of similar artists to return (1-100)'),
+			description: 'Find artists similar to any artist using Last.fm data - No authentication required',
+			inputSchema: {
+				artist: z.string().describe('Artist name'),
+				limit: z.coerce.number().min(1).max(100).optional().default(30).describe('Number of similar artists to return (1-100)'),
+			},
 		},
 		async ({ artist, limit }) => {
 			try {
@@ -362,13 +383,15 @@ ${artistList}${nextSteps}`,
 	)
 
 	// get_similar_tracks - Find similar tracks
-	server.tool(
+	server.registerTool(
 		'get_similar_tracks',
-		'Find tracks similar to any track using Last.fm data - No authentication required',
 		{
-			artist: z.string().describe('Artist name'),
-			track: z.string().describe('Track name'),
-			limit: z.coerce.number().min(1).max(100).optional().default(30).describe('Number of similar tracks to return (1-100)'),
+			description: 'Find tracks similar to any track using Last.fm data - No authentication required',
+			inputSchema: {
+				artist: z.string().describe('Artist name'),
+				track: z.string().describe('Track name'),
+				limit: z.coerce.number().min(1).max(100).optional().default(30).describe('Number of similar tracks to return (1-100)'),
+			},
 		},
 		async ({ artist, track, limit }) => {
 			try {
