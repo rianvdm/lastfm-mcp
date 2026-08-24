@@ -82,9 +82,7 @@ describe('OAuth round-trip integration', () => {
 			expect(res.status).toBe(401)
 			const wwwAuth = res.headers.get('WWW-Authenticate')
 			expect(wwwAuth).not.toBeNull()
-			expect(wwwAuth).toContain(
-				`Bearer resource_metadata="${BASE_URL}/.well-known/oauth-protected-resource"`,
-			)
+			expect(wwwAuth).toContain(`Bearer resource_metadata="${BASE_URL}/.well-known/oauth-protected-resource"`)
 		})
 	})
 
@@ -216,6 +214,10 @@ describe('OAuth round-trip integration', () => {
 			authorizeUrl.searchParams.set('code_challenge_method', 'S256')
 			authorizeUrl.searchParams.set('response_type', 'code')
 			authorizeUrl.searchParams.set('state', oauthState)
+			// Claude.ai sends the full MCP endpoint URL (with the /mcp path) as the RFC 8707
+			// resource on both the authorize and token requests. Old workers-oauth-provider
+			// releases rejected this; the round trip must accept it without any workaround.
+			authorizeUrl.searchParams.set('resource', `${BASE_URL}/mcp`)
 
 			const authorizeRes = await worker.fetch(new Request(authorizeUrl.toString()), env, {} as ExecutionContext)
 			expect(authorizeRes.status).toBe(302)
@@ -262,6 +264,7 @@ describe('OAuth round-trip integration', () => {
 						client_id,
 						redirect_uri: 'http://localhost:3000/callback',
 						code_verifier: codeVerifier,
+						resource: `${BASE_URL}/mcp`,
 					}).toString(),
 				}),
 				env,

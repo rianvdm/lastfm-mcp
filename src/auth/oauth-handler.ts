@@ -77,16 +77,6 @@ async function handleAuthorize(request: Request, env: OAuthEnv): Promise<Respons
 		// Parse the OAuth request from the MCP client
 		const oauthReqInfo: AuthRequest = await env.OAUTH_PROVIDER.parseAuthRequest(request)
 
-		// workers-oauth-provider validates audience against ${protocol}//${host} (no path),
-		// but Claude.ai sends the full MCP endpoint URL (with /mcp path) as the resource.
-		// Clear the resource to prevent audience mismatch. This can be removed if
-		// workers-oauth-provider adds path-aware audience validation.
-		const oauthReqWithResource = oauthReqInfo as AuthRequest & { resource?: string }
-		if (oauthReqWithResource.resource) {
-			console.log(`[OAUTH] Clearing resource param to prevent audience mismatch: ${oauthReqWithResource.resource}`)
-			oauthReqWithResource.resource = undefined
-		}
-
 		// Look up client info
 		const clientInfo = await env.OAUTH_PROVIDER.lookupClient(oauthReqInfo.clientId)
 
