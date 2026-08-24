@@ -1,0 +1,404 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`createMcpServer registration > advertises the expected prompt catalogue 1`] = `
+[
+  {
+    "arguments": [
+      {
+        "name": "artist",
+        "required": true,
+      },
+      {
+        "name": "album",
+        "required": true,
+      },
+    ],
+    "description": "Get detailed analysis of a specific album",
+    "name": "album_analysis",
+  },
+  {
+    "arguments": [
+      {
+        "name": "artist",
+        "required": true,
+      },
+    ],
+    "description": "Get detailed analysis of a specific artist",
+    "name": "artist_analysis",
+  },
+  {
+    "arguments": [
+      {
+        "name": "username",
+        "required": true,
+      },
+      {
+        "name": "timeframe",
+        "required": false,
+      },
+    ],
+    "description": "Analyze and summarize user's listening habits",
+    "name": "listening_habits",
+  },
+  {
+    "arguments": [
+      {
+        "name": "username",
+        "required": true,
+      },
+      {
+        "name": "period",
+        "required": false,
+      },
+    ],
+    "description": "Get insights about user's listening habits and patterns",
+    "name": "listening_insights",
+  },
+  {
+    "arguments": [
+      {
+        "name": "username",
+        "required": true,
+      },
+      {
+        "name": "genre",
+        "required": false,
+      },
+    ],
+    "description": "Discover new music based on listening history",
+    "name": "music_discovery",
+  },
+  {
+    "arguments": [
+      {
+        "name": "artist",
+        "required": true,
+      },
+      {
+        "name": "track",
+        "required": true,
+      },
+    ],
+    "description": "Get detailed analysis of a specific track",
+    "name": "track_analysis",
+  },
+]
+`;
+
+exports[`createMcpServer registration > advertises the expected resource templates 1`] = `
+[
+  {
+    "description": undefined,
+    "mimeType": undefined,
+    "name": "album-info",
+    "uriTemplate": "lastfm://album/{artist}/{album}",
+  },
+  {
+    "description": undefined,
+    "mimeType": undefined,
+    "name": "artist-info",
+    "uriTemplate": "lastfm://artist/{artist}",
+  },
+  {
+    "description": undefined,
+    "mimeType": undefined,
+    "name": "similar-artists",
+    "uriTemplate": "lastfm://artist/{artist}/similar",
+  },
+  {
+    "description": undefined,
+    "mimeType": undefined,
+    "name": "similar-tracks",
+    "uriTemplate": "lastfm://track/{artist}/{track}/similar",
+  },
+  {
+    "description": undefined,
+    "mimeType": undefined,
+    "name": "track-info",
+    "uriTemplate": "lastfm://track/{artist}/{track}",
+  },
+  {
+    "description": undefined,
+    "mimeType": undefined,
+    "name": "user-loved-tracks",
+    "uriTemplate": "lastfm://user/{username}/loved",
+  },
+  {
+    "description": undefined,
+    "mimeType": undefined,
+    "name": "user-profile",
+    "uriTemplate": "lastfm://user/{username}/profile",
+  },
+  {
+    "description": undefined,
+    "mimeType": undefined,
+    "name": "user-recent-tracks",
+    "uriTemplate": "lastfm://user/{username}/recent",
+  },
+  {
+    "description": undefined,
+    "mimeType": undefined,
+    "name": "user-top-albums",
+    "uriTemplate": "lastfm://user/{username}/top-albums",
+  },
+  {
+    "description": undefined,
+    "mimeType": undefined,
+    "name": "user-top-artists",
+    "uriTemplate": "lastfm://user/{username}/top-artists",
+  },
+]
+`;
+
+exports[`createMcpServer registration > advertises the expected tool catalogue 1`] = `
+[
+  {
+    "description": "Get detailed Last.fm information about any album (track listing, tags, play counts) - No authentication required",
+    "name": "get_album_info",
+    "properties": [
+      "album",
+      "artist",
+      "username",
+    ],
+    "required": [
+      "album",
+      "artist",
+    ],
+  },
+  {
+    "description": "Get detailed Last.fm information about any artist (biography, tags, similar artists, top tracks) - No authentication required",
+    "name": "get_artist_info",
+    "properties": [
+      "artist",
+      "username",
+    ],
+    "required": [
+      "artist",
+    ],
+  },
+  {
+    "description": "Get an artist's globally most-played albums on Last.fm (not user-specific) - No authentication required. Useful for finding the canonical record by an artist.",
+    "name": "get_artist_top_albums",
+    "properties": [
+      "artist",
+      "limit",
+      "mbid",
+    ],
+    "required": [
+      "artist",
+    ],
+  },
+  {
+    "description": "Get an artist's globally most-played tracks on Last.fm (not user-specific) - No authentication required. Useful for finding canonical / signature songs by an artist.",
+    "name": "get_artist_top_tracks",
+    "properties": [
+      "artist",
+      "limit",
+      "mbid",
+    ],
+    "required": [
+      "artist",
+    ],
+  },
+  {
+    "description": "Get comprehensive Last.fm listening statistics and analytics - REQUIRES AUTHENTICATION. Shows detailed insights about music habits.",
+    "name": "get_listening_stats",
+    "properties": [
+      "period",
+      "username",
+    ],
+    "required": [],
+  },
+  {
+    "description": "Get user's loved/favorite tracks from Last.fm - REQUIRES AUTHENTICATION. Shows tracks the user has marked as favorites.",
+    "name": "get_loved_tracks",
+    "properties": [
+      "limit",
+      "username",
+    ],
+    "required": [],
+  },
+  {
+    "description": "Get personalized music recommendations from Last.fm based on listening history - REQUIRES AUTHENTICATION",
+    "name": "get_music_recommendations",
+    "properties": [
+      "genre",
+      "limit",
+      "username",
+    ],
+    "required": [],
+  },
+  {
+    "description": "Get user's recent Last.fm listening history - REQUIRES AUTHENTICATION. Use lastfm_auth_status first to check login status.",
+    "name": "get_recent_tracks",
+    "properties": [
+      "date",
+      "from",
+      "limit",
+      "page",
+      "timezone",
+      "to",
+      "username",
+    ],
+    "required": [],
+  },
+  {
+    "description": "Find artists similar to any artist using Last.fm data - No authentication required",
+    "name": "get_similar_artists",
+    "properties": [
+      "artist",
+      "limit",
+    ],
+    "required": [
+      "artist",
+    ],
+  },
+  {
+    "description": "Find tracks similar to any track using Last.fm data - No authentication required",
+    "name": "get_similar_tracks",
+    "properties": [
+      "artist",
+      "limit",
+      "track",
+    ],
+    "required": [
+      "artist",
+      "track",
+    ],
+  },
+  {
+    "description": "Get user's most listened to albums from Last.fm - REQUIRES AUTHENTICATION. Specify time period like '7day', '1month', '6month', 'overall'.",
+    "name": "get_top_albums",
+    "properties": [
+      "limit",
+      "period",
+      "username",
+    ],
+    "required": [],
+  },
+  {
+    "description": "Get user's most listened to artists from Last.fm - REQUIRES AUTHENTICATION. Specify time period like '7day', '1month', '6month', 'overall'.",
+    "name": "get_top_artists",
+    "properties": [
+      "limit",
+      "period",
+      "username",
+    ],
+    "required": [],
+  },
+  {
+    "description": "Get user's most listened to tracks from Last.fm - REQUIRES AUTHENTICATION. Specify time period like '7day', '1month', '6month', 'overall'.",
+    "name": "get_top_tracks",
+    "properties": [
+      "limit",
+      "period",
+      "username",
+    ],
+    "required": [],
+  },
+  {
+    "description": "Get detailed Last.fm information about any track (artist, album, play count, tags, similar tracks) - No authentication required",
+    "name": "get_track_info",
+    "properties": [
+      "artist",
+      "track",
+      "username",
+    ],
+    "required": [
+      "artist",
+      "track",
+    ],
+  },
+  {
+    "description": "Get Last.fm user profile information and listening statistics - REQUIRES AUTHENTICATION for private profiles",
+    "name": "get_user_info",
+    "properties": [
+      "username",
+    ],
+    "required": [],
+  },
+  {
+    "description": "Get artist listening data for a specific time period - REQUIRES AUTHENTICATION. Perfect for temporal queries like "what artists was I into in 2023".",
+    "name": "get_weekly_artist_chart",
+    "properties": [
+      "from",
+      "to",
+      "username",
+    ],
+    "required": [],
+  },
+  {
+    "description": "Get available weekly chart date ranges for user's listening history - REQUIRES AUTHENTICATION. Use this to find historical time periods for temporal queries like "when did I start listening to X".",
+    "name": "get_weekly_chart_list",
+    "properties": [
+      "username",
+    ],
+    "required": [],
+  },
+  {
+    "description": "Get track listening data for a specific time period - REQUIRES AUTHENTICATION. Perfect for temporal queries like "what songs was I obsessed with in summer 2023".",
+    "name": "get_weekly_track_chart",
+    "properties": [
+      "from",
+      "to",
+      "username",
+    ],
+    "required": [],
+  },
+  {
+    "description": "Check if user is authenticated with Last.fm - Use this to verify login status before accessing personal music data",
+    "name": "lastfm_auth_status",
+    "properties": [],
+    "required": [],
+  },
+  {
+    "description": "Test Last.fm MCP server connectivity - Use this to verify the server is working",
+    "name": "ping",
+    "properties": [
+      "message",
+    ],
+    "required": [],
+  },
+  {
+    "description": "Get Last.fm MCP server information and available capabilities",
+    "name": "server_info",
+    "properties": [],
+    "required": [],
+  },
+]
+`;
+
+exports[`createMcpServer registration > advertises the resources each template lists 1`] = `
+[
+  {
+    "description": "Tracks marked as favorites",
+    "mimeType": "application/json",
+    "name": "testuser's Loved Tracks",
+    "uri": "lastfm://user/testuser/loved",
+  },
+  {
+    "description": "User profile and statistics",
+    "mimeType": "application/json",
+    "name": "testuser's Profile",
+    "uri": "lastfm://user/testuser/profile",
+  },
+  {
+    "description": "Recently played tracks with timestamps",
+    "mimeType": "application/json",
+    "name": "testuser's Recent Tracks",
+    "uri": "lastfm://user/testuser/recent",
+  },
+  {
+    "description": "Most played albums by time period",
+    "mimeType": "application/json",
+    "name": "testuser's Top Albums",
+    "uri": "lastfm://user/testuser/top-albums",
+  },
+  {
+    "description": "Most played artists by time period",
+    "mimeType": "application/json",
+    "name": "testuser's Top Artists",
+    "uri": "lastfm://user/testuser/top-artists",
+  },
+]
+`;
