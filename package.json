@@ -1,6 +1,6 @@
 {
 	"name": "lastfm-mcp",
-	"version": "0.0.0",
+	"version": "2.5.0",
 	"private": true,
 	"description": "Model Context Protocol server for Last.fm music data integration",
 	"keywords": [

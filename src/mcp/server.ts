@@ -6,6 +6,7 @@ import { CachedLastfmClient } from '../clients/cachedLastfm'
 import { LastfmClient } from '../clients/lastfm'
 import type { Env } from '../types/env'
 
+import { SERVER_VERSION } from './protocol'
 import { registerPrompts } from './prompts/analysis'
 import { registerResources } from './resources/lastfm'
 import {
@@ -18,7 +19,6 @@ import {
 
 // Server metadata
 const SERVER_NAME = 'lastfm-mcp'
-const SERVER_VERSION = '1.0.0'
 
 /**
  * Request context that can be updated per-request.

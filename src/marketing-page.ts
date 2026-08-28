@@ -333,6 +333,8 @@ export const MARKETING_PAGE_HTML = `<!DOCTYPE html>
         .query:nth-child(2):hover { border-color: rgba(255, 140, 50, 0.4); box-shadow: 0 0 40px rgba(255, 140, 50, 0.15); }
         .query:nth-child(3):hover { border-color: rgba(60, 120, 255, 0.4); box-shadow: 0 0 40px rgba(60, 120, 255, 0.15); }
         .query:nth-child(4):hover { border-color: rgba(168, 85, 247, 0.4); box-shadow: 0 0 40px rgba(168, 85, 247, 0.15); }
+        .query:nth-child(5):hover { border-color: rgba(16, 185, 129, 0.4); box-shadow: 0 0 40px rgba(16, 185, 129, 0.15); }
+        .query:nth-child(6):hover { border-color: rgba(236, 72, 153, 0.4); box-shadow: 0 0 40px rgba(236, 72, 153, 0.15); }
 
         .query-number {
             position: absolute;
@@ -353,6 +355,8 @@ export const MARKETING_PAGE_HTML = `<!DOCTYPE html>
         .query:nth-child(2) .query-number { background: linear-gradient(135deg, #ff6b35, #ffb347); }
         .query:nth-child(3) .query-number { background: linear-gradient(135deg, #3c78ff, #60a5fa); }
         .query:nth-child(4) .query-number { background: linear-gradient(135deg, #a855f7, #c084fc); }
+        .query:nth-child(5) .query-number { background: linear-gradient(135deg, #10b981, #34d399); }
+        .query:nth-child(6) .query-number { background: linear-gradient(135deg, #ec4899, #f472b6); }
 
         .query-icon {
             width: 32px;
@@ -391,6 +395,12 @@ export const MARKETING_PAGE_HTML = `<!DOCTYPE html>
         /* Setup */
         .setup {
             border-top: 1px solid var(--border);
+        }
+
+        .section-note {
+            color: var(--text-muted);
+            font-size: 0.85rem;
+            margin: -8px 0 24px;
         }
 
         .setup-list {
@@ -687,6 +697,18 @@ export const MARKETING_PAGE_HTML = `<!DOCTYPE html>
                         <q>How has my music taste changed over the years?</q>
                         <span>Tracks the evolution of your listening patterns</span>
                     </div>
+                    <div class="query">
+                        <div class="query-number">5</div>
+                        <div class="query-icon"><i class="ph ph-calendar-check"></i></div>
+                        <q>What did I listen to yesterday?</q>
+                        <span>Ask by calendar date in your own timezone, not Unix timestamps</span>
+                    </div>
+                    <div class="query">
+                        <div class="query-number">6</div>
+                        <div class="query-icon"><i class="ph ph-disc"></i></div>
+                        <q>What's the essential album by this artist?</q>
+                        <span>Pulls an artist's most-played tracks and albums worldwide</span>
+                    </div>
                 </div>
             </div>
         </section>
@@ -694,14 +716,15 @@ export const MARKETING_PAGE_HTML = `<!DOCTYPE html>
         <section id="setup" class="setup">
             <div class="container">
                 <h2>Setup</h2>
+                <p class="section-note">Works with any MCP client. The server speaks the current MCP revision (2026-07-28); older clients connect over the previous revisions without any extra configuration.</p>
                 <div class="setup-list">
                     <div class="setup-card">
                         <h3>Claude.ai / Claude Desktop</h3>
                         <ol>
-                            <li>Go to <strong>Settings</strong> &rarr; <strong>Integrations</strong></li>
-                            <li>Click <strong>Add Integration</strong></li>
+                            <li>Go to <strong>Settings</strong> &rarr; <strong>Connectors</strong></li>
+                            <li>Click <strong>Add Custom Connector</strong></li>
                             <li>Enter the URL below and click <strong>Add</strong></li>
-                            <li>Authenticate with Last.fm when prompted</li>
+                            <li>Sign in to Last.fm when prompted</li>
                         </ol>
                         <div class="code-wrap">
                             <code>https://lastfm-mcp.com/mcp</code>
@@ -802,12 +825,13 @@ export const MARKETING_PAGE_HTML = `<!DOCTYPE html>
                             <li>get_top_albums</li>
                             <li>get_top_tracks</li>
                             <li>get_loved_tracks</li>
+                            <li>get_user_info</li>
                             <li>get_listening_stats</li>
                             <li>get_music_recommendations</li>
                         </ul>
                     </div>
                     <div class="tool-col">
-                        <h3><i class="ph ph-calendar-blank"></i> Temporal</h3>
+                        <h3><i class="ph ph-calendar-blank"></i> Temporal (auth required)</h3>
                         <ul>
                             <li>get_weekly_chart_list</li>
                             <li>get_weekly_artist_chart</li>

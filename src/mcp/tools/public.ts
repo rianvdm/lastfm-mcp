@@ -5,7 +5,7 @@ import { z } from 'zod'
 
 import { CachedLastfmClient } from '../../clients/cachedLastfm'
 import { buildNextSteps } from '../../utils/breadcrumb'
-import { PROTOCOL_VERSION } from '../protocol'
+import { PROTOCOL_VERSION, SERVER_VERSION } from '../protocol'
 import { toolError } from './error-handler'
 import { formatArtist, toArray } from './formatters'
 
@@ -59,7 +59,7 @@ export function registerPublicTools(server: McpServer, client: CachedLastfmClien
 				content: [
 					{
 						type: 'text',
-						text: `Last.fm MCP Server v1.0.0
+						text: `Last.fm MCP Server v${SERVER_VERSION}
 
 Status: Running
 Protocol: MCP ${PROTOCOL_VERSION}

@@ -6,14 +6,11 @@ import { createMcpHandler, type CreateMcpHandlerOptions } from 'agents/mcp/serve
 
 import { LastfmOAuthHandler, type LastfmUserProps } from './auth/oauth-handler'
 import { MARKETING_PAGE_HTML } from './marketing-page'
-import { PROTOCOL_VERSION } from './mcp/protocol'
+import { PROTOCOL_VERSION, SERVER_VERSION } from './mcp/protocol'
 import { createMcpServer } from './mcp/server'
 import { buildOAuthAuthMessages } from './mcp/tools'
 import type { Env } from './types/env'
 import { buildRateLimitResponse, checkRateLimit, rateLimitKeyFromRequest } from './utils/rateLimit'
-
-// Server metadata
-const SERVER_VERSION = '1.0.0'
 
 /**
  * Options shared by both MCP handler call sites.
