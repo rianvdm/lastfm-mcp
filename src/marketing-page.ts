@@ -850,6 +850,7 @@ export const MARKETING_PAGE_HTML = `<!DOCTYPE html>
                 <a href="https://github.com/rianvdm/lastfm-mcp#readme"><i class="ph ph-book-open"></i>Documentation</a>
                 <a href="https://github.com/rianvdm/lastfm-mcp/releases"><i class="ph ph-tag"></i>Release Notes</a>
                 <a href="https://github.com/rianvdm/lastfm-mcp/issues"><i class="ph ph-bug"></i>Report a Bug</a>
+                <a href="https://elezea.com/privacy/#lastfm-mcp-server"><i class="ph ph-shield-check"></i>Privacy</a>
             </div>
             <p class="footer-note">Open source under MIT. Built on <a href="https://www.last.fm/api">Last.fm API</a> and <a href="https://modelcontextprotocol.io">MCP</a>.</p>
         </div>
