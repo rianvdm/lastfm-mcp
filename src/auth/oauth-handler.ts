@@ -1,6 +1,6 @@
 // ABOUTME: OAuth handler integrating Last.fm authentication with the MCP OAuth 2.1 flow.
 // ABOUTME: Handles /authorize, /lastfm-callback, /login, /callback, and OAuth discovery endpoints.
-import { CimdFetchError } from '@cloudflare/workers-oauth-provider'
+import { AuthorizationError, CimdFetchError } from '@cloudflare/workers-oauth-provider'
 import type { AuthRequest, OAuthHelpers } from '@cloudflare/workers-oauth-provider'
 import type { ExecutionContext } from '@cloudflare/workers-types'
 
@@ -118,6 +118,13 @@ async function handleAuthorize(request: Request, env: OAuthEnv): Promise<Respons
 		if (error instanceof CimdFetchError) {
 			console.warn(`[OAUTH] Client metadata document failed for ${error.metadataUrl}: ${error.detail}`)
 			return new Response('Invalid client_id: the client metadata document could not be fetched or validated', { status: 400 })
+		}
+		// The request itself is invalid. That is the client's mistake, not a server fault.
+		// The error is shown here even when it carries a verified redirectUri: anyone can
+		// register a client, so redirecting errors back would make this an open redirector.
+		if (error instanceof AuthorizationError) {
+			console.warn(`[OAUTH] Invalid authorization request (${error.code}): ${error.description}`)
+			return new Response(error.description, { status: 400 })
 		}
 		console.error('[OAUTH] Error in authorize:', error)
 		return new Response(`Authorization error: ${error instanceof Error ? error.message : 'Unknown error'}`, {

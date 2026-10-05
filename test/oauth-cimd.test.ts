@@ -208,7 +208,7 @@ describe('OAuth Client ID Metadata Documents', () => {
 			expect(await res.text()).toContain('Invalid client_id')
 		})
 
-		it('should not redirect when the document does not list the requested redirect_uri', async () => {
+		it('should return 400 without redirecting when the document does not list the requested redirect_uri', async () => {
 			mockMetadataFetch(metadataUrl, () => validDocument(metadataUrl))
 
 			const res = await worker.fetch(
@@ -217,10 +217,9 @@ describe('OAuth Client ID Metadata Documents', () => {
 				{} as ExecutionContext,
 			)
 
-			// The exact status for this AuthorizationError is not pinned here; what matters is
-			// that the user is never sent to Last.fm (or anywhere else) for an unlisted redirect_uri.
-			expect(res.status).not.toBe(302)
-			expect(res.headers.get('Location') ?? '').not.toContain('last.fm')
+			// The user is never sent to Last.fm (or anywhere else) for an unlisted redirect_uri.
+			expect(res.status).toBe(400)
+			expect(res.headers.get('Location')).toBeNull()
 		})
 	})
 
