@@ -79,7 +79,8 @@ To get started, authenticate at ${authUrl}${nextSteps}`,
 	server.registerTool(
 		'get_track_info',
 		{
-			description: 'Get detailed Last.fm information about any track (artist, album, play count, tags, similar tracks) - No authentication required',
+			description:
+				'Get detailed Last.fm information about any track (artist, album, play count, tags, similar tracks) - No authentication required',
 			inputSchema: z.object({
 				artist: z.string().describe('Artist name'),
 				track: z.string().describe('Track name'),
@@ -103,7 +104,11 @@ To get started, authenticate at ${authUrl}${nextSteps}`,
 				const nextSteps = buildNextSteps([
 					{ tool: 'get_similar_tracks', args: `artist="${trackArtist}", track="${data.track.name}"`, hint: 'find more like this track' },
 					{ tool: 'get_artist_info', args: `artist="${trackArtist}"`, hint: 'pull bio, tags, and similar artists' },
-					{ tool: 'get_album_info', args: `artist="${trackArtist}", album="${data.track.album?.['#text'] || ''}"`, hint: 'pull tracklist and album-level stats' },
+					{
+						tool: 'get_album_info',
+						args: `artist="${trackArtist}", album="${data.track.album?.['#text'] || ''}"`,
+						hint: 'pull tracklist and album-level stats',
+					},
 				])
 
 				return {
@@ -139,7 +144,8 @@ ${!username ? '*Note: Sign in to see your personal listening stats for this trac
 	server.registerTool(
 		'get_artist_info',
 		{
-			description: 'Get detailed Last.fm information about any artist (biography, tags, similar artists, top tracks) - No authentication required',
+			description:
+				'Get detailed Last.fm information about any artist (biography, tags, similar artists, top tracks) - No authentication required',
 			inputSchema: z.object({
 				artist: z.string().describe('Artist name'),
 				username: z.string().optional().describe('Last.fm username (optional, for user-specific data)'),
@@ -162,8 +168,8 @@ ${!username ? '*Note: Sign in to see your personal listening stats for this trac
 				const userStats = username && data.artist.stats.userplaycount ? `• Your plays: ${data.artist.stats.userplaycount}` : ''
 
 				const nextSteps = buildNextSteps([
-					{ tool: 'get_artist_top_tracks', args: `artist="${data.artist.name}"`, hint: 'see this artist\'s most-played tracks' },
-					{ tool: 'get_artist_top_albums', args: `artist="${data.artist.name}"`, hint: 'see this artist\'s most-played albums' },
+					{ tool: 'get_artist_top_tracks', args: `artist="${data.artist.name}"`, hint: "see this artist's most-played tracks" },
+					{ tool: 'get_artist_top_albums', args: `artist="${data.artist.name}"`, hint: "see this artist's most-played albums" },
 					{ tool: 'get_similar_artists', args: `artist="${data.artist.name}"`, hint: 'find similar artists' },
 				])
 
@@ -264,7 +270,8 @@ ${!username ? '*Note: Sign in to see your personal listening stats for this albu
 	server.registerTool(
 		'get_artist_top_tracks',
 		{
-			description: "Get an artist's globally most-played tracks on Last.fm (not user-specific) - No authentication required. Useful for finding canonical / signature songs by an artist.",
+			description:
+				"Get an artist's globally most-played tracks on Last.fm (not user-specific) - No authentication required. Useful for finding canonical / signature songs by an artist.",
 			inputSchema: z.object({
 				artist: z.string().describe('Artist name'),
 				limit: z.coerce.number().min(1).max(50).optional().default(10).describe('Number of tracks to return (1-50)'),
@@ -306,7 +313,8 @@ ${trackList}${nextSteps}`,
 	server.registerTool(
 		'get_artist_top_albums',
 		{
-			description: "Get an artist's globally most-played albums on Last.fm (not user-specific) - No authentication required. Useful for finding the canonical record by an artist.",
+			description:
+				"Get an artist's globally most-played albums on Last.fm (not user-specific) - No authentication required. Useful for finding the canonical record by an artist.",
 			inputSchema: z.object({
 				artist: z.string().describe('Artist name'),
 				limit: z.coerce.number().min(1).max(50).optional().default(10).describe('Number of albums to return (1-50)'),
@@ -321,7 +329,11 @@ ${trackList}${nextSteps}`,
 				const albumList = albums.map((album, index) => `${index + 1}. ${album.name} (${album.playcount} plays)`).join('\n')
 
 				const nextSteps = buildNextSteps([
-					{ tool: 'get_album_info', args: `artist="${artist}", album="<ALBUM NAME>"`, hint: 'pull tracklist and stats for one of these albums' },
+					{
+						tool: 'get_album_info',
+						args: `artist="${artist}", album="<ALBUM NAME>"`,
+						hint: 'pull tracklist and stats for one of these albums',
+					},
 					{ tool: 'get_artist_top_tracks', args: `artist="${artist}"`, hint: 'pivot to canonical tracks by this artist' },
 					{ tool: 'get_similar_artists', args: `artist="${artist}"`, hint: 'find similar artists' },
 				])
@@ -407,7 +419,11 @@ ${artistList}${nextSteps}`,
 					.join('\n')
 
 				const nextSteps = buildNextSteps([
-					{ tool: 'get_track_info', args: 'artist="<ARTIST FROM LIST>", track="<TRACK FROM LIST>"', hint: 'expand one of the similar tracks' },
+					{
+						tool: 'get_track_info',
+						args: 'artist="<ARTIST FROM LIST>", track="<TRACK FROM LIST>"',
+						hint: 'expand one of the similar tracks',
+					},
 					{ tool: 'get_artist_info', args: 'artist="<ARTIST FROM LIST>"', hint: 'pivot to one of the artists from the list' },
 				])
 

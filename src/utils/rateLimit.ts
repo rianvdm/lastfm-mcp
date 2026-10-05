@@ -24,11 +24,7 @@ const DEFAULT_OPTIONS: RateLimitOptions = {
  * Check and increment the per-key counter using a fixed window keyed by `floor(now / window)`.
  * Returns `allowed: true` (fail-open) on KV errors so a broken KV doesn't take down the service.
  */
-export async function checkRateLimit(
-	kv: KVNamespace,
-	key: string,
-	options: Partial<RateLimitOptions> = {},
-): Promise<RateLimitResult> {
+export async function checkRateLimit(kv: KVNamespace, key: string, options: Partial<RateLimitOptions> = {}): Promise<RateLimitResult> {
 	const { limit, windowSeconds } = { ...DEFAULT_OPTIONS, ...options }
 	const now = Math.floor(Date.now() / 1000)
 	const windowId = Math.floor(now / windowSeconds)

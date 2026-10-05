@@ -145,7 +145,7 @@ export function registerAuthenticatedTools(
 			}
 
 			const nextSteps = buildNextSteps([
-				{ tool: 'get_recent_tracks', args: '', hint: 'see what you\'ve been listening to lately' },
+				{ tool: 'get_recent_tracks', args: '', hint: "see what you've been listening to lately" },
 				{ tool: 'get_top_artists', args: 'period="1month"', hint: 'top artists for a recent window' },
 				{ tool: 'get_listening_stats', args: '', hint: 'shape of your overall scrobble history' },
 				{ tool: 'get_music_recommendations', args: '', hint: 'personalized picks based on your history' },
@@ -179,16 +179,27 @@ ${renderToolList(AUTHENTICATED_TOOL_CATALOG)}
 	server.registerTool(
 		'get_recent_tracks',
 		{
-			description: "Get user's recent Last.fm listening history - REQUIRES AUTHENTICATION. Use lastfm_auth_status first to check login status.",
+			description:
+				"Get user's recent Last.fm listening history - REQUIRES AUTHENTICATION. Use lastfm_auth_status first to check login status.",
 			inputSchema: z.object({
 				username: z.string().optional().describe('Last.fm username (defaults to authenticated user)'),
 				limit: z.coerce.number().min(1).max(1000).optional().default(50).describe('Number of tracks to return per page (1-1000)'),
 				page: z.coerce.number().min(1).optional().default(1).describe('Page number for pagination (starts at 1)'),
-				date: z.string().optional().describe('Calendar date in YYYY-MM-DD format (e.g. "2026-03-16"). The server computes correct UTC day boundaries using the timezone param. Prefer this over from/to when querying "today", "yesterday", or a specific date.'),
+				date: z
+					.string()
+					.optional()
+					.describe(
+						'Calendar date in YYYY-MM-DD format (e.g. "2026-03-16"). The server computes correct UTC day boundaries using the timezone param. Prefer this over from/to when querying "today", "yesterday", or a specific date.',
+					),
 				from: z.coerce.number().optional().describe('Start timestamp (Unix timestamp). Ignored if date is provided.'),
 				to: z.coerce.number().optional().describe('End timestamp (Unix timestamp). Ignored if date is provided.'),
-				timezone: z.string().optional().default('UTC')
-					.describe('IANA timezone name (e.g. "America/New_York"). Defaults to UTC. Required for date param to work correctly — always pass when the user\'s timezone is known.'),
+				timezone: z
+					.string()
+					.optional()
+					.default('UTC')
+					.describe(
+						'IANA timezone name (e.g. "America/New_York"). Defaults to UTC. Required for date param to work correctly — always pass when the user\'s timezone is known.',
+					),
 			}),
 		},
 		async ({ username, limit, page, date, from, to, timezone }) => {
@@ -231,18 +242,27 @@ ${renderToolList(AUTHENTICATED_TOOL_CATALOG)}
 				const totalTracks = parseInt(data.recenttracks['@attr'].total)
 
 				const nowStr = formatTimestamp(Math.floor(Date.now() / 1000), effectiveTimezone)
-				const rangeStr = effectiveFrom && effectiveTo
-					? `${formatTimestamp(effectiveFrom, effectiveTimezone)} – ${formatTimestamp(effectiveTo, effectiveTimezone)}`
-					: effectiveFrom
-						? `from ${formatTimestamp(effectiveFrom, effectiveTimezone)}`
-						: `most recent (server time: ${nowStr})`
+				const rangeStr =
+					effectiveFrom && effectiveTo
+						? `${formatTimestamp(effectiveFrom, effectiveTimezone)} – ${formatTimestamp(effectiveTo, effectiveTimezone)}`
+						: effectiveFrom
+							? `from ${formatTimestamp(effectiveFrom, effectiveTimezone)}`
+							: `most recent (server time: ${nowStr})`
 
 				const topTrack = tracks[0]
-				const topArtist = topTrack ? (topTrack.artist['#text'] || (topTrack.artist as unknown as { name: string }).name) : null
+				const topArtist = topTrack ? topTrack.artist['#text'] || (topTrack.artist as unknown as { name: string }).name : null
 				const nextSteps = buildNextSteps([
 					topTrack && topArtist
-						? { tool: 'get_track_info', args: `artist=${JSON.stringify(topArtist)}, track=${JSON.stringify(topTrack.name)}`, hint: 'expand the most recent track' }
-						: { tool: 'get_track_info', args: 'artist="<ARTIST FROM LIST>", track="<TRACK FROM LIST>"', hint: 'expand a track from the feed' },
+						? {
+								tool: 'get_track_info',
+								args: `artist=${JSON.stringify(topArtist)}, track=${JSON.stringify(topTrack.name)}`,
+								hint: 'expand the most recent track',
+							}
+						: {
+								tool: 'get_track_info',
+								args: 'artist="<ARTIST FROM LIST>", track="<TRACK FROM LIST>"',
+								hint: 'expand a track from the feed',
+							},
 					{ tool: 'get_artist_info', args: 'artist="<ARTIST FROM LIST>"', hint: 'expand an artist from the feed' },
 					{ tool: 'get_top_artists', args: 'period="7day"', hint: 'aggregate the recent feed into a 7-day top list' },
 				])
@@ -276,7 +296,8 @@ ${currentPage > 1 ? `\n⬅️ **Previous page:** Use \`page: ${currentPage - 1}\
 	server.registerTool(
 		'get_top_artists',
 		{
-			description: "Get user's most listened to artists from Last.fm - REQUIRES AUTHENTICATION. Specify time period like '7day', '1month', '6month', 'overall'.",
+			description:
+				"Get user's most listened to artists from Last.fm - REQUIRES AUTHENTICATION. Specify time period like '7day', '1month', '6month', 'overall'.",
 			inputSchema: z.object({
 				username: z.string().optional().describe('Last.fm username (defaults to authenticated user)'),
 				period: z.enum(PERIOD_VALUES).optional().default('overall').describe('Time period for top artists'),
@@ -327,7 +348,8 @@ Total artists: ${data.topartists['@attr'].total}${nextSteps}`,
 	server.registerTool(
 		'get_top_albums',
 		{
-			description: "Get user's most listened to albums from Last.fm - REQUIRES AUTHENTICATION. Specify time period like '7day', '1month', '6month', 'overall'.",
+			description:
+				"Get user's most listened to albums from Last.fm - REQUIRES AUTHENTICATION. Specify time period like '7day', '1month', '6month', 'overall'.",
 			inputSchema: z.object({
 				username: z.string().optional().describe('Last.fm username (defaults to authenticated user)'),
 				period: z.enum(PERIOD_VALUES).optional().default('overall').describe('Time period for top albums'),
@@ -354,8 +376,16 @@ Total artists: ${data.topartists['@attr'].total}${nextSteps}`,
 				const topAlbum = albums[0]
 				const nextSteps = buildNextSteps([
 					topAlbum
-						? { tool: 'get_album_info', args: `artist=${JSON.stringify(formatArtist(topAlbum.artist))}, album=${JSON.stringify(topAlbum.name)}`, hint: 'expand your top album' }
-						: { tool: 'get_album_info', args: 'artist="<ARTIST FROM LIST>", album="<ALBUM FROM LIST>"', hint: 'expand one of your top albums' },
+						? {
+								tool: 'get_album_info',
+								args: `artist=${JSON.stringify(formatArtist(topAlbum.artist))}, album=${JSON.stringify(topAlbum.name)}`,
+								hint: 'expand your top album',
+							}
+						: {
+								tool: 'get_album_info',
+								args: 'artist="<ARTIST FROM LIST>", album="<ALBUM FROM LIST>"',
+								hint: 'expand one of your top albums',
+							},
 					{ tool: 'get_top_tracks', args: `period="${period}"`, hint: 'pivot to top tracks for the same period' },
 					{ tool: 'get_top_artists', args: `period="${period}"`, hint: 'pivot to top artists for the same period' },
 				])
@@ -382,7 +412,8 @@ Total albums: ${data.topalbums['@attr'].total}${nextSteps}`,
 	server.registerTool(
 		'get_top_tracks',
 		{
-			description: "Get user's most listened to tracks from Last.fm - REQUIRES AUTHENTICATION. Specify time period like '7day', '1month', '6month', 'overall'.",
+			description:
+				"Get user's most listened to tracks from Last.fm - REQUIRES AUTHENTICATION. Specify time period like '7day', '1month', '6month', 'overall'.",
 			inputSchema: z.object({
 				username: z.string().optional().describe('Last.fm username (defaults to authenticated user)'),
 				period: z.enum(PERIOD_VALUES).optional().default('overall').describe('Time period for top tracks'),
@@ -408,12 +439,24 @@ Total albums: ${data.topalbums['@attr'].total}${nextSteps}`,
 					.join('\n')
 
 				const topTrack = tracks[0]
-				const topTrackArtist = topTrack ? (topTrack.artist['#text'] || (topTrack.artist as unknown as { name: string }).name) : null
+				const topTrackArtist = topTrack ? topTrack.artist['#text'] || (topTrack.artist as unknown as { name: string }).name : null
 				const nextSteps = buildNextSteps([
 					topTrack && topTrackArtist
-						? { tool: 'get_track_info', args: `artist=${JSON.stringify(topTrackArtist)}, track=${JSON.stringify(topTrack.name)}`, hint: 'expand your top track' }
-						: { tool: 'get_track_info', args: 'artist="<ARTIST FROM LIST>", track="<TRACK FROM LIST>"', hint: 'expand one of your top tracks' },
-					{ tool: 'get_similar_tracks', args: 'artist="<ARTIST FROM LIST>", track="<TRACK FROM LIST>"', hint: 'find more like one of your favorites' },
+						? {
+								tool: 'get_track_info',
+								args: `artist=${JSON.stringify(topTrackArtist)}, track=${JSON.stringify(topTrack.name)}`,
+								hint: 'expand your top track',
+							}
+						: {
+								tool: 'get_track_info',
+								args: 'artist="<ARTIST FROM LIST>", track="<TRACK FROM LIST>"',
+								hint: 'expand one of your top tracks',
+							},
+					{
+						tool: 'get_similar_tracks',
+						args: 'artist="<ARTIST FROM LIST>", track="<TRACK FROM LIST>"',
+						hint: 'find more like one of your favorites',
+					},
 					{ tool: 'get_top_albums', args: `period="${period}"`, hint: 'pivot to top albums for the same period' },
 				])
 
@@ -439,7 +482,8 @@ Total tracks: ${data.toptracks['@attr'].total}${nextSteps}`,
 	server.registerTool(
 		'get_loved_tracks',
 		{
-			description: "Get user's loved/favorite tracks from Last.fm - REQUIRES AUTHENTICATION. Shows tracks the user has marked as favorites.",
+			description:
+				"Get user's loved/favorite tracks from Last.fm - REQUIRES AUTHENTICATION. Shows tracks the user has marked as favorites.",
 			inputSchema: z.object({
 				username: z.string().optional().describe('Last.fm username (defaults to authenticated user)'),
 				limit: z.coerce.number().min(1).max(1000).optional().default(50).describe('Number of tracks to return (1-1000)'),
@@ -464,12 +508,24 @@ Total tracks: ${data.toptracks['@attr'].total}${nextSteps}`,
 					.join('\n')
 
 				const topLoved = tracks[0]
-				const topLovedArtist = topLoved ? (topLoved.artist['#text'] || (topLoved.artist as unknown as { name: string }).name) : null
+				const topLovedArtist = topLoved ? topLoved.artist['#text'] || (topLoved.artist as unknown as { name: string }).name : null
 				const nextSteps = buildNextSteps([
 					topLoved && topLovedArtist
-						? { tool: 'get_track_info', args: `artist=${JSON.stringify(topLovedArtist)}, track=${JSON.stringify(topLoved.name)}`, hint: 'expand your most-recently-loved track' }
-						: { tool: 'get_track_info', args: 'artist="<ARTIST FROM LIST>", track="<TRACK FROM LIST>"', hint: 'expand one of your loved tracks' },
-					{ tool: 'get_similar_tracks', args: 'artist="<ARTIST FROM LIST>", track="<TRACK FROM LIST>"', hint: 'find more like a loved track' },
+						? {
+								tool: 'get_track_info',
+								args: `artist=${JSON.stringify(topLovedArtist)}, track=${JSON.stringify(topLoved.name)}`,
+								hint: 'expand your most-recently-loved track',
+							}
+						: {
+								tool: 'get_track_info',
+								args: 'artist="<ARTIST FROM LIST>", track="<TRACK FROM LIST>"',
+								hint: 'expand one of your loved tracks',
+							},
+					{
+						tool: 'get_similar_tracks',
+						args: 'artist="<ARTIST FROM LIST>", track="<TRACK FROM LIST>"',
+						hint: 'find more like a loved track',
+					},
 					{ tool: 'get_music_recommendations', args: '', hint: 'personalized picks based on your history' },
 				])
 
@@ -516,7 +572,7 @@ Total loved tracks: ${data.lovedtracks['@attr'].total}${nextSteps}`,
 				const nextSteps = buildNextSteps([
 					{ tool: 'get_listening_stats', args: '', hint: 'aggregate stats across the full scrobble history' },
 					{ tool: 'get_top_artists', args: 'period="overall"', hint: 'all-time top artists' },
-					{ tool: 'get_recent_tracks', args: '', hint: 'see what they\'ve been listening to lately' },
+					{ tool: 'get_recent_tracks', args: '', hint: "see what they've been listening to lately" },
 				])
 
 				return {
@@ -548,7 +604,8 @@ Total loved tracks: ${data.lovedtracks['@attr'].total}${nextSteps}`,
 	server.registerTool(
 		'get_listening_stats',
 		{
-			description: 'Get comprehensive Last.fm listening statistics and analytics - REQUIRES AUTHENTICATION. Shows detailed insights about music habits.',
+			description:
+				'Get comprehensive Last.fm listening statistics and analytics - REQUIRES AUTHENTICATION. Shows detailed insights about music habits.',
 			inputSchema: z.object({
 				username: z.string().optional().describe('Last.fm username (defaults to authenticated user)'),
 				period: z.enum(PERIOD_VALUES).optional().default('overall').describe('Time period for statistics'),
@@ -650,7 +707,8 @@ ${artistList}
 	server.registerTool(
 		'get_weekly_chart_list',
 		{
-			description: 'Get available weekly chart date ranges for user\'s listening history - REQUIRES AUTHENTICATION. Use this to find historical time periods for temporal queries like "when did I start listening to X".',
+			description:
+				'Get available weekly chart date ranges for user\'s listening history - REQUIRES AUTHENTICATION. Use this to find historical time periods for temporal queries like "when did I start listening to X".',
 			inputSchema: z.object({
 				username: z.string().optional().describe('Last.fm username (defaults to authenticated user)'),
 			}),
@@ -679,8 +737,16 @@ ${artistList}
 				const sampleFrom = charts[charts.length - 1]?.from
 				const sampleTo = charts[charts.length - 1]?.to
 				const nextSteps = buildNextSteps([
-					{ tool: 'get_weekly_artist_chart', args: `from=${sampleFrom}, to=${sampleTo}`, hint: 'top artists for a specific week (substitute from/to from any row above)' },
-					{ tool: 'get_weekly_track_chart', args: `from=${sampleFrom}, to=${sampleTo}`, hint: 'top tracks for a specific week (substitute from/to from any row above)' },
+					{
+						tool: 'get_weekly_artist_chart',
+						args: `from=${sampleFrom}, to=${sampleTo}`,
+						hint: 'top artists for a specific week (substitute from/to from any row above)',
+					},
+					{
+						tool: 'get_weekly_track_chart',
+						args: `from=${sampleFrom}, to=${sampleTo}`,
+						hint: 'top tracks for a specific week (substitute from/to from any row above)',
+					},
 				])
 
 				return {
@@ -707,7 +773,8 @@ ${chartList}
 	server.registerTool(
 		'get_weekly_artist_chart',
 		{
-			description: 'Get artist listening data for a specific time period - REQUIRES AUTHENTICATION. Perfect for temporal queries like "what artists was I into in 2023".',
+			description:
+				'Get artist listening data for a specific time period - REQUIRES AUTHENTICATION. Perfect for temporal queries like "what artists was I into in 2023".',
 			inputSchema: z.object({
 				username: z.string().optional().describe('Last.fm username (defaults to authenticated user)'),
 				from: z.coerce.number().optional().describe('Start timestamp (Unix timestamp) - get from weekly_chart_list'),
@@ -725,8 +792,7 @@ ${chartList}
 				const data = await client.getWeeklyArtistChart(effectiveUsername, from, to)
 
 				const artists = data.weeklyartistchart.artist
-				const periodInfo =
-					from && to ? `${formatTimestamp(from)} to ${formatTimestamp(to)}` : 'Most Recent Week'
+				const periodInfo = from && to ? `${formatTimestamp(from)} to ${formatTimestamp(to)}` : 'Most Recent Week'
 
 				const artistList = artists
 					.slice(0, 30)
@@ -766,7 +832,8 @@ ${artists.length > 30 ? '\n📝 **Note:** Showing top 30 artists only' : ''}${ne
 	server.registerTool(
 		'get_weekly_track_chart',
 		{
-			description: 'Get track listening data for a specific time period - REQUIRES AUTHENTICATION. Perfect for temporal queries like "what songs was I obsessed with in summer 2023".',
+			description:
+				'Get track listening data for a specific time period - REQUIRES AUTHENTICATION. Perfect for temporal queries like "what songs was I obsessed with in summer 2023".',
 			inputSchema: z.object({
 				username: z.string().optional().describe('Last.fm username (defaults to authenticated user)'),
 				from: z.coerce.number().optional().describe('Start timestamp (Unix timestamp) - get from weekly_chart_list'),
@@ -784,8 +851,7 @@ ${artists.length > 30 ? '\n📝 **Note:** Showing top 30 artists only' : ''}${ne
 				const data = await client.getWeeklyTrackChart(effectiveUsername, from, to)
 
 				const tracks = data.weeklytrackchart.track
-				const periodInfo =
-					from && to ? `${formatTimestamp(from)} to ${formatTimestamp(to)}` : 'Most Recent Week'
+				const periodInfo = from && to ? `${formatTimestamp(from)} to ${formatTimestamp(to)}` : 'Most Recent Week'
 
 				const trackList = tracks
 					.slice(0, 30)
@@ -796,8 +862,16 @@ ${artists.length > 30 ? '\n📝 **Note:** Showing top 30 artists only' : ''}${ne
 				const nextSteps = buildNextSteps([
 					{ tool: 'get_weekly_artist_chart', args: `from=${from}, to=${to}`, hint: 'see top artists for the same week' },
 					topWeekTrack
-						? { tool: 'get_track_info', args: `artist=${JSON.stringify(topWeekTrack.artist['#text'])}, track=${JSON.stringify(topWeekTrack.name)}`, hint: 'expand the top track from this week' }
-						: { tool: 'get_track_info', args: 'artist="<ARTIST FROM LIST>", track="<TRACK FROM LIST>"', hint: 'expand a track from this week' },
+						? {
+								tool: 'get_track_info',
+								args: `artist=${JSON.stringify(topWeekTrack.artist['#text'])}, track=${JSON.stringify(topWeekTrack.name)}`,
+								hint: 'expand the top track from this week',
+							}
+						: {
+								tool: 'get_track_info',
+								args: 'artist="<ARTIST FROM LIST>", track="<TRACK FROM LIST>"',
+								hint: 'expand a track from this week',
+							},
 					{ tool: 'get_weekly_chart_list', args: '', hint: 'pick a different week to explore' },
 				])
 

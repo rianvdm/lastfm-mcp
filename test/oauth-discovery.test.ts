@@ -18,14 +18,14 @@ describe('OAuth discovery endpoints', () => {
 		it('should include resource field matching base URL', async () => {
 			const req = new Request(`${BASE_URL}/.well-known/oauth-protected-resource`)
 			const res = await worker.fetch(req, env, {} as ExecutionContext)
-			const body = await res.json() as Record<string, unknown>
+			const body = (await res.json()) as Record<string, unknown>
 			expect(body.resource).toBe(BASE_URL)
 		})
 
 		it('should include authorization_servers array with base URL', async () => {
 			const req = new Request(`${BASE_URL}/.well-known/oauth-protected-resource`)
 			const res = await worker.fetch(req, env, {} as ExecutionContext)
-			const body = await res.json() as Record<string, unknown>
+			const body = (await res.json()) as Record<string, unknown>
 			expect(Array.isArray(body.authorization_servers)).toBe(true)
 			expect(body.authorization_servers).toContain(BASE_URL)
 		})
@@ -33,7 +33,7 @@ describe('OAuth discovery endpoints', () => {
 		it('should include bearer_methods_supported with header', async () => {
 			const req = new Request(`${BASE_URL}/.well-known/oauth-protected-resource`)
 			const res = await worker.fetch(req, env, {} as ExecutionContext)
-			const body = await res.json() as Record<string, unknown>
+			const body = (await res.json()) as Record<string, unknown>
 			expect(Array.isArray(body.bearer_methods_supported)).toBe(true)
 			expect(body.bearer_methods_supported).toContain('header')
 		})
@@ -50,7 +50,7 @@ describe('OAuth discovery endpoints', () => {
 		it('should include all required MCP OAuth fields', async () => {
 			const req = new Request(`${BASE_URL}/.well-known/oauth-authorization-server`)
 			const res = await worker.fetch(req, env, {} as ExecutionContext)
-			const body = await res.json() as Record<string, unknown>
+			const body = (await res.json()) as Record<string, unknown>
 			expect(body.issuer).toBeDefined()
 			expect(body.authorization_endpoint).toBeDefined()
 			expect(body.token_endpoint).toBeDefined()
@@ -59,7 +59,7 @@ describe('OAuth discovery endpoints', () => {
 		it('should support authorization_code grant type', async () => {
 			const req = new Request(`${BASE_URL}/.well-known/oauth-authorization-server`)
 			const res = await worker.fetch(req, env, {} as ExecutionContext)
-			const body = await res.json() as Record<string, unknown>
+			const body = (await res.json()) as Record<string, unknown>
 			expect(Array.isArray(body.grant_types_supported)).toBe(true)
 			expect(body.grant_types_supported).toContain('authorization_code')
 		})
@@ -67,7 +67,7 @@ describe('OAuth discovery endpoints', () => {
 		it('should support code response type', async () => {
 			const req = new Request(`${BASE_URL}/.well-known/oauth-authorization-server`)
 			const res = await worker.fetch(req, env, {} as ExecutionContext)
-			const body = await res.json() as Record<string, unknown>
+			const body = (await res.json()) as Record<string, unknown>
 			expect(Array.isArray(body.response_types_supported)).toBe(true)
 			expect(body.response_types_supported).toContain('code')
 		})
@@ -75,7 +75,7 @@ describe('OAuth discovery endpoints', () => {
 		it('should support S256 PKCE code challenge method', async () => {
 			const req = new Request(`${BASE_URL}/.well-known/oauth-authorization-server`)
 			const res = await worker.fetch(req, env, {} as ExecutionContext)
-			const body = await res.json() as Record<string, unknown>
+			const body = (await res.json()) as Record<string, unknown>
 			expect(Array.isArray(body.code_challenge_methods_supported)).toBe(true)
 			expect(body.code_challenge_methods_supported).toContain('S256')
 		})
