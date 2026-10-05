@@ -79,5 +79,19 @@ describe('OAuth discovery endpoints', () => {
 			expect(Array.isArray(body.code_challenge_methods_supported)).toBe(true)
 			expect(body.code_challenge_methods_supported).toContain('S256')
 		})
+
+		it('should advertise Client ID Metadata Document support', async () => {
+			const req = new Request(`${BASE_URL}/.well-known/oauth-authorization-server`)
+			const res = await worker.fetch(req, env, {} as ExecutionContext)
+			const body = (await res.json()) as Record<string, unknown>
+			expect(body.client_id_metadata_document_supported).toBe(true)
+		})
+
+		it('should still advertise the dynamic client registration endpoint', async () => {
+			const req = new Request(`${BASE_URL}/.well-known/oauth-authorization-server`)
+			const res = await worker.fetch(req, env, {} as ExecutionContext)
+			const body = (await res.json()) as Record<string, unknown>
+			expect(body.registration_endpoint).toBe(`${BASE_URL}/oauth/register`)
+		})
 	})
 })

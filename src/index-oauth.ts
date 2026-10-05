@@ -127,6 +127,11 @@ const oauthProvider = new OAuthProvider({
 	authorizeEndpoint: '/authorize',
 	tokenEndpoint: '/oauth/token',
 	clientRegistrationEndpoint: '/oauth/register',
+	// Accept HTTPS-URL client_ids backed by a Client ID Metadata Document (CIMD), the
+	// MCP 2026-07-28 preferred registration path. Requires the global_fetch_strictly_public
+	// compatibility flag in wrangler.toml. Dynamic client registration stays enabled above
+	// for clients that don't support CIMD.
+	clientIdMetadataDocumentEnabled: true,
 	defaultHandler: LastfmOAuthHandler,
 })
 
