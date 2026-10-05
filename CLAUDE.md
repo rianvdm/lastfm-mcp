@@ -21,6 +21,13 @@ npm run cf-typegen       # Regenerate Worker type bindings (run after changing w
 
 Test runner: **vitest 4** with `@cloudflare/vitest-pool-workers` ≥0.15 (runs in workerd/miniflare). Requires **Node 22** (see `.nvmrc`); the config uses the `cloudflareTest()` plugin shape, not the removed `defineWorkersConfig`.
 
+**`wrangler` is pinned to the exact version `@cloudflare/vitest-pool-workers` depends on**, so tests, `npm run dev`, and deploys share one wrangler and one workerd. A caret range resolves to the newest wrangler and splits the tree in two again. When bumping vitest-pool-workers, move the pin in the same change:
+
+```bash
+npm view @cloudflare/vitest-pool-workers@<new-version> dependencies.wrangler   # the version to pin
+npm ls wrangler workerd                                                         # after install: one copy of each
+```
+
 ```bash
 npm test                                    # All tests
 npx vitest run                              # All tests, exit when done
