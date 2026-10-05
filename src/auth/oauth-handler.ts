@@ -1,5 +1,6 @@
 // ABOUTME: OAuth handler integrating Last.fm authentication with the MCP OAuth 2.1 flow.
 // ABOUTME: Handles /authorize, /lastfm-callback, /login, /callback, and OAuth discovery endpoints.
+import { CimdFetchError } from '@cloudflare/workers-oauth-provider'
 import type { AuthRequest, OAuthHelpers } from '@cloudflare/workers-oauth-provider'
 import type { ExecutionContext } from '@cloudflare/workers-types'
 
@@ -111,6 +112,13 @@ async function handleAuthorize(request: Request, env: OAuthEnv): Promise<Respons
 		// Redirect to Last.fm
 		return Response.redirect(lastfmAuthUrl, 302)
 	} catch (error) {
+		// A client_id that is a metadata document URL which couldn't be fetched or
+		// validated is a client-side problem, not a server fault. The detail can
+		// describe the upstream response, so log it and keep the reply generic.
+		if (error instanceof CimdFetchError) {
+			console.warn(`[OAUTH] Client metadata document failed for ${error.metadataUrl}: ${error.detail}`)
+			return new Response('Invalid client_id: the client metadata document could not be fetched or validated', { status: 400 })
+		}
 		console.error('[OAUTH] Error in authorize:', error)
 		return new Response(`Authorization error: ${error instanceof Error ? error.message : 'Unknown error'}`, {
 			status: 500,
@@ -185,6 +193,13 @@ async function handleLastfmCallback(request: Request, env: OAuthEnv): Promise<Re
 		// Redirect back to the MCP client
 		return Response.redirect(redirectTo, 302)
 	} catch (error) {
+		// completeAuthorization re-resolves a CIMD client's metadata document. If that
+		// fails here the client can't be verified, so no code is issued. Same handling
+		// as /authorize: log the detail, keep the reply generic.
+		if (error instanceof CimdFetchError) {
+			console.warn(`[OAUTH] Client metadata document failed for ${error.metadataUrl}: ${error.detail}`)
+			return new Response('Invalid client_id: the client metadata document could not be fetched or validated', { status: 400 })
+		}
 		console.error('[OAUTH] Error in callback:', error)
 		return new Response(`Authentication failed: ${error instanceof Error ? error.message : 'Unknown error'}`, {
 			status: 500,
