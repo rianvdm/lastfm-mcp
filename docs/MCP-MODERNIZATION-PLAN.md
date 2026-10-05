@@ -12,25 +12,25 @@ The MCP (Model Context Protocol) landscape has evolved significantly since this 
 
 ### What We Have
 
-| File | Purpose | Keep/Migrate/Remove |
-|------|---------|---------------------|
-| `src/index.ts` | Main worker entry, routing | **Migrate** - simplify to use SDK |
-| `src/protocol/handlers.ts` | MCP method handlers | **Migrate** - convert to SDK tools/resources |
-| `src/protocol/parser.ts` | JSON-RPC parsing | **Remove** - SDK handles this |
-| `src/protocol/validation.ts` | Request validation | **Remove** - SDK + Zod handles this |
-| `src/types/mcp.ts` | MCP type definitions | **Remove** - SDK provides types |
-| `src/transport/sse.ts` | Legacy SSE transport | **Remove** - deprecated |
-| `src/auth/lastfm.ts` | Last.fm OAuth | **Keep** - still needed |
-| `src/auth/jwt.ts` | JWT session management | **Keep** - still needed |
-| `src/clients/lastfm.ts` | Last.fm API client | **Keep** - still needed |
-| `src/clients/cachedLastfm.ts` | Cached API client | **Keep** - still needed |
-| `src/types/lastfm-mcp.ts` | Tool/resource definitions | **Migrate** - convert to SDK format |
-| `src/utils/*.ts` | Rate limiting, logging | **Keep** - still needed |
+| File                          | Purpose                    | Keep/Migrate/Remove                          |
+| ----------------------------- | -------------------------- | -------------------------------------------- |
+| `src/index.ts`                | Main worker entry, routing | **Migrate** - simplify to use SDK            |
+| `src/protocol/handlers.ts`    | MCP method handlers        | **Migrate** - convert to SDK tools/resources |
+| `src/protocol/parser.ts`      | JSON-RPC parsing           | **Remove** - SDK handles this                |
+| `src/protocol/validation.ts`  | Request validation         | **Remove** - SDK + Zod handles this          |
+| `src/types/mcp.ts`            | MCP type definitions       | **Remove** - SDK provides types              |
+| `src/transport/sse.ts`        | Legacy SSE transport       | **Remove** - deprecated                      |
+| `src/auth/lastfm.ts`          | Last.fm OAuth              | **Keep** - still needed                      |
+| `src/auth/jwt.ts`             | JWT session management     | **Keep** - still needed                      |
+| `src/clients/lastfm.ts`       | Last.fm API client         | **Keep** - still needed                      |
+| `src/clients/cachedLastfm.ts` | Cached API client          | **Keep** - still needed                      |
+| `src/types/lastfm-mcp.ts`     | Tool/resource definitions  | **Migrate** - convert to SDK format          |
+| `src/utils/*.ts`              | Rate limiting, logging     | **Keep** - still needed                      |
 
 ### What's Working (Keep These)
 
 - ✅ Last.fm API client with caching
-- ✅ Last.fm OAuth authentication flow  
+- ✅ Last.fm OAuth authentication flow
 - ✅ JWT session management
 - ✅ Rate limiting and logging utilities
 - ✅ KV storage for sessions
@@ -78,24 +78,24 @@ src/
 
 ### Endpoint Structure (Backward Compatible)
 
-| Endpoint | Method | Purpose | Notes |
-|----------|--------|---------|-------|
-| `/` | GET | Marketing page | |
-| `/` | POST | MCP JSON-RPC | **Keep for backward compat** |
-| `/mcp` | POST | MCP JSON-RPC | Primary endpoint going forward |
-| `/mcp` | GET | SSE stream (optional) | SDK handles this |
-| `/login` | GET | Last.fm auth redirect | |
-| `/callback` | GET | Last.fm auth callback | |
-| `/health` | GET | Health check | |
-| `/.well-known/mcp.json` | GET | Server discovery | |
+| Endpoint                | Method | Purpose               | Notes                          |
+| ----------------------- | ------ | --------------------- | ------------------------------ |
+| `/`                     | GET    | Marketing page        |                                |
+| `/`                     | POST   | MCP JSON-RPC          | **Keep for backward compat**   |
+| `/mcp`                  | POST   | MCP JSON-RPC          | Primary endpoint going forward |
+| `/mcp`                  | GET    | SSE stream (optional) | SDK handles this               |
+| `/login`                | GET    | Last.fm auth redirect |                                |
+| `/callback`             | GET    | Last.fm auth callback |                                |
+| `/health`               | GET    | Health check          |                                |
+| `/.well-known/mcp.json` | GET    | Server discovery      |                                |
 
 ### Breaking Changes
 
-| Change | Impact | Mitigation |
-|--------|--------|------------|
+| Change                  | Impact                      | Mitigation                           |
+| ----------------------- | --------------------------- | ------------------------------------ |
 | `/sse` endpoint removed | Users with `/sse` in config | Low impact - most use root or `/mcp` |
-| `POST /` still works | None | Keeping for backward compat |
-| Protocol internals | None visible to users | SDK handles same JSON-RPC format |
+| `POST /` still works    | None                        | Keeping for backward compat          |
+| Protocol internals      | None visible to users       | SDK handles same JSON-RPC format     |
 
 ---
 
@@ -228,53 +228,55 @@ Use this checklist across multiple coding sessions. Check off items as completed
 
 ```typescript
 // src/mcp/server.ts
-import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 
 export const server = new McpServer({
-  name: "lastfm-mcp",
-  version: "1.0.0",
-});
+	name: 'lastfm-mcp',
+	version: '1.0.0',
+})
 
 // Import and register tools, resources, prompts
-import { registerPublicTools } from "./tools/public";
-import { registerAuthenticatedTools } from "./tools/authenticated";
-import { registerResources } from "./resources/lastfm";
-import { registerPrompts } from "./prompts/analysis";
+import { registerPublicTools } from './tools/public'
+import { registerAuthenticatedTools } from './tools/authenticated'
+import { registerResources } from './resources/lastfm'
+import { registerPrompts } from './prompts/analysis'
 
-registerPublicTools(server);
-registerAuthenticatedTools(server);
-registerResources(server);
-registerPrompts(server);
+registerPublicTools(server)
+registerAuthenticatedTools(server)
+registerResources(server)
+registerPrompts(server)
 ```
 
 ### Tool Registration Example
 
 ```typescript
 // src/mcp/tools/public.ts
-import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import { z } from "zod";
+import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
+import { z } from 'zod'
 
 export function registerPublicTools(server: McpServer) {
-  server.tool(
-    "get_track_info",
-    "Get detailed information about a track",
-    {
-      artist: z.string().describe("Artist name"),
-      track: z.string().describe("Track name"),
-    },
-    async ({ artist, track }) => {
-      // Get client from context or create new
-      const client = getCachedLastfmClient(env);
-      const data = await client.getTrackInfo(artist, track);
-      
-      return {
-        content: [{
-          type: "text",
-          text: formatTrackInfo(data),
-        }],
-      };
-    }
-  );
+	server.tool(
+		'get_track_info',
+		'Get detailed information about a track',
+		{
+			artist: z.string().describe('Artist name'),
+			track: z.string().describe('Track name'),
+		},
+		async ({ artist, track }) => {
+			// Get client from context or create new
+			const client = getCachedLastfmClient(env)
+			const data = await client.getTrackInfo(artist, track)
+
+			return {
+				content: [
+					{
+						type: 'text',
+						text: formatTrackInfo(data),
+					},
+				],
+			}
+		},
+	)
 }
 ```
 
@@ -282,45 +284,45 @@ export function registerPublicTools(server: McpServer) {
 
 ```typescript
 // src/index.ts
-import { createMcpHandler } from "agents/mcp";
-import { server } from "./mcp/server";
-import { MARKETING_PAGE_HTML } from "./marketing-page";
-import type { Env } from "./types/env";
+import { createMcpHandler } from 'agents/mcp'
+import { server } from './mcp/server'
+import { MARKETING_PAGE_HTML } from './marketing-page'
+import type { Env } from './types/env'
 
 export default {
-  async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
-    const url = new URL(request.url);
+	async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
+		const url = new URL(request.url)
 
-    // MCP endpoint - primary (/mcp) and backward compat (POST /)
-    if (url.pathname === "/mcp" || (url.pathname === "/" && request.method === "POST")) {
-      return createMcpHandler(server)(request, env, ctx);
-    }
+		// MCP endpoint - primary (/mcp) and backward compat (POST /)
+		if (url.pathname === '/mcp' || (url.pathname === '/' && request.method === 'POST')) {
+			return createMcpHandler(server)(request, env, ctx)
+		}
 
-    // Marketing page (GET / only)
-    if (url.pathname === "/" && request.method === "GET") {
-      return new Response(MARKETING_PAGE_HTML, {
-        headers: { "Content-Type": "text/html" },
-      });
-    }
+		// Marketing page (GET / only)
+		if (url.pathname === '/' && request.method === 'GET') {
+			return new Response(MARKETING_PAGE_HTML, {
+				headers: { 'Content-Type': 'text/html' },
+			})
+		}
 
-    // Auth endpoints (keep existing)
-    if (url.pathname === "/login") {
-      return handleLogin(request, env);
-    }
-    if (url.pathname === "/callback") {
-      return handleCallback(request, env);
-    }
+		// Auth endpoints (keep existing)
+		if (url.pathname === '/login') {
+			return handleLogin(request, env)
+		}
+		if (url.pathname === '/callback') {
+			return handleCallback(request, env)
+		}
 
-    // Health check
-    if (url.pathname === "/health") {
-      return new Response(JSON.stringify({ status: "ok" }), {
-        headers: { "Content-Type": "application/json" },
-      });
-    }
+		// Health check
+		if (url.pathname === '/health') {
+			return new Response(JSON.stringify({ status: 'ok' }), {
+				headers: { 'Content-Type': 'application/json' },
+			})
+		}
 
-    return new Response("Not found", { status: 404 });
-  },
-};
+		return new Response('Not found', { status: 404 })
+	},
+}
 ```
 
 ---
@@ -346,12 +348,12 @@ claude mcp add --transport http lastfm https://lastfm-mcp-prod.rian-db8.workers.
 
 ```json
 {
-  "mcpServers": {
-    "lastfm": {
-      "command": "npx",
-      "args": ["-y", "mcp-remote", "https://lastfm-mcp-prod.rian-db8.workers.dev/mcp"]
-    }
-  }
+	"mcpServers": {
+		"lastfm": {
+			"command": "npx",
+			"args": ["-y", "mcp-remote", "https://lastfm-mcp-prod.rian-db8.workers.dev/mcp"]
+		}
+	}
 }
 ```
 
@@ -361,11 +363,11 @@ Edit `~/.codeium/mcp_config.json`:
 
 ```json
 {
-  "mcpServers": {
-    "lastfm": {
-      "serverUrl": "https://lastfm-mcp-prod.rian-db8.workers.dev/mcp"
-    }
-  }
+	"mcpServers": {
+		"lastfm": {
+			"serverUrl": "https://lastfm-mcp-prod.rian-db8.workers.dev/mcp"
+		}
+	}
 }
 ```
 
@@ -390,15 +392,15 @@ The SDK's `server.tool()` doesn't directly receive `env`. Solutions:
 ```typescript
 // Option 1: Factory function
 export function createServer(env: Env) {
-  const server = new McpServer({ name: "lastfm-mcp", version: "1.0.0" });
-  const client = new CachedLastfmClient(new LastfmClient(env.LASTFM_API_KEY), env.MCP_SESSIONS);
-  
-  server.tool("get_track_info", "...", schema, async (args) => {
-    // client is available via closure
-    return await client.getTrackInfo(args.artist, args.track);
-  });
-  
-  return server;
+	const server = new McpServer({ name: 'lastfm-mcp', version: '1.0.0' })
+	const client = new CachedLastfmClient(new LastfmClient(env.LASTFM_API_KEY), env.MCP_SESSIONS)
+
+	server.tool('get_track_info', '...', schema, async (args) => {
+		// client is available via closure
+		return await client.getTrackInfo(args.artist, args.track)
+	})
+
+	return server
 }
 ```
 
@@ -416,10 +418,10 @@ During migration, may need to support both old and new endpoints temporarily:
 
 ```typescript
 // Support both during transition
-if (url.pathname === "/mcp" || url.pathname === "/") {
-  if (request.method === "POST") {
-    return createMcpHandler(server)(request, env, ctx);
-  }
+if (url.pathname === '/mcp' || url.pathname === '/') {
+	if (request.method === 'POST') {
+		return createMcpHandler(server)(request, env, ctx)
+	}
 }
 ```
 
@@ -429,16 +431,16 @@ if (url.pathname === "/mcp" || url.pathname === "/") {
 
 Use this section to track progress across sessions:
 
-| Session | Status | Date | Notes |
-|---------|--------|------|-------|
-| 1. Setup & Dependencies | ✅ Complete | 2024-12-10 | Branch created, deps installed, structure created |
-| 2. Public Tools | ✅ Complete | 2024-12-10 | 7 public tools with Zod schemas |
-| 3. Authenticated Tools | ✅ Complete | 2024-12-10 | 12 authenticated tools with session context |
-| 4. Resources & Prompts | ✅ Complete | 2024-12-10 | 10 resources, 6 prompts migrated |
-| 5. Entry Point & Routing | ✅ Complete | 2024-12-10 | /mcp uses createMcpHandler, backward compat kept |
-| 6. Authentication | ✅ Complete | 2024-12-10 | OAuth 2.0 + session_id fallback for Claude Desktop |
-| 7. Testing | ✅ Complete | 2024-12-10 | Tested with Windsurf (OAuth) and Claude Desktop (session_id) |
-| 8. Cleanup & Deploy | ✅ Complete | 2024-12-10 | Deployed to production |
+| Session                  | Status      | Date       | Notes                                                        |
+| ------------------------ | ----------- | ---------- | ------------------------------------------------------------ |
+| 1. Setup & Dependencies  | ✅ Complete | 2024-12-10 | Branch created, deps installed, structure created            |
+| 2. Public Tools          | ✅ Complete | 2024-12-10 | 7 public tools with Zod schemas                              |
+| 3. Authenticated Tools   | ✅ Complete | 2024-12-10 | 12 authenticated tools with session context                  |
+| 4. Resources & Prompts   | ✅ Complete | 2024-12-10 | 10 resources, 6 prompts migrated                             |
+| 5. Entry Point & Routing | ✅ Complete | 2024-12-10 | /mcp uses createMcpHandler, backward compat kept             |
+| 6. Authentication        | ✅ Complete | 2024-12-10 | OAuth 2.0 + session_id fallback for Claude Desktop           |
+| 7. Testing               | ✅ Complete | 2024-12-10 | Tested with Windsurf (OAuth) and Claude Desktop (session_id) |
+| 8. Cleanup & Deploy      | ✅ Complete | 2024-12-10 | Deployed to production                                       |
 
 Legend: ⬜ Not Started | 🟡 In Progress | ✅ Complete | ❌ Blocked
 
@@ -449,6 +451,7 @@ Legend: ⬜ Not Started | 🟡 In Progress | ✅ Complete | ❌ Blocked
 ### Problem Statement
 
 Claude Desktop's MCP connector does not persist session IDs across conversations:
+
 - First request in conversation: No `Mcp-Session-Id` header → server generates new UUID
 - Within conversation: Header is sent back correctly
 - New conversation: Fresh start → completely new session ID
@@ -463,11 +466,13 @@ We implemented **two authentication methods** to support different MCP clients:
 2. **Session ID URL parameter** - For clients that don't support OAuth (Claude Desktop)
 
 **New Files Created:**
+
 - `src/index-oauth.ts` - Hybrid auth entry point (OAuth + session_id fallback)
 - `src/auth/oauth-handler.ts` - Last.fm OAuth integration + manual login flow
 - `src/mcp/tools/authenticated.ts` - Added `registerAuthenticatedToolsWithOAuth()` function
 
 **Key Changes:**
+
 - Added `@cloudflare/workers-oauth-provider` dependency
 - Added `OAUTH_KV` namespace binding to `wrangler.toml`
 - OAuth tools use `getMcpAuthContext()` for auth from OAuth tokens
@@ -477,6 +482,7 @@ We implemented **two authentication methods** to support different MCP clients:
 ### Current State (as of 2024-12-10)
 
 **OAuth 2.0 (RFC 9728 compliant):**
+
 - ✅ OAuth discovery (`/.well-known/oauth-authorization-server`)
 - ✅ Protected resource metadata (`/.well-known/oauth-protected-resource`)
 - ✅ Client registration endpoint (`/oauth/register`)
@@ -487,6 +493,7 @@ We implemented **two authentication methods** to support different MCP clients:
 - ✅ Works with Windsurf and OAuth-compliant MCP clients
 
 **Session ID Fallback (for Claude Desktop):**
+
 - ✅ Manual login endpoint (`/login`)
 - ✅ Session stored in KV with 30-day TTL
 - ✅ Session ID passed via URL query parameter
@@ -535,17 +542,17 @@ We implemented **two authentication methods** to support different MCP clients:
 
 #### Client Compatibility
 
-| Client | Auth Method | Status |
-|--------|-------------|--------|
-| Windsurf | OAuth 2.0 | ✅ Working |
+| Client         | Auth Method          | Status                    |
+| -------------- | -------------------- | ------------------------- |
+| Windsurf       | OAuth 2.0            | ✅ Working                |
 | Claude Desktop | session_id URL param | ✅ Working (manual setup) |
-| Claude Code | session_id URL param | ✅ Working (manual setup) |
-| MCP Inspector | OAuth 2.0 | ✅ Should work |
-| Custom clients | Either | ✅ Both supported |
+| Claude Code    | session_id URL param | ✅ Working (manual setup) |
+| MCP Inspector  | OAuth 2.0            | ✅ Should work            |
+| Custom clients | Either               | ✅ Both supported         |
 
 #### OAuth 2.0 Flow (Windsurf, etc.)
 
-1. Client requests `/mcp` → gets 401 with `WWW-Authenticate: Bearer resource_metadata="..."` 
+1. Client requests `/mcp` → gets 401 with `WWW-Authenticate: Bearer resource_metadata="..."`
 2. Client fetches `/.well-known/oauth-protected-resource`
 3. Client fetches `/.well-known/oauth-authorization-server`
 4. Client registers via `/oauth/register`
@@ -566,21 +573,21 @@ We implemented **two authentication methods** to support different MCP clients:
 
 #### Endpoint Reference
 
-| Endpoint | Method | Purpose |
-|----------|--------|--------|
-| `/` | GET | API info JSON |
-| `/mcp` | POST | MCP JSON-RPC endpoint |
-| `/mcp?session_id=XXX` | POST | MCP with session auth |
-| `/login` | GET | Manual login (Claude Desktop) |
-| `/callback` | GET | Manual login callback |
-| `/authorize` | GET | OAuth authorization |
-| `/oauth/token` | POST | OAuth token exchange |
-| `/oauth/register` | POST | OAuth client registration |
-| `/lastfm-callback` | GET | OAuth Last.fm callback |
-| `/.well-known/oauth-authorization-server` | GET | OAuth server metadata |
-| `/.well-known/oauth-protected-resource` | GET | OAuth resource metadata |
-| `/.well-known/mcp.json` | GET | MCP server discovery |
-| `/health` | GET | Health check |
+| Endpoint                                  | Method | Purpose                       |
+| ----------------------------------------- | ------ | ----------------------------- |
+| `/`                                       | GET    | API info JSON                 |
+| `/mcp`                                    | POST   | MCP JSON-RPC endpoint         |
+| `/mcp?session_id=XXX`                     | POST   | MCP with session auth         |
+| `/login`                                  | GET    | Manual login (Claude Desktop) |
+| `/callback`                               | GET    | Manual login callback         |
+| `/authorize`                              | GET    | OAuth authorization           |
+| `/oauth/token`                            | POST   | OAuth token exchange          |
+| `/oauth/register`                         | POST   | OAuth client registration     |
+| `/lastfm-callback`                        | GET    | OAuth Last.fm callback        |
+| `/.well-known/oauth-authorization-server` | GET    | OAuth server metadata         |
+| `/.well-known/oauth-protected-resource`   | GET    | OAuth resource metadata       |
+| `/.well-known/mcp.json`                   | GET    | MCP server discovery          |
+| `/health`                                 | GET    | Health check                  |
 
 ---
 

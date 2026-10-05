@@ -24,11 +24,11 @@ Add to `~/.codeium/windsurf/mcp_config.json`:
 
 ```json
 {
-  "mcpServers": {
-    "lastfm": {
-      "serverUrl": "https://lastfm-mcp.com/mcp"
-    }
-  }
+	"mcpServers": {
+		"lastfm": {
+			"serverUrl": "https://lastfm-mcp.com/mcp"
+		}
+	}
 }
 ```
 
@@ -38,12 +38,12 @@ For clients that don't support remote servers directly (Continue.dev, Zed, etc.)
 
 ```json
 {
-  "mcpServers": {
-    "lastfm": {
-      "command": "npx",
-      "args": ["-y", "mcp-remote", "https://lastfm-mcp.com/mcp"]
-    }
-  }
+	"mcpServers": {
+		"lastfm": {
+			"command": "npx",
+			"args": ["-y", "mcp-remote", "https://lastfm-mcp.com/mcp"]
+		}
+	}
 }
 ```
 
@@ -63,39 +63,39 @@ Public tools work without signing in. You only need to connect your account for 
 
 ### Public tools
 
-| Tool | Description |
-| ---- | ----------- |
-| `get_track_info` | Detailed information about a track |
-| `get_artist_info` | Artist information and bio |
-| `get_album_info` | Album details and track listing |
+| Tool                    | Description                             |
+| ----------------------- | --------------------------------------- |
+| `get_track_info`        | Detailed information about a track      |
+| `get_artist_info`       | Artist information and bio              |
+| `get_album_info`        | Album details and track listing         |
 | `get_artist_top_tracks` | An artist's globally most-played tracks |
 | `get_artist_top_albums` | An artist's globally most-played albums |
-| `get_similar_artists` | Artists similar to a given artist |
-| `get_similar_tracks` | Tracks similar to a given track |
-| `ping` | Test connectivity |
-| `server_info` | Server status and capabilities |
-| `lastfm_auth_status` | Check authentication status |
+| `get_similar_artists`   | Artists similar to a given artist       |
+| `get_similar_tracks`    | Tracks similar to a given track         |
+| `ping`                  | Test connectivity                       |
+| `server_info`           | Server status and capabilities          |
+| `lastfm_auth_status`    | Check authentication status             |
 
 ### Personal tools (requires sign-in)
 
-| Tool | Description |
-| ---- | ----------- |
-| `get_recent_tracks` | Recent listening history (paginated) |
-| `get_top_artists` | Top artists by time period |
-| `get_top_albums` | Top albums by time period |
-| `get_top_tracks` | Top tracks by time period |
-| `get_loved_tracks` | Loved/favorited tracks |
-| `get_user_info` | Last.fm profile information |
-| `get_listening_stats` | Listening statistics |
-| `get_music_recommendations` | Personalized recommendations |
+| Tool                        | Description                          |
+| --------------------------- | ------------------------------------ |
+| `get_recent_tracks`         | Recent listening history (paginated) |
+| `get_top_artists`           | Top artists by time period           |
+| `get_top_albums`            | Top albums by time period            |
+| `get_top_tracks`            | Top tracks by time period            |
+| `get_loved_tracks`          | Loved/favorited tracks               |
+| `get_user_info`             | Last.fm profile information          |
+| `get_listening_stats`       | Listening statistics                 |
+| `get_music_recommendations` | Personalized recommendations         |
 
 ### Temporal queries (requires sign-in)
 
-| Tool | Description |
-| ---- | ----------- |
-| `get_weekly_chart_list` | Available historical time periods |
+| Tool                      | Description                              |
+| ------------------------- | ---------------------------------------- |
+| `get_weekly_chart_list`   | Available historical time periods        |
 | `get_weekly_artist_chart` | Artist charts for a specific time period |
-| `get_weekly_track_chart` | Track charts for a specific time period |
+| `get_weekly_track_chart`  | Track charts for a specific time period  |
 
 Good for questions like "when did I start listening to Led Zeppelin?" or "what was I into last March?"
 
@@ -118,14 +118,14 @@ lastfm://track/{artist}/{track}/similar  # Similar tracks
 
 ## Prompts
 
-| Prompt | Description | Arguments |
-| ------ | ----------- | --------- |
-| `listening_insights` | Analyze listening habits and patterns | `username`, `period?` |
-| `music_discovery` | Discover music based on listening history | `username`, `genre?` |
-| `track_analysis` | Detailed analysis of a track | `artist`, `track` |
-| `album_analysis` | Detailed analysis of an album | `artist`, `album` |
-| `artist_analysis` | Detailed analysis of an artist | `artist` |
-| `listening_habits` | Summarize listening habits | `username`, `timeframe?` |
+| Prompt               | Description                               | Arguments                |
+| -------------------- | ----------------------------------------- | ------------------------ |
+| `listening_insights` | Analyze listening habits and patterns     | `username`, `period?`    |
+| `music_discovery`    | Discover music based on listening history | `username`, `genre?`     |
+| `track_analysis`     | Detailed analysis of a track              | `artist`, `track`        |
+| `album_analysis`     | Detailed analysis of an album             | `artist`, `album`        |
+| `artist_analysis`    | Detailed analysis of an artist            | `artist`                 |
+| `listening_habits`   | Summarize listening habits                | `username`, `timeframe?` |
 
 ## Development
 
@@ -194,17 +194,17 @@ npm run build     # wrangler deploy --dry-run: catches type and binding errors
 
 ### Endpoints
 
-| Endpoint | Purpose |
-| -------- | ------- |
-| `/mcp` | MCP JSON-RPC endpoint (rate-limited per IP) |
-| `/authorize` | OAuth 2.0 authorization |
-| `/oauth/token` | OAuth 2.0 token exchange |
-| `/oauth/register` | OAuth 2.0 dynamic client registration |
-| `/.well-known/oauth-authorization-server` | OAuth server metadata |
-| `/.well-known/oauth-protected-resource` | OAuth resource metadata |
-| `/.well-known/mcp.json` | MCP server card (name, version, transport) |
-| `/health` | Health check |
-| `/` | Landing page |
+| Endpoint                                  | Purpose                                     |
+| ----------------------------------------- | ------------------------------------------- |
+| `/mcp`                                    | MCP JSON-RPC endpoint (rate-limited per IP) |
+| `/authorize`                              | OAuth 2.0 authorization                     |
+| `/oauth/token`                            | OAuth 2.0 token exchange                    |
+| `/oauth/register`                         | OAuth 2.0 dynamic client registration       |
+| `/.well-known/oauth-authorization-server` | OAuth server metadata                       |
+| `/.well-known/oauth-protected-resource`   | OAuth resource metadata                     |
+| `/.well-known/mcp.json`                   | MCP server card (name, version, transport)  |
+| `/health`                                 | Health check                                |
+| `/`                                       | Landing page                                |
 
 ## Contributing
 

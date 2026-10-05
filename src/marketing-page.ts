@@ -931,4 +931,4 @@ export const MARKETING_PAGE_HTML = `<!DOCTYPE html>
         })();
     </script>
 </body>
-</html>`;
+</html>`
