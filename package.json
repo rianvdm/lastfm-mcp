@@ -29,7 +29,7 @@
 	},
 	"devDependencies": {
 		"@cloudflare/vitest-pool-workers": "^0.22.0",
-		"@cloudflare/workers-types": "^4.20250607.0",
+		"@cloudflare/workers-types": "^5.20260815.1",
 		"@modelcontextprotocol/client": "2.0.0",
 		"@types/node": "^22.20.1",
 		"@typescript-eslint/eslint-plugin": "^8.33.1",
@@ -39,7 +39,7 @@
 		"prettier": "^3.5.3",
 		"typescript": "^5.5.2",
 		"vitest": "^4.1.11",
-		"wrangler": "^4.19.1"
+		"wrangler": "4.124.0"
 	},
 	"dependencies": {
 		"@cloudflare/workers-oauth-provider": "^0.10.3",
