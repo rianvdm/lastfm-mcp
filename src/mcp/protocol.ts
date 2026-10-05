@@ -15,4 +15,4 @@ export const PROTOCOL_VERSION = '2026-07-28'
  * `/health`, and the MCP handshake. Kept here so the three call sites cannot drift
  * apart again; bump it alongside package.json and the git tag on release.
  */
-export const SERVER_VERSION = '2.5.0'
+export const SERVER_VERSION = '2.6.0'
