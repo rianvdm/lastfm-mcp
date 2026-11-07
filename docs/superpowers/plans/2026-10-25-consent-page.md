@@ -240,13 +240,23 @@ git commit -m "feat(auth): upgrade workers-oauth-provider to 1.x with the origin
 
 No code. Each bullet marked **(gate)** waits for Rian's go-ahead.
 
+- [ ] **Step 0:** Rian decides the production rollback strategy before the push: (a) a prepared rollback branch, `main` plus `resourceMatchOriginOnly: true` on 0.10.3, tested against grants written by 1.x; or (b) fix-forward only. **(gate)**
 - [ ] **Step 1:** Draft the upstream issue on `cloudflare/workers-oauth-provider`, asking for path descendants of an origin resource to be mapped like query-carrying ones. Rian files it, or approves filing it. Put its link in the doc comments in `src/auth/resource-indicator.ts` and commit.
 - [ ] **Step 2:** Push the branch and open PR 1 with `gh pr create`. List the safety evidence in the body: test names and fixture origin. **(gate)**
 - [ ] **Step 3:** Before deploying, Rian signs in to the staging Worker with Claude Code (a `/mcp` sender) and with one origin sender (Claude or MCP Inspector), then confirms a tool call works in each.
-- [ ] **Step 4:** `npm run deploy` (staging). **(gate)** Then confirm: both existing sessions still call tools, and a fresh sign-in from each client works.
-- [ ] **Step 5:** Rollback rehearsal. Run `npx wrangler rollback` on staging to the pre-upgrade version **(gate)**, confirm both sessions still work, then run `npm run deploy` again. If sessions break after rollback, record that production rollback isn't a safe escape hatch, and tell Rian before Step 6.
-- [ ] **Step 6:** Merge, then `npm run deploy:prod`. **(gate)**
-- [ ] **Step 7:** After a few hours and again the next day, query Workers Observability for `[OAUTH] error` and count by `reason`. Expect at most 7 `grant_audience_unbound` and no `invalid_target` at `/authorize` or `/oauth/token` for `/mcp` requests. Report the counts to Rian.
+- [ ] **Step 4:** `npm run deploy` (staging). **(gate)** Then confirm: the origin sender's existing session still calls tools, and a fresh sign-in from each client works. The existing `/mcp`-sender session (Claude Code) is expected to get a 401, then `invalid_grant` on refresh, then re-authorize once by itself. That re-authorization is the real-world check of the spec's assumption that clients recover from `invalid_grant`.
+- [ ] **Step 5:** Rollback rehearsal. Run `npx wrangler rollback` on staging to the rollback target **(gate)**. Tokens issued by 1.x still validate on 0.10.3, so a session that keeps working right after the rollback proves nothing. Force a refresh in each session: refresh by hand in MCP Inspector, or wait out the 1-hour access token. Then run `npm run deploy` again. If sessions break after rollback, record that production rollback isn't a safe escape hatch, and tell Rian before Step 6. Expectations:
+  - With plain `main` as the target, `/mcp` senders and trailing-slash senders whose grant was created or refreshed under 1.x get `invalid_target` on that refresh, and clients don't recover from it.
+  - The rollback target is pending Rian's decision in Step 0.
+- [ ] **Step 6:** Merge. `.github/workflows/ci.yml` runs `npm run deploy:prod` on every push to `main`, so **the merge is the production deploy (gate on the merge)**. Any later push to `main` also redeploys over a `wrangler rollback`.
+- [ ] **Step 7:** After a few hours and again the next day, query Workers Observability for `[OAUTH] error`, `[OAUTH] Invalid authorization request` (`/authorize` errors are thrown by `parseAuthRequest` and logged by our handler, not by `onError`) and `[HTTP] redirect to https`. Count every `reason`, including:
+  - `token_audience_unbound`
+  - `grant_audience_unbound`
+  - `invalid_scope` / `scope_not_granted` (1.2 refuses a refresh whose scope names nothing the grant holds)
+
+  Expect at most 7 `grant_audience_unbound` (the 6 `/mcp`-bound grants, plus the workers.dev grant only if its client now refreshes on `lastfm-mcp.com`) and no `invalid_target` at `/authorize` or `/oauth/token` for `/mcp` requests. Report the counts to Rian.
+
+Note for Steps 4–6: sign-ins in flight at deploy time from `/mcp` senders can 500 at `/lastfm-callback`, because the `oauth-pending:` record written by 0.10.3 carries `…/mcp`. This is accepted; they retry.
 
 ---
 
