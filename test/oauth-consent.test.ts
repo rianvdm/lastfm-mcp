@@ -57,11 +57,15 @@ async function startConsent(redirectUri: string, state = 'client-state') {
 	return { clientId, ...consent }
 }
 
-/** Expect a response rendered locally as an error: 400, HTML, and no redirect anywhere. */
+/** Expect a response rendered locally as an error: 400, HTML, no redirect anywhere, not cached and not frameable. */
 function expectLocalError(res: Response) {
 	expect(res.status).toBe(400)
 	expect(res.headers.get('Content-Type')).toMatch(/^text\/html/)
 	expect(res.headers.get('Location')).toBeNull()
+	expect(res.headers.get('X-Frame-Options')).toBe('DENY')
+	expect(res.headers.get('Cache-Control')).toBe('no-store')
+	expect(res.headers.get('Content-Security-Policy')).toBe("frame-ancestors 'none'")
+	expect(res.headers.get('Content-Security-Policy') ?? '').not.toContain('form-action')
 }
 
 describe('Consent before the Last.fm redirect', () => {
@@ -195,6 +199,31 @@ describe('Consent before the Last.fm redirect', () => {
 			expect(again.response.status).toBe(302)
 			expect(new URL(again.response.headers.get('Location') ?? '').hostname).toBe('www.last.fm')
 			expect(lastfmStateFrom(again.response)).toBeTruthy()
+		})
+
+		// Issue #40: anyone can register a client with any name, so an approval for one client must never carry over to another
+		it('should ask again for a newly registered client even when another client is remembered', async () => {
+			const { handle, cookies } = await startConsent(WEB_REDIRECT_URI)
+			const approveRes = await submitConsent(worker, env, ORIGIN, handle, 'approve', cookies)
+			expect(approveRes.status).toBe(302)
+			const approvedJar = toCookieHeader(approveRes, cookies)
+			expect(approvedJar).toContain('__Host-oauth-approvals=')
+
+			const attackerId = await registerPublicClient(worker, env, ORIGIN, 'https://attacker.example/cb', 'Claude')
+			const attack = await openConsent(
+				worker,
+				env,
+				await buildAuthorizeUrl({ origin: ORIGIN, clientId: attackerId, redirectUri: 'https://attacker.example/cb' }),
+				approvedJar,
+			)
+
+			expect(attack.response.status).toBe(200)
+			const body = await attack.response.text()
+			expect(/<h1>(.*?)<\/h1>/s.exec(body)?.[1]).toBe(HEADLINE)
+			expect(body).toContain('attacker.example')
+			expect(body).toContain('“Claude”')
+			// The renderer escapes the apostrophe
+			expect(body).toContain('The app chose this name itself. It hasn&#039;t been checked.')
 		})
 
 		it('should ask again for a different redirect URI', async () => {

@@ -95,8 +95,14 @@ export function toCookieHeader(response: Response, existing = ''): string {
 	return [...jar].map(([name, value]) => `${name}=${value}`).join('; ')
 }
 
-/** Register a public DCR client for one or more redirect URIs and return its client_id. */
-export async function registerPublicClient(worker: WorkerLike, env: Env, origin: string, redirectUris: string | string[]): Promise<string> {
+/** Register a public DCR client for one or more redirect URIs and return its client_id. `clientName` is self-asserted, as in DCR. */
+export async function registerPublicClient(
+	worker: WorkerLike,
+	env: Env,
+	origin: string,
+	redirectUris: string | string[],
+	clientName = 'Resource Compat Test Client',
+): Promise<string> {
 	const response = await send(
 		worker,
 		env,
@@ -104,7 +110,7 @@ export async function registerPublicClient(worker: WorkerLike, env: Env, origin:
 			method: 'POST',
 			headers: { 'Content-Type': 'application/json', ...hostHeader(origin) },
 			body: JSON.stringify({
-				client_name: 'Resource Compat Test Client',
+				client_name: clientName,
 				redirect_uris: Array.isArray(redirectUris) ? redirectUris : [redirectUris],
 				grant_types: ['authorization_code', 'refresh_token'],
 				response_types: ['code'],
