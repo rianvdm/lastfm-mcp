@@ -129,37 +129,45 @@ git commit -m "test(auth): capture 0.10.3 OAuth KV records as an upgrade fixture
 
 **Files:**
 - Create: `src/auth/resource-indicator.ts`
-- Modify: `src/index-oauth.ts` (call it in the default export's `fetch`, just before `oauthProvider.fetch`)
+- Modify: `src/index-oauth.ts` (route-specific branches for `/authorize` and `/oauth/token` in the default export's `fetch`, just before `oauthProvider.fetch`)
 - Test: `test/auth/resource-indicator.test.ts`
 
+**Prior art:** discogs-mcp solved this on 2026-10-06 (`~/git/discogs-mcp/src/index-oauth.ts`: `normalizeAuthorizeResource`, `stripResourceParam`, `getOAuthProvider`). Read it before starting and reuse its names, wiring and request-rebuilding code. Two deliberate differences:
+- `/oauth/token` gets the same narrow rewrite as `/authorize`. discogs strips `resource` from every token request. Rian chose the narrow rewrite on 2026-11-07 so the library keeps rejecting any other value with `invalid_target`.
+- Repeated `resource` params are each checked. discogs checks only the first.
+
+The functions live in their own module so they can be unit-tested and later copied back to discogs-mcp.
+
 **Interfaces:**
-- Produces `normalizeResourceIndicator(request: Request): Promise<Request>`. It returns the same `Request` object when nothing changes, and otherwise a new `Request` with every matching `resource` value replaced by the origin. Method, headers (including `Authorization`) and all other parameters are preserved.
+- Produces, in `src/auth/resource-indicator.ts`:
+  - `normalizeAuthorizeResource(request: Request, url: URL): Request` (same name and signature as discogs-mcp's)
+  - `normalizeTokenResource(request: Request): Promise<Request>` (narrow-rewrite counterpart of discogs-mcp's `stripResourceParam`; same `POST` and `application/x-www-form-urlencoded` checks)
+- Each one returns the same `Request` object when nothing changes, and otherwise a new `Request` with every `resource` value equal to `${origin}/mcp` replaced by the origin. Method, headers (including `Authorization`) and all other parameters are preserved.
+- `src/index-oauth.ts` calls `normalizeAuthorizeResource` only when `url.pathname === '/authorize'` and `normalizeTokenResource` only when `url.pathname === '/oauth/token'`, as discogs-mcp does.
 
 - [ ] **Step 1: Write the failing unit tests**
 
-`describe('normalizeResourceIndicator')`, with origin `https://lastfm-mcp.com`:
+`describe('normalizeAuthorizeResource')` and `describe('normalizeTokenResource')`, with origin `https://lastfm-mcp.com`:
 - `GET /authorize?resource=https://lastfm-mcp.com/mcp&state=x` → `resource` is `https://lastfm-mcp.com` and `state` is `x`.
 - `POST /oauth/token`, form body `grant_type=refresh_token&refresh_token=r&resource=https%3A%2F%2Flastfm-mcp.com%2Fmcp` → body `resource` is `https://lastfm-mcp.com`, the other fields are unchanged, and `Authorization: Basic abc` is preserved.
-- Unchanged (same object, `toBe`) for each of:
+- Unchanged (same object, `toBe`), in both functions, for each `resource` value:
   - `https://evil.example/mcp`
   - `https://lastfm-mcp.com/mcp/x`
   - `https://lastfm-mcp.com/mcp?x=1`
   - `https://lastfm-mcp.com/mcp-other`
   - `https://lastfm-mcp.com`
   - no `resource`
-  - `GET /oauth/token`
-  - `POST /oauth/token` with `Content-Type: application/json`
-  - `POST /oauth/register`
-  - `GET /mcp?resource=https://lastfm-mcp.com/mcp`
-- On a request to `https://lastfm-mcp.rian-db8.workers.dev/authorize`, `resource=https://lastfm-mcp.com/mcp` is unchanged, because a different host isn't mapped.
-- Repeated `resource` params: each value equal to `${origin}/mcp` is replaced and the others are kept.
+- `normalizeTokenResource` also leaves unchanged: `GET /oauth/token`, and `POST /oauth/token` with `Content-Type: application/json`.
+- On a request to `https://lastfm-mcp.rian-db8.workers.dev/authorize`, `resource=https://lastfm-mcp.com/mcp` is unchanged, because a different host isn't mapped. Same for the token function.
+- Repeated `resource` params, in both functions: each value equal to `${origin}/mcp` is replaced and the others are kept.
+- Routing, in a worker-level test: `POST /oauth/register` and `GET /mcp?resource=https://lastfm-mcp.com/mcp` reach the provider untouched (neither function is called on those paths).
 
 - [ ] **Step 2: Run to confirm they fail**
 
 Run: `npx vitest run test/auth/resource-indicator.test.ts`
 Expected: FAIL, module not found.
 
-- [ ] **Step 3: Implement `normalizeResourceIndicator` and wire it into `src/index-oauth.ts`**
+- [ ] **Step 3: Implement both functions and wire them into `src/index-oauth.ts`**
 
 Compare strings with `` `${url.origin}/mcp` ``, not with parsed URLs, so dot segments or encodings never match. The doc comment cites RFC 8707 §2.2 and the upstream issue (link added in Task 5).
 
@@ -185,7 +193,7 @@ git commit -m "feat(auth): map the /mcp resource indicator to the server origin"
 - Modify: `test/oauth-authorize-errors.test.ts` (add invalid-resource cases)
 
 **Interfaces:**
-- Consumes: `loadOAuth0xFixture`, `OAUTH_0X_GRANTS` (Task 2), the helpers (Task 1), `normalizeResourceIndicator` (Task 3).
+- Consumes: `loadOAuth0xFixture`, `OAUTH_0X_GRANTS` (Task 2), the helpers (Task 1), `normalizeAuthorizeResource` and `normalizeTokenResource` (Task 3).
 - Produces `getOAuthProvider(origin: string): OAuthProvider` in `src/index-oauth.ts`. It's memoized in a module-level `Map`, and every instance shares the same `apiHandler`, `defaultHandler` and options, with `resourceMetadata: { resource: origin }`.
 
 - [ ] **Step 1: Write the survival test**
@@ -211,7 +219,7 @@ Check: `git diff --stat package-lock.json` shows one small hunk.
 - [ ] **Step 5: Apply the migration**
 
 Work through `skills/migrate-to-1.x/SKILL.md` in the installed package. Specifically:
-- Build `getOAuthProvider(origin)` with `resourceMetadata: { resource: origin }`. Call it in `fetch` with `url.origin`, after `normalizeResourceIndicator`.
+- Build `getOAuthProvider(origin)` with `resourceMetadata: { resource: origin }`. Call it in `fetch` with `url.origin`, after the Task 3 normalizers, as discogs-mcp does.
 - Add `onError: ({ status, code, internal }) => console.warn('[OAUTH] error', { status, code, ...internal })`.
 - Delete `handleProtectedResourceMetadata` and its `case`.
 - Keep the `WWW-Authenticate` rewrite only if a test needs it. The existing round-trip assertion (`resource_metadata="${BASE_URL}/.well-known/oauth-protected-resource"`) must still pass, and `test/oauth-discovery.test.ts` must still see `resource` equal to `BASE_URL` with no trailing slash.
@@ -232,7 +240,7 @@ git commit -m "feat(auth): upgrade workers-oauth-provider to 1.x with the origin
 
 No code. Each bullet marked **(gate)** waits for Rian's go-ahead.
 
-- [ ] **Step 1:** Draft the upstream issue on `cloudflare/workers-oauth-provider`, asking for path descendants of an origin resource to be mapped like query-carrying ones. Rian files it, or approves filing it. Put its link in the `normalizeResourceIndicator` doc comment and commit.
+- [ ] **Step 1:** Draft the upstream issue on `cloudflare/workers-oauth-provider`, asking for path descendants of an origin resource to be mapped like query-carrying ones. Rian files it, or approves filing it. Put its link in the doc comments in `src/auth/resource-indicator.ts` and commit.
 - [ ] **Step 2:** Push the branch and open PR 1 with `gh pr create`. List the safety evidence in the body: test names and fixture origin. **(gate)**
 - [ ] **Step 3:** Before deploying, Rian signs in to the staging Worker with Claude Code (a `/mcp` sender) and with one origin sender (Claude or MCP Inspector), then confirms a tool call works in each.
 - [ ] **Step 4:** `npm run deploy` (staging). **(gate)** Then confirm: both existing sessions still call tools, and a fresh sign-in from each client works.
