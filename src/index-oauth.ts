@@ -11,6 +11,7 @@ import { PROTOCOL_VERSION, SERVER_VERSION } from './mcp/protocol'
 import { createMcpServer } from './mcp/server'
 import { buildOAuthAuthMessages } from './mcp/tools'
 import type { Env } from './types/env'
+import { httpsRedirect } from './utils/httpsRedirect'
 import { buildRateLimitResponse, checkRateLimit, rateLimitKeyFromRequest } from './utils/rateLimit'
 
 /**
@@ -166,6 +167,11 @@ function getOAuthProvider(origin: string): OAuthProvider {
 export default {
 	async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
 		const url = new URL(request.url)
+
+		// The OAuth provider can't be built for a plain-http origin outside loopback, so send those to https first
+		const redirect = httpsRedirect(url)
+		if (redirect) return redirect
+
 		const baseUrl = `${url.protocol}//${url.host}`
 
 		// Handle CORS preflight requests

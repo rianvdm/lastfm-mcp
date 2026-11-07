@@ -1,5 +1,5 @@
 // ABOUTME: Tests for the OAuth entry point (src/index-oauth.ts).
-// ABOUTME: Covers unauthenticated 401 routing, session-based auth, OAuth routing, and regression for copy-paste URL bug.
+// ABOUTME: Covers plain-http redirects, unauthenticated 401 routing, session-based auth, OAuth routing, and regression for copy-paste URL bug.
 import { env, createExecutionContext, waitOnExecutionContext } from 'cloudflare:test'
 import { Client, StreamableHTTPClientTransport } from '@modelcontextprotocol/client'
 import { describe, it, expect } from 'vitest'
@@ -458,6 +458,68 @@ describe('Last.fm MCP Server (OAuth Entry Point)', () => {
 			expect(res.headers.get('WWW-Authenticate')).toBeTruthy()
 			const body = await res.text()
 			expect(body).not.toContain('/login?session_id=')
+		})
+	})
+
+	// 1.x refuses a plain-http protected resource on a non-loopback host, so these must never reach the provider.
+	describe('plain-http requests', () => {
+		async function send(request: Request): Promise<Response> {
+			const ctx = createExecutionContext()
+			const response = await worker.fetch(request, env, ctx)
+			await waitOnExecutionContext(ctx)
+			return response
+		}
+
+		it('should redirect GET http://lastfm-mcp.com/mcp to https with a 308', async () => {
+			const res = await send(new Request('http://lastfm-mcp.com/mcp'))
+
+			expect(res.status).toBe(308)
+			expect(res.headers.get('Location')).toBe('https://lastfm-mcp.com/mcp')
+		})
+
+		it('should redirect POST http://lastfm-mcp.com/oauth/token with a 308 so the method and body are kept', async () => {
+			const res = await send(
+				new Request('http://lastfm-mcp.com/oauth/token', {
+					method: 'POST',
+					headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+					body: 'grant_type=refresh_token&refresh_token=x&client_id=y',
+				}),
+			)
+
+			expect(res.status).toBe(308)
+			expect(res.headers.get('Location')).toBe('https://lastfm-mcp.com/oauth/token')
+		})
+
+		it('should keep the query string', async () => {
+			const res = await send(new Request('http://lastfm-mcp.com/authorize?client_id=abc&state=xyz&resource=https%3A%2F%2Flastfm-mcp.com'))
+
+			expect(res.status).toBe(308)
+			expect(res.headers.get('Location')).toBe(
+				'https://lastfm-mcp.com/authorize?client_id=abc&state=xyz&resource=https%3A%2F%2Flastfm-mcp.com',
+			)
+		})
+
+		it('should redirect plain http on a workers.dev host', async () => {
+			const res = await send(
+				new Request('http://lastfm-mcp.rian-db8.workers.dev/', { headers: { Host: 'lastfm-mcp.rian-db8.workers.dev' } }),
+			)
+
+			expect(res.status).toBe(308)
+			expect(res.headers.get('Location')).toBe('https://lastfm-mcp.rian-db8.workers.dev/')
+		})
+
+		it('should not redirect loopback http (wrangler dev)', async () => {
+			const res = await send(new Request('http://localhost:8787/health'))
+
+			expect(res.status).toBe(200)
+		})
+
+		it('should serve OAuth metadata over loopback http with the loopback origin as the resource', async () => {
+			const res = await send(new Request('http://localhost:8787/.well-known/oauth-protected-resource'))
+
+			expect(res.status).toBe(200)
+			const body = (await res.json()) as { resource?: string }
+			expect(body.resource).toBe('http://localhost:8787')
 		})
 	})
 
