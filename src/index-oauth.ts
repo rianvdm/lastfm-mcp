@@ -5,6 +5,7 @@ import type { ExecutionContext } from '@cloudflare/workers-types'
 import { createMcpHandler, type CreateMcpHandlerOptions } from 'agents/mcp/server'
 
 import { LastfmOAuthHandler, type LastfmUserProps } from './auth/oauth-handler'
+import { normalizeAuthorizeResource, normalizeTokenResource } from './auth/resource-indicator'
 import { MARKETING_PAGE_HTML } from './marketing-page'
 import { PROTOCOL_VERSION, SERVER_VERSION } from './mcp/protocol'
 import { createMcpServer } from './mcp/server'
@@ -299,6 +300,13 @@ Sitemap: https://lastfm-mcp.com/sitemap.xml`,
 			// No session → fall through to OAuth provider
 			// - Valid bearer token: OAuth provider authenticates and serves MCP
 			// - No bearer token: OAuth provider returns 401 + WWW-Authenticate (triggers browser OAuth flow)
+		}
+
+		// Map a `resource` of `${origin}/mcp` to the origin on the two routes that validate it
+		if (url.pathname === '/authorize') {
+			request = normalizeAuthorizeResource(request, url)
+		} else if (url.pathname === '/oauth/token') {
+			request = await normalizeTokenResource(request)
 		}
 
 		// Use OAuth provider for everything else
