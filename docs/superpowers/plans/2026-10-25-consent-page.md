@@ -19,7 +19,7 @@
 - Canonical resource: `${new URL(request.url).origin}` exactly (no trailing slash, no path).
 - Resource rewrite: only a `resource` value equal to exactly `${origin}/mcp`, only on `GET /authorize` (query) and `POST /oauth/token` (`application/x-www-form-urlencoded` body).
 - Leave `allowPrivateUseRedirectUris` off.
-- `CONSENT_SECRET`: a Worker secret of at least 32 characters. Remember approvals for 30 days (library default) with no `subject`.
+- `CONSENT_SECRET`: a Worker secret of at least 32 characters. Remember approvals for 1 year (`maxAgeSeconds: 365 * 24 * 60 * 60`, a named constant) with no `subject`.
 - The consent page renders client-supplied strings (name, domain, hostname) escaped, always.
 - Consent page copy, exact:
   - Wordmark: `Last.fm MCP`
@@ -30,7 +30,7 @@
   - Row labels: `App`, `Access goes to`
   - Loopback warning: `This sends access to an app on your computer. Continue only if you just started connecting from that app.`
   - Buttons: `Continue to Last.fm` (`name="decision" value="approve"`), `Don't allow` (`value="deny"`)
-  - Non-loopback fine print: `You won't be asked again for this app for 30 days.`
+  - Non-loopback fine print: `You won't be asked again for this app for a year.`
   - Privacy link: `https://elezea.com/privacy/#lastfm-mcp-server`
 - Visual tokens (from elezea.com): background `#fff`, text `#444`, headings `#1b1b1b`, muted `#767676`, rules `#ddd`, accent `#ff6c00`, warning border `#ffe670` on `#fff8d6`, 5px radius, 17px body, max column width 560px, serif stack `Georgia, Cambria, "Times New Roman", Times, serif`. No external fonts or scripts.
 - Consent response headers: the library's `beginConsent()` headers, plus `Content-Type: text/html; charset=utf-8`. No `form-action` directive in any CSP on `/authorize`.
@@ -240,14 +240,14 @@ git commit -m "feat(auth): upgrade workers-oauth-provider to 1.x with the origin
 
 No code. Each bullet marked **(gate)** waits for Rian's go-ahead.
 
-- [ ] **Step 0:** Rian decides the production rollback strategy before the push: (a) a prepared rollback branch, `main` plus `resourceMatchOriginOnly: true` on 0.10.3, tested against grants written by 1.x; or (b) fix-forward only. **(gate)**
+- [x] **Step 0:** Rollback strategy. Rian chose (2026-11-07) a prepared rollback branch, `fix/oauth-rollback-origin-only`: `main` plus `resourceMatchOriginOnly: true` on 0.10.3, tested against grants written by 1.x (`test/oauth-rollback-compat.test.ts` on that branch).
 - [ ] **Step 1:** Draft the upstream issue on `cloudflare/workers-oauth-provider`, asking for path descendants of an origin resource to be mapped like query-carrying ones. Rian files it, or approves filing it. Put its link in the doc comments in `src/auth/resource-indicator.ts` and commit.
 - [ ] **Step 2:** Push the branch and open PR 1 with `gh pr create`. List the safety evidence in the body: test names and fixture origin. **(gate)**
 - [ ] **Step 3:** Before deploying, Rian signs in to the staging Worker with Claude Code (a `/mcp` sender) and with one origin sender (Claude or MCP Inspector), then confirms a tool call works in each.
 - [ ] **Step 4:** `npm run deploy` (staging). **(gate)** Then confirm: the origin sender's existing session still calls tools, and a fresh sign-in from each client works. The existing `/mcp`-sender session (Claude Code) is expected to get a 401, then `invalid_grant` on refresh, then re-authorize once by itself. That re-authorization is the real-world check of the spec's assumption that clients recover from `invalid_grant`.
-- [ ] **Step 5:** Rollback rehearsal. Run `npx wrangler rollback` on staging to the rollback target **(gate)**. Tokens issued by 1.x still validate on 0.10.3, so a session that keeps working right after the rollback proves nothing. Force a refresh in each session: refresh by hand in MCP Inspector, or wait out the 1-hour access token. Then run `npm run deploy` again. If sessions break after rollback, record that production rollback isn't a safe escape hatch, and tell Rian before Step 6. Expectations:
+- [ ] **Step 5:** Rollback rehearsal. Deploy `fix/oauth-rollback-origin-only` to staging with `npm run deploy` from that branch **(gate)**. Tokens issued by 1.x still validate on 0.10.3, so a session that keeps working right after the rollback proves nothing. Force a refresh in each session: refresh by hand in MCP Inspector, or wait out the 1-hour access token. Then run `npm run deploy` again. If sessions break after rollback, record that production rollback isn't a safe escape hatch, and tell Rian before Step 6. Expectations:
   - With plain `main` as the target, `/mcp` senders and trailing-slash senders whose grant was created or refreshed under 1.x get `invalid_target` on that refresh, and clients don't recover from it.
-  - The rollback target is pending Rian's decision in Step 0.
+  - With the rollback branch as the target, every session should refresh and call tools after the forced refresh. A failure means the rollback branch isn't a safe escape hatch: stop and tell Rian before Step 6.
 - [ ] **Step 6:** Merge. `.github/workflows/ci.yml` runs `npm run deploy:prod` on every push to `main`, so **the merge is the production deploy (gate on the merge)**. Any later push to `main` also redeploys over a `wrangler rollback`.
 - [ ] **Step 7:** After a few hours and again the next day, query Workers Observability for `[OAUTH] error`, `[OAUTH] Invalid authorization request` (`/authorize` errors are thrown by `parseAuthRequest` and logged by our handler, not by `onError`) and `[HTTP] redirect to https`. Count every `reason`, including:
   - `token_audience_unbound`
@@ -283,8 +283,8 @@ Using a base `ConsentDescription` fixture:
 - `'should show the verified domain for a CIMD client'`: contains `Published by claude.ai (verified)` and doesn't contain `hasn't been checked`.
 - `'should quote the name and flag it as unchecked for a registered client'`: contains `“Music Helper”` (curly quotes) and `The app chose this name itself. It hasn&#039;t been checked.` (or the unescaped apostrophe, if the copy is written as a literal rather than passed through `sanitizeText`)
 - `'should show the redirect hostname'`: contains `musichelper.example`.
-- `'should warn and omit the 30-day line for a loopback redirect'`: contains the loopback warning and not `30 days`.
-- `'should show the 30-day line and no warning otherwise'`.
+- `'should warn and omit the remember line for a loopback redirect'`: contains the loopback warning and not `for a year`.
+- `'should show the remember line and no warning otherwise'`.
 - `'should escape client-supplied strings'`: `clientName` `<script>alert(1)</script>"` and `redirectHost` `a"><img>` produce no `<script>` and no `<img>`.
 - `'should post the handle back to /authorize'`: contains `method="post"`, `action="/authorize"` and `name="handle" value="<escaped handle>"`, plus both buttons with the exact `name`/`value` pairs.
 - `'should not name the app in the headline'`: the `<h1>` text equals the exact headline.
@@ -368,5 +368,5 @@ git commit -m "feat(auth): ask for consent before redirecting to Last.fm (#40)"
 - [ ] **Step 2:** `wrangler secret put CONSENT_SECRET` for staging, then `--env production`, each with a fresh 48-character random value. Rian runs these, or approves running them. **(gate)**
 - [ ] **Step 3:** `npm run deploy` (staging). **(gate)** In Chrome, check Approve end to end, Deny back to the client, a second connect that skips the page (fixed-callback client), the localhost warning (Claude Code), and the page at phone width.
 - [ ] **Step 4:** Last.fm repeat-authorization check: open `/authorize` for a client already approved on Last.fm and note whether Last.fm prompts again.
-- [ ] **Step 5:** Merge, then `npm run deploy:prod`. **(gate)** Repeat one approve run on production.
+- [ ] **Step 5:** Merge. **(gate)** CI deploys production on every push to `main`, so the merge is the production deploy. Repeat one approve run on production.
 - [ ] **Step 6:** Comment on #40 with the Last.fm finding and the PR links, and close it.

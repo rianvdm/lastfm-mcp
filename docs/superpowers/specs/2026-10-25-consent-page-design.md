@@ -20,7 +20,7 @@ The MCP 2026-07-28 authorization spec requires a fix here ([security considerati
 ## Goals
 
 - Meet both spec requirements above.
-- Keep friction low. Rian's words: "Very little friction. Just want to make sure I don't violate the requirement." In practice, a client with a fixed web callback shows the page once, then not again for 30 days. A local agent shows it on each full sign-in, which is rare.
+- Keep friction low. Rian's words: "Very little friction. Just want to make sure I don't violate the requirement." In practice, a client with a fixed web callback shows the page once, then not again for a year. A local agent shows it on each full sign-in, which for grants created on 0.10.3 or later means at least every 30 days.
 - Look like elezea.com, not like the dark marketing page.
 
 ## Non-goals
@@ -57,7 +57,7 @@ Latest on 2026-10-25 is 1.2.4. Recheck before starting. Follow the migration gui
   2. A fixture of real 0.10.3 KV records (clients, grants, tokens, with their refresh tokens), captured from 0.10.3 in a test run and committed. After the upgrade, a survival test loads it. Origin, trailing-slash and unbound grants must refresh and call a tool. The `/mcp`-bound grant must get `invalid_grant`, which clients recover from by re-authorizing, and never `invalid_target`, which they don't recover from.
   3. Negative tests showing that the mapping touches nothing else: other hosts, other paths, `/mcp/x`, `/mcp?x=1`, and non-form token bodies.
   4. Log the library's `onError` internal reasons, so a post-deploy query can count `invalid_target` and `grant_audience_unbound` in production.
-  5. On staging, sign in before the upgrade with one `/mcp`-sending client (Claude Code) and one origin-sending client. Upgrade, confirm both sessions still work and new sign-ins work, then rehearse a rollback and roll forward again.
+  5. On staging, sign in before the upgrade with one `/mcp`-sending client (Claude Code) and one origin-sending client. Upgrade, confirm both sessions still work and new sign-ins work, then rehearse a rollback to the prepared rollback branch (`fix/oauth-rollback-origin-only`: `main` plus `resourceMatchOriginOnly: true` on 0.10.3, tested against grants written by 1.x), force a refresh, and roll forward again. Rian chose this rollback target on 2026-11-07.
 - 0.10.3 already answers every `/.well-known/oauth-protected-resource*` path itself, before `defaultHandler` runs. The root path advertises the origin and `/mcp` advertises `…/mcp`. So `handleProtectedResourceMetadata` in `src/auth/oauth-handler.ts` is already dead code: delete it. After the upgrade, confirm the root metadata response still advertises the origin. Also check whether the `WWW-Authenticate` rewrite in `src/index-oauth.ts` is still needed, so that clients keep fetching root metadata.
 - Leave `allowPrivateUseRedirectUris` off. Clients registered only with private-use schemes will have to re-register. Clients like Cursor also register https/loopback callbacks.
 - User IDs can't contain `:`. The user ID is the Last.fm username, and Last.fm usernames can't contain `:`, so no change is needed.
@@ -87,8 +87,8 @@ Decisions:
 
 - **`beginUpstream`/`finishUpstream` replace the `oauth-pending:{state}` KV record** in `MCP_SESSIONS`. Last.fm's `state` then exists only after consent and is bound to the browser. Last.fm returns the `cb` URL with `token` appended, so `state` rides in the callback URL's query string as it does today.
 - **Last.fm returns without a token** (the user declined there): call `finishUpstream` and redirect the client with `access_denied`, per `upstream-sign-in.md`.
-- **Remember approvals for 30 days** (the library default `maxAgeSeconds`). Rian approved this. Pass no `subject`: the server learns the Last.fm user only after consent, so approvals belong to the browser, as the docs describe for proxy servers. Approvals are bound to client ID + redirect URI + resource, so a client that changes its redirect URI sees the page again.
-- **Local agents won't hit the remembered approval, and that's accepted (Rian approved).** The library's approval key hashes the exact redirect URI, port included. Most loopback clients pick a new port for each sign-in, so they see the page on every full sign-in. Grants created on 0.10.3 or later expire 30 days after sign-in (the library default `refreshTokenTTL`, which refreshes don't extend in 0.10.3 or 1.2.4). Grants created before 2026-08-24, on 0.1.0, have no expiry. So a client signs in again on first setup, after re-adding the server, after losing its tokens, after a grant is revoked, and every 30 days for grants created on 0.10.3 or later. A local agent sees the page each of those times. Whether that changes how long consent should be remembered is still open. Don't write custom approval storage to get around the port.
+- **Remember approvals for 1 year** (`maxAgeSeconds: 365 * 24 * 60 * 60`; the library default is 30 days). Rian chose a year on 2026-11-07, after it turned out grants created on 0.10.3 or later expire 30 days after sign-in: with a 30-day memory, most clients would have seen the page about monthly. The #40 attack uses a newly registered client, so a longer memory for an already-approved client and redirect URI doesn't widen it. Pass no `subject`: the server learns the Last.fm user only after consent, so approvals belong to the browser, as the docs describe for proxy servers. Approvals are bound to client ID + redirect URI + resource, so a client that changes its redirect URI sees the page again.
+- **Local agents won't hit the remembered approval, and that's accepted (Rian approved).** The library's approval key hashes the exact redirect URI, port included. Most loopback clients pick a new port for each sign-in, so they see the page on every full sign-in. Grants created on 0.10.3 or later expire 30 days after sign-in (the library default `refreshTokenTTL`, which refreshes don't extend in 0.10.3 or 1.2.4). Grants created before 2026-08-24, on 0.1.0, have no expiry. So a client signs in again on first setup, after re-adding the server, after losing its tokens, after a grant is revoked, and every 30 days for grants created on 0.10.3 or later. A local agent sees the page each of those times. Don't write custom approval storage to get around the port.
 - **New Worker secret `CONSENT_SECRET`** (32+ chars) for the remembered-approval cookie. Add it to `Env`, the `wrangler.toml` secrets comment, test bindings, and both environments before deploy.
 - **Error handling** follows the table in `consent-page.md`: render locally for `CimdFetchError` and for `AuthorizationError` without `redirectTo`. Keep today's choice of not redirecting errors back to the client: anyone can register a client, so redirecting would make this an open redirector. Expired, replayed, or other-browser consent gets a local page with a "start again" message. Anything else is a 500.
 - **CSP on the consent response:** keep the library's `frame-ancestors 'none'` and `X-Frame-Options: DENY`. Don't set `form-action 'self'` on this page, as `buildSecurityHeaders` does today. Chrome applies `form-action` to redirects that follow a form POST, so it would block both the 302 to `www.last.fm` and the Deny redirect to the client. Either omit `form-action` or derive it from the actual targets. Verify the approve and deny redirects in a real browser.
@@ -108,7 +108,7 @@ Content, top to bottom:
    - **Access goes to:** the redirect hostname in monospace.
 5. When `redirectIsLoopback`: a yellow warning box saying "This sends access to an app on your computer. Continue only if you just started connecting from that app."
 6. Buttons: "Continue to Last.fm" (primary) and "Don't allow" (secondary).
-7. Fine print: a Privacy link to `https://elezea.com/privacy/#lastfm-mcp-server`. When the redirect isn't loopback, it also says "You won't be asked again for this app for 30 days." For loopback redirects, leave that sentence out, because it wouldn't be true.
+7. Fine print: a Privacy link to `https://elezea.com/privacy/#lastfm-mcp-server`. When the redirect isn't loopback, it also says "You won't be asked again for this app for a year." For loopback redirects, leave that sentence out, because it wouldn't be true.
 
 Visual language, from `elezea.com/src/styles/styles/variables.css` and `btns.css`:
 
@@ -134,7 +134,7 @@ Use the existing `cloudflare:test` integration style (see `test/oauth-roundtrip.
 - Expired consent, a replayed handle, and a POST without the binding cookie are all rendered locally, with no redirect.
 - Remembered: after one approval, a second GET for the same client and redirect URI goes straight to Last.fm. A different redirect URI shows the page.
 - CIMD client: the page shows its verified domain. DCR client: the "hasn't been checked" note.
-- Loopback redirect URI: the warning is present and the 30-day sentence is absent. Non-loopback: the reverse.
+- Loopback redirect URI: the warning is present and the "for a year" sentence is absent. Non-loopback: the reverse.
 - Escaping: a client named `<script>` renders inert.
 - Last.fm callback without a token → `access_denied` to the client.
 - Existing round-trip and CIMD tests updated for the extra consent step.
