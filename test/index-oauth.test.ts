@@ -2,7 +2,7 @@
 // ABOUTME: Covers plain-http redirects, unauthenticated 401 routing, session-based auth, OAuth routing, and regression for copy-paste URL bug.
 import { env, createExecutionContext, waitOnExecutionContext } from 'cloudflare:test'
 import { Client, StreamableHTTPClientTransport } from '@modelcontextprotocol/client'
-import { describe, it, expect } from 'vitest'
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import worker from '../src/index-oauth'
 
 describe('Last.fm MCP Server (OAuth Entry Point)', () => {
@@ -463,6 +463,17 @@ describe('Last.fm MCP Server (OAuth Entry Point)', () => {
 
 	// 1.x refuses a plain-http protected resource on a non-loopback host, so these must never reach the provider.
 	describe('plain-http requests', () => {
+		let logSpy: ReturnType<typeof vi.spyOn>
+
+		// Capture the redirect log line so it can be asserted and stays out of the test output
+		beforeEach(() => {
+			logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
+		})
+
+		afterEach(() => {
+			logSpy.mockRestore()
+		})
+
 		async function send(request: Request): Promise<Response> {
 			const ctx = createExecutionContext()
 			const response = await worker.fetch(request, env, ctx)
@@ -497,6 +508,18 @@ describe('Last.fm MCP Server (OAuth Entry Point)', () => {
 			expect(res.headers.get('Location')).toBe(
 				'https://lastfm-mcp.com/authorize?client_id=abc&state=xyz&resource=https%3A%2F%2Flastfm-mcp.com',
 			)
+		})
+
+		it('should log the method and pathname, without the query, when it redirects', async () => {
+			await send(new Request('http://lastfm-mcp.com/authorize?client_id=abc&state=xyz&code=secret', { method: 'GET' }))
+
+			expect(logSpy).toHaveBeenCalledWith('[HTTP] redirect to https', { method: 'GET', path: '/authorize' })
+		})
+
+		it('should not log the redirect line for an https request', async () => {
+			await send(new Request('https://lastfm-mcp.com/health'))
+
+			expect(logSpy).not.toHaveBeenCalledWith('[HTTP] redirect to https', expect.anything())
 		})
 
 		it('should redirect plain http on a workers.dev host', async () => {

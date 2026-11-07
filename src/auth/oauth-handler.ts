@@ -1,5 +1,5 @@
 // ABOUTME: OAuth handler integrating Last.fm authentication with the MCP OAuth 2.1 flow.
-// ABOUTME: Handles /authorize, /lastfm-callback, /login, /callback, and OAuth discovery endpoints.
+// ABOUTME: Handles /authorize, /lastfm-callback, /login and /callback; discovery endpoints are served elsewhere.
 import { AuthorizationError, CimdFetchError } from '@cloudflare/workers-oauth-provider'
 import type { AuthRequest, OAuthHelpers } from '@cloudflare/workers-oauth-provider'
 import type { ExecutionContext } from '@cloudflare/workers-types'

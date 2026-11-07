@@ -170,7 +170,11 @@ export default {
 
 		// The OAuth provider can't be built for a plain-http origin outside loopback, so send those to https first
 		const redirect = httpsRedirect(url)
-		if (redirect) return redirect
+		if (redirect) {
+			// Pathname only: the query can carry `state` or `code`
+			console.log('[HTTP] redirect to https', { method: request.method, path: url.pathname })
+			return redirect
+		}
 
 		const baseUrl = `${url.protocol}//${url.host}`
 
