@@ -132,6 +132,11 @@ const oauthProvider = new OAuthProvider({
 	// compatibility flag in wrangler.toml. Dynamic client registration stays enabled above
 	// for clients that don't support CIMD.
 	clientIdMetadataDocumentEnabled: true,
+	// Rollback target for the workers-oauth-provider 1.x upgrade. 1.x stores every grant's resource as the bare
+	// origin, and 0.10.3 compares by exact string on refresh, so clients sending `${origin}/` or `${origin}/mcp`
+	// would get invalid_target. Comparing origins only lets 0.10.3 accept 1.x-written grants whatever spelling
+	// of the origin the client sends.
+	resourceMatchOriginOnly: true,
 	defaultHandler: LastfmOAuthHandler,
 })
 
