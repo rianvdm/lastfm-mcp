@@ -10,6 +10,9 @@
  * These helpers rewrite exactly `${origin}/mcp` to `${origin}` and nothing else, so the provider keeps
  * rejecting every other value. Strings are compared as-is rather than as parsed URLs, so dot segments
  * and percent-encodings never match. Each returns the same `Request` object when nothing changes.
+ *
+ * Delete this module once the library maps path descendants of an origin resource itself:
+ * https://github.com/cloudflare/workers-oauth-provider/issues/430
  */
 
 /** Map each `resource` value equal to `${origin}/mcp` to the origin; null when none matched. */
