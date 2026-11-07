@@ -38,7 +38,7 @@ echo "binding = \"MCP_SESSIONS\""
 echo "id = \"$SESSIONS_ID\""
 echo ""
 
-echo "🔐 Setting up secrets (you'll be prompted for each)..."
+echo "🔐 Setting up secrets (you'll be prompted for the two Last.fm values; CONSENT_SECRET is generated)..."
 echo "Please have your Last.fm app credentials ready."
 echo ""
 
@@ -48,6 +48,9 @@ wrangler secret put LASTFM_API_KEY --env production
 
 echo "Setting LASTFM_SHARED_SECRET..."
 wrangler secret put LASTFM_SHARED_SECRET --env production
+
+echo "Setting CONSENT_SECRET (a random string of 32+ characters)..."
+openssl rand -base64 32 | wrangler secret put CONSENT_SECRET --env production
 
 echo ""
 echo "✅ Production setup complete!"

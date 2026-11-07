@@ -1,8 +1,10 @@
 // ABOUTME: Integration test for the full OAuth 2.1 round-trip flow.
-// ABOUTME: Tests unauthenticated MCP returns 401, discovery endpoints work, and OAuth authorize redirect happens.
+// ABOUTME: Tests unauthenticated MCP returns 401, discovery endpoints work, and /authorize asks for consent before Last.fm.
 import { env, createExecutionContext, waitOnExecutionContext } from 'cloudflare:test'
-import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { describe, it, expect, vi } from 'vitest'
+
 import worker from '../src/index-oauth'
+import { lastfmStateFrom, openConsent, returnFromLastfm, submitConsent, toCookieHeader } from './helpers/oauth-flow'
 
 // Mock Last.fm auth to avoid real HTTP calls during the callback simulation.
 // getAuthUrl passes the callbackUrl through so the real stateToken is preserved in the URL.
@@ -136,7 +138,7 @@ describe('OAuth round-trip integration', () => {
 	})
 
 	describe('Step 4: Dynamic client registration + GET /authorize', () => {
-		it('should register a client and redirect to Last.fm for authorization', async () => {
+		it('should register a client and show the consent page before Last.fm', async () => {
 			// Register a dynamic OAuth client
 			const registrationRes = await worker.fetch(
 				new Request(`${BASE_URL}/oauth/register`, {
@@ -172,12 +174,12 @@ describe('OAuth round-trip integration', () => {
 			authorizeUrl.searchParams.set('response_type', 'code')
 			authorizeUrl.searchParams.set('state', state)
 
-			const authorizeRes = await worker.fetch(new Request(authorizeUrl.toString()), env, {} as ExecutionContext)
+			const { response: authorizeRes } = await openConsent(worker, env, authorizeUrl)
 
-			// The authorize endpoint should redirect to Last.fm
-			expect(authorizeRes.status).toBe(302)
-			const location = authorizeRes.headers.get('Location') ?? ''
-			expect(location).toContain('last.fm')
+			// The authorize endpoint asks the user first; Last.fm comes only after approval
+			expect(authorizeRes.status).toBe(200)
+			expect(authorizeRes.headers.get('Location')).toBeNull()
+			expect(await authorizeRes.text()).toContain('An app wants to read your Last.fm listening data')
 		})
 	})
 
@@ -202,7 +204,7 @@ describe('OAuth round-trip integration', () => {
 			expect(registrationRes.status).toBe(201)
 			const { client_id } = (await registrationRes.json()) as { client_id: string }
 
-			// Step 4b: Initiate authorize to get the state token stored in KV
+			// Step 4b: Open the consent page, then approve it to get the Last.fm redirect
 			const codeVerifier = 'dBjftJeZ4CVP-mB92K27uhbUJU1p1r_wW1gFWFOEjXk'
 			const codeChallenge = await computeS256Challenge(codeVerifier)
 			const oauthState = crypto.randomUUID()
@@ -219,30 +221,30 @@ describe('OAuth round-trip integration', () => {
 			// releases rejected this; the round trip must accept it without any workaround.
 			authorizeUrl.searchParams.set('resource', `${BASE_URL}/mcp`)
 
-			const authorizeRes = await worker.fetch(new Request(authorizeUrl.toString()), env, {} as ExecutionContext)
-			expect(authorizeRes.status).toBe(302)
+			const consent = await openConsent(worker, env, authorizeUrl)
+			expect(consent.response.status).toBe(200)
+			const approveRes = await submitConsent(worker, env, BASE_URL, consent.handle, 'approve', consent.cookies)
+			expect(approveRes.status).toBe(302)
 
-			// Step 4c: Extract the Last.fm redirect URL and parse out the lastfm_state
+			// Step 4c: Extract the Last.fm redirect URL and parse out the state
 			// The Location is the Last.fm auth URL with a `cb` param containing the callback URL.
-			// That callback URL has the stateToken we stored in KV.
-			const lastfmRedirect = authorizeRes.headers.get('Location') ?? ''
+			// That callback URL carries the state created after consent.
+			const lastfmRedirect = approveRes.headers.get('Location') ?? ''
 			expect(lastfmRedirect).toContain('last.fm')
 
-			const lastfmRedirectUrl = new URL(lastfmRedirect)
-			const cbParam = lastfmRedirectUrl.searchParams.get('cb') ?? ''
+			const cbParam = new URL(lastfmRedirect).searchParams.get('cb') ?? ''
 			expect(cbParam).toContain('/lastfm-callback')
 
-			const cbUrl = new URL(cbParam)
-			const stateToken = cbUrl.searchParams.get('state') ?? ''
+			const stateToken = lastfmStateFrom(approveRes)
 			expect(stateToken).toBeTruthy()
 
-			// Step 5: Simulate Last.fm redirecting back with a token
-			const simulatedLastfmToken = 'simulated-lastfm-token'
-			const callbackUrl = new URL(`${BASE_URL}/lastfm-callback`)
-			callbackUrl.searchParams.set('token', simulatedLastfmToken)
-			callbackUrl.searchParams.set('state', stateToken)
-
-			const callbackRes = await worker.fetch(new Request(callbackUrl.toString()), env, {} as ExecutionContext)
+			// Step 5: Simulate Last.fm redirecting back with a token, in the browser that approved
+			const callbackRes = await returnFromLastfm(worker, env, {
+				origin: BASE_URL,
+				state: stateToken,
+				cookies: toCookieHeader(approveRes, consent.cookies),
+				token: 'simulated-lastfm-token',
+			})
 
 			// The callback should redirect to the MCP client's redirect_uri with an authorization code
 			expect(callbackRes.status).toBe(302)

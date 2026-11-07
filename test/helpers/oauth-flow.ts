@@ -1,5 +1,5 @@
-// ABOUTME: Shared helpers that drive the OAuth round trip (register, authorize, Last.fm callback, token, refresh, MCP call).
-// ABOUTME: Cookies are carried between steps so one place can later add the consent step; Last.fm is mocked by each test file.
+// ABOUTME: Shared helpers that drive the OAuth round trip (register, authorize, consent, Last.fm callback, token, refresh, MCP call).
+// ABOUTME: Cookies are carried between steps like a browser would; Last.fm is mocked by each test file.
 import { createExecutionContext, waitOnExecutionContext } from 'cloudflare:test'
 
 import type { Env } from '../../src/types/env'
@@ -58,23 +58,51 @@ async function send(worker: WorkerLike, env: Env, request: Request): Promise<Res
 	return response
 }
 
-/** Turn a response's Set-Cookie headers into a Cookie request header value (name=value pairs only). */
-function toCookieHeader(response: Response, existing = ''): string {
+/** Whether a Set-Cookie header's attributes delete the cookie: `Max-Age` of zero or less, or else an `Expires` in the past. */
+function deletesCookie(attributes: string[]): boolean {
+	const parsed = new Map<string, string>()
+	for (const attribute of attributes) {
+		const [name, ...rest] = attribute.split('=')
+		parsed.set(name.trim().toLowerCase(), rest.join('=').trim())
+	}
+	// Max-Age wins over Expires (RFC 6265 §5.3)
+	const maxAge = parsed.get('max-age')
+	if (maxAge !== undefined) return Number(maxAge) <= 0
+	const expires = parsed.get('expires')
+	return expires !== undefined && Date.parse(expires) <= Date.now()
+}
+
+/**
+ * Apply a response's Set-Cookie headers to a Cookie request header value, like a browser jar: set cookies
+ * are added or replaced, deleted ones are dropped. Only name=value pairs are kept.
+ */
+export function toCookieHeader(response: Response, existing = ''): string {
 	const jar = new Map<string, string>()
 	for (const pair of existing.split('; ').filter(Boolean)) {
 		const [name, ...rest] = pair.split('=')
 		jar.set(name, rest.join('='))
 	}
 	for (const setCookie of response.headers.getSetCookie()) {
-		const [pair] = setCookie.split(';')
-		const [name, ...rest] = pair.split('=')
-		jar.set(name.trim(), rest.join('=').trim())
+		const [pair, ...attributes] = setCookie.split(';')
+		const [rawName, ...rest] = pair.split('=')
+		const name = rawName.trim()
+		if (deletesCookie(attributes)) {
+			jar.delete(name)
+		} else {
+			jar.set(name, rest.join('=').trim())
+		}
 	}
 	return [...jar].map(([name, value]) => `${name}=${value}`).join('; ')
 }
 
-/** Register a public DCR client and return its client_id. */
-export async function registerPublicClient(worker: WorkerLike, env: Env, origin: string, redirectUri: string): Promise<string> {
+/** Register a public DCR client for one or more redirect URIs and return its client_id. `clientName` is self-asserted, as in DCR. */
+export async function registerPublicClient(
+	worker: WorkerLike,
+	env: Env,
+	origin: string,
+	redirectUris: string | string[],
+	clientName = 'Resource Compat Test Client',
+): Promise<string> {
 	const response = await send(
 		worker,
 		env,
@@ -82,8 +110,8 @@ export async function registerPublicClient(worker: WorkerLike, env: Env, origin:
 			method: 'POST',
 			headers: { 'Content-Type': 'application/json', ...hostHeader(origin) },
 			body: JSON.stringify({
-				client_name: 'Resource Compat Test Client',
-				redirect_uris: [redirectUri],
+				client_name: clientName,
+				redirect_uris: Array.isArray(redirectUris) ? redirectUris : [redirectUris],
 				grant_types: ['authorization_code', 'refresh_token'],
 				response_types: ['code'],
 				token_endpoint_auth_method: 'none',
@@ -94,36 +122,104 @@ export async function registerPublicClient(worker: WorkerLike, env: Env, origin:
 	return ((await response.json()) as { client_id: string }).client_id
 }
 
-/** Run /authorize, the Last.fm callback and the redirect back to the client; returns the authorization code. */
+/** Build a PKCE authorization request URL for a client. `state` defaults to a random value. */
+export async function buildAuthorizeUrl(opts: {
+	origin: string
+	clientId: string
+	redirectUri: string
+	resource?: string
+	state?: string
+}): Promise<URL> {
+	const authorizeUrl = new URL(`${opts.origin}/authorize`)
+	authorizeUrl.searchParams.set('client_id', opts.clientId)
+	authorizeUrl.searchParams.set('redirect_uri', opts.redirectUri)
+	authorizeUrl.searchParams.set('code_challenge', await computeS256Challenge(CODE_VERIFIER))
+	authorizeUrl.searchParams.set('code_challenge_method', 'S256')
+	authorizeUrl.searchParams.set('response_type', 'code')
+	authorizeUrl.searchParams.set('state', opts.state ?? crypto.randomUUID())
+	if (opts.resource !== undefined) authorizeUrl.searchParams.set('resource', opts.resource)
+	return authorizeUrl
+}
+
+/**
+ * GET /authorize as a browser would. On a consent page (200) `handle` is the form's hidden handle; otherwise it
+ * is empty. `cookies` is the jar after the response. The response body is left unread.
+ */
+export async function openConsent(
+	worker: WorkerLike,
+	env: Env,
+	authorizeUrl: URL,
+	cookies = '',
+): Promise<{ response: Response; handle: string; cookies: string }> {
+	const headers: Record<string, string> = hostHeader(authorizeUrl.origin)
+	if (cookies) headers.Cookie = cookies
+	const response = await send(worker, env, new Request(authorizeUrl.toString(), { headers }))
+	const handle = response.status === 200 ? ((await response.clone().text()).match(/name="handle" value="([^"]*)"/)?.[1] ?? '') : ''
+	return { response, handle, cookies: toCookieHeader(response, cookies) }
+}
+
+/** POST the consent form back to /authorize with the user's decision. */
+export async function submitConsent(
+	worker: WorkerLike,
+	env: Env,
+	origin: string,
+	handle: string,
+	decision: 'approve' | 'deny',
+	cookies: string,
+): Promise<Response> {
+	const headers: Record<string, string> = { 'Content-Type': 'application/x-www-form-urlencoded', ...hostHeader(origin) }
+	if (cookies) headers.Cookie = cookies
+	return send(
+		worker,
+		env,
+		new Request(`${origin}/authorize`, { method: 'POST', headers, body: new URLSearchParams({ handle, decision }).toString() }),
+	)
+}
+
+/** The `state` carried in the `cb` URL of a redirect to Last.fm. */
+export function lastfmStateFrom(response: Response): string {
+	const cb = new URL(new URL(response.headers.get('Location') ?? '').searchParams.get('cb') ?? '')
+	return cb.searchParams.get('state') ?? ''
+}
+
+/** GET /lastfm-callback as Last.fm's redirect would: the `cb` URL with `token` added, or without one if the user declined. */
+export async function returnFromLastfm(
+	worker: WorkerLike,
+	env: Env,
+	opts: { origin: string; state: string; cookies: string; token?: string },
+): Promise<Response> {
+	const callbackUrl = new URL(`${opts.origin}/lastfm-callback`)
+	callbackUrl.searchParams.set('state', opts.state)
+	if (opts.token !== undefined) callbackUrl.searchParams.set('token', opts.token)
+	const headers: Record<string, string> = hostHeader(opts.origin)
+	if (opts.cookies) headers.Cookie = opts.cookies
+	return send(worker, env, new Request(callbackUrl.toString(), { headers }))
+}
+
+/** Run /authorize, approve consent, the Last.fm callback and the redirect back to the client; returns the authorization code. */
 export async function signIn(
 	worker: WorkerLike,
 	env: Env,
 	opts: { origin: string; clientId: string; redirectUri: string; resource?: string },
 ): Promise<{ code: string; codeVerifier: string }> {
-	const { origin, clientId, redirectUri, resource } = opts
+	const { origin } = opts
 
-	const authorizeUrl = new URL(`${origin}/authorize`)
-	authorizeUrl.searchParams.set('client_id', clientId)
-	authorizeUrl.searchParams.set('redirect_uri', redirectUri)
-	authorizeUrl.searchParams.set('code_challenge', await computeS256Challenge(CODE_VERIFIER))
-	authorizeUrl.searchParams.set('code_challenge_method', 'S256')
-	authorizeUrl.searchParams.set('response_type', 'code')
-	authorizeUrl.searchParams.set('state', crypto.randomUUID())
-	if (resource !== undefined) authorizeUrl.searchParams.set('resource', resource)
+	const consent = await openConsent(worker, env, await buildAuthorizeUrl(opts))
+	if (consent.response.status !== 200 || !consent.handle)
+		throw new Error(`/authorize returned ${consent.response.status} without a consent page`)
 
-	const authorizeRes = await send(worker, env, new Request(authorizeUrl.toString(), { headers: hostHeader(origin) }))
-	if (authorizeRes.status !== 302) throw new Error(`/authorize returned ${authorizeRes.status}`)
-	let cookie = toCookieHeader(authorizeRes)
+	const approveRes = await submitConsent(worker, env, origin, consent.handle, 'approve', consent.cookies)
+	if (approveRes.status !== 302) throw new Error(`Consent approval returned ${approveRes.status}`)
+	const cookies = toCookieHeader(approveRes, consent.cookies)
 
 	// Last.fm would redirect to the `cb` URL it was given, adding a token.
-	const cb = new URL(new URL(authorizeRes.headers.get('Location') ?? '').searchParams.get('cb') ?? '')
-	const callbackUrl = new URL(`${origin}/lastfm-callback`)
-	callbackUrl.searchParams.set('token', 'simulated-lastfm-token')
-	callbackUrl.searchParams.set('state', cb.searchParams.get('state') ?? '')
-
-	const callbackRes = await send(worker, env, new Request(callbackUrl.toString(), { headers: { ...hostHeader(origin), Cookie: cookie } }))
+	const callbackRes = await returnFromLastfm(worker, env, {
+		origin,
+		state: lastfmStateFrom(approveRes),
+		cookies,
+		token: 'simulated-lastfm-token',
+	})
 	if (callbackRes.status !== 302) throw new Error(`/lastfm-callback returned ${callbackRes.status}`)
-	cookie = toCookieHeader(callbackRes, cookie)
 
 	const code = new URL(callbackRes.headers.get('Location') ?? '').searchParams.get('code')
 	if (!code) throw new Error('Client redirect carried no authorization code')

@@ -148,6 +148,7 @@ Create `.dev.vars` (or copy `.dev.vars.example`):
 ```
 LASTFM_API_KEY=your_api_key
 LASTFM_SHARED_SECRET=your_shared_secret
+CONSENT_SECRET=any_random_string_of_32_or_more_characters
 ```
 
 ```bash
@@ -162,12 +163,17 @@ npx @modelcontextprotocol/inspector http://localhost:8787/mcp
 
 ### Deployment
 
-Set production secrets (or run `npm run setup:prod`, which creates the KV namespaces and prompts for these):
+Set production secrets (or run `npm run setup:prod`, which creates the KV namespaces, prompts for the two Last.fm values and generates `CONSENT_SECRET`):
 
 ```bash
 echo "your_api_key" | wrangler secret put LASTFM_API_KEY --env production
 echo "your_shared_secret" | wrangler secret put LASTFM_SHARED_SECRET --env production
+openssl rand -base64 32 | wrangler secret put CONSENT_SECRET --env production
 ```
+
+`CONSENT_SECRET` signs the cookie that remembers which apps a browser approved. Rotating it shows the consent page again to everyone; if it's missing or shorter than 32 characters, approvals aren't remembered, but sign-ins still work.
+
+**Upgrading an existing deployment:** this version adds the consent page and the `CONSENT_SECRET` secret. Set it with the `openssl` line above before you deploy, or right after. Until it's set, the consent page shows on every sign-in.
 
 Deploy:
 

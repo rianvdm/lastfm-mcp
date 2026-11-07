@@ -38,4 +38,5 @@ id = "8c3a19a93165452b9ab0215bdb3daa71"
 # Secrets (set via wrangler secret put):
 # - LASTFM_API_KEY
 # - LASTFM_SHARED_SECRET
+# - CONSENT_SECRET (32+ characters, e.g. `openssl rand -base64 32`; signs the remembered-consent cookie)
 # - JWT_SECRET 
