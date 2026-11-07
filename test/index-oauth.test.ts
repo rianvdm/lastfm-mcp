@@ -1,8 +1,8 @@
 // ABOUTME: Tests for the OAuth entry point (src/index-oauth.ts).
-// ABOUTME: Covers unauthenticated 401 routing, session-based auth, OAuth routing, and regression for copy-paste URL bug.
+// ABOUTME: Covers plain-http redirects, unauthenticated 401 routing, session-based auth, OAuth routing, and regression for copy-paste URL bug.
 import { env, createExecutionContext, waitOnExecutionContext } from 'cloudflare:test'
 import { Client, StreamableHTTPClientTransport } from '@modelcontextprotocol/client'
-import { describe, it, expect } from 'vitest'
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import worker from '../src/index-oauth'
 
 describe('Last.fm MCP Server (OAuth Entry Point)', () => {
@@ -23,7 +23,7 @@ describe('Last.fm MCP Server (OAuth Entry Point)', () => {
 		}
 
 		it('should return 401 when no auth is provided', async () => {
-			const request = new Request('http://example.com/mcp', {
+			const request = new Request('https://example.com/mcp', {
 				method: 'POST',
 				body: initBody,
 				headers: mcpHeaders,
@@ -37,7 +37,7 @@ describe('Last.fm MCP Server (OAuth Entry Point)', () => {
 		})
 
 		it('should include WWW-Authenticate header pointing to OAuth metadata', async () => {
-			const request = new Request('http://example.com/mcp', {
+			const request = new Request('https://example.com/mcp', {
 				method: 'POST',
 				body: initBody,
 				headers: mcpHeaders,
@@ -50,13 +50,13 @@ describe('Last.fm MCP Server (OAuth Entry Point)', () => {
 			expect(response.status).toBe(401)
 			const wwwAuth = response.headers.get('WWW-Authenticate')
 			expect(wwwAuth).not.toBeNull()
-			expect(wwwAuth).toContain('Bearer resource_metadata="http://example.com/.well-known/oauth-protected-resource"')
+			expect(wwwAuth).toContain('Bearer resource_metadata="https://example.com/.well-known/oauth-protected-resource"')
 		})
 
 		it('should ignore a legacy Mcp-Session-Id header and fall through to OAuth', async () => {
 			// MCP 2026-07-28 removed protocol sessions. A stale header from an old
 			// manual-login client must not be honoured, so this is a plain 401.
-			const request = new Request('http://example.com/mcp', {
+			const request = new Request('https://example.com/mcp', {
 				method: 'POST',
 				body: initBody,
 				headers: { ...mcpHeaders, 'Mcp-Session-Id': 'legacy-header-no-longer-routed' },
@@ -71,7 +71,7 @@ describe('Last.fm MCP Server (OAuth Entry Point)', () => {
 		})
 
 		it('should not include a /login?session_id= URL in the response body', async () => {
-			const request = new Request('http://example.com/mcp', {
+			const request = new Request('https://example.com/mcp', {
 				method: 'POST',
 				body: initBody,
 				headers: mcpHeaders,
@@ -100,7 +100,7 @@ describe('Last.fm MCP Server (OAuth Entry Point)', () => {
 			}
 
 			// Request with session_id that doesn't exist in KV
-			const request = new Request('http://example.com/mcp?session_id=nonexistent-session', {
+			const request = new Request('https://example.com/mcp?session_id=nonexistent-session', {
 				method: 'POST',
 				body: JSON.stringify(initRequest),
 				headers: {
@@ -133,7 +133,7 @@ describe('Last.fm MCP Server (OAuth Entry Point)', () => {
 				}),
 			)
 
-			const request = new Request(`http://example.com/mcp?session_id=${sessionId}`, {
+			const request = new Request(`https://example.com/mcp?session_id=${sessionId}`, {
 				method: 'POST',
 				body: JSON.stringify({
 					jsonrpc: '2.0',
@@ -175,7 +175,7 @@ describe('Last.fm MCP Server (OAuth Entry Point)', () => {
 				}),
 			)
 
-			const request = new Request(`http://example.com/mcp?session_id=${sessionId}`, {
+			const request = new Request(`https://example.com/mcp?session_id=${sessionId}`, {
 				method: 'POST',
 				body: JSON.stringify({
 					jsonrpc: '2.0',
@@ -359,7 +359,7 @@ describe('Last.fm MCP Server (OAuth Entry Point)', () => {
 				id: 1,
 			}
 
-			const request = new Request('http://example.com/mcp', {
+			const request = new Request('https://example.com/mcp', {
 				method: 'POST',
 				body: JSON.stringify(initRequest),
 				headers: {
@@ -391,7 +391,7 @@ describe('Last.fm MCP Server (OAuth Entry Point)', () => {
 				id: 1,
 			}
 
-			const request = new Request('http://example.com/mcp', {
+			const request = new Request('https://example.com/mcp', {
 				method: 'POST',
 				body: JSON.stringify(initRequest),
 				headers: {
@@ -407,7 +407,7 @@ describe('Last.fm MCP Server (OAuth Entry Point)', () => {
 
 			expect(response.status).toBe(401)
 			const wwwAuth = response.headers.get('WWW-Authenticate')
-			expect(wwwAuth).toContain('Bearer resource_metadata="http://example.com/.well-known/oauth-protected-resource"')
+			expect(wwwAuth).toContain('Bearer resource_metadata="https://example.com/.well-known/oauth-protected-resource"')
 		})
 
 		it.todo('should return 200 when valid bearer token provided — covered by oauth-roundtrip integration test')
@@ -415,7 +415,7 @@ describe('Last.fm MCP Server (OAuth Entry Point)', () => {
 		it('should not return a /login?session_id= URL in OAuth path tool responses', async () => {
 			// Even with an invalid bearer token (401 expected),
 			// the OAuth path must never fall back to session-based auth messages.
-			const request = new Request('http://example.com/mcp', {
+			const request = new Request('https://example.com/mcp', {
 				method: 'POST',
 				body: JSON.stringify({
 					jsonrpc: '2.0',
@@ -461,9 +461,94 @@ describe('Last.fm MCP Server (OAuth Entry Point)', () => {
 		})
 	})
 
+	// 1.x refuses a plain-http protected resource on a non-loopback host, so these must never reach the provider.
+	describe('plain-http requests', () => {
+		let logSpy: ReturnType<typeof vi.spyOn>
+
+		// Capture the redirect log line so it can be asserted and stays out of the test output
+		beforeEach(() => {
+			logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
+		})
+
+		afterEach(() => {
+			logSpy.mockRestore()
+		})
+
+		async function send(request: Request): Promise<Response> {
+			const ctx = createExecutionContext()
+			const response = await worker.fetch(request, env, ctx)
+			await waitOnExecutionContext(ctx)
+			return response
+		}
+
+		it('should redirect GET http://lastfm-mcp.com/mcp to https with a 308', async () => {
+			const res = await send(new Request('http://lastfm-mcp.com/mcp'))
+
+			expect(res.status).toBe(308)
+			expect(res.headers.get('Location')).toBe('https://lastfm-mcp.com/mcp')
+		})
+
+		it('should redirect POST http://lastfm-mcp.com/oauth/token with a 308 so the method and body are kept', async () => {
+			const res = await send(
+				new Request('http://lastfm-mcp.com/oauth/token', {
+					method: 'POST',
+					headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+					body: 'grant_type=refresh_token&refresh_token=x&client_id=y',
+				}),
+			)
+
+			expect(res.status).toBe(308)
+			expect(res.headers.get('Location')).toBe('https://lastfm-mcp.com/oauth/token')
+		})
+
+		it('should keep the query string', async () => {
+			const res = await send(new Request('http://lastfm-mcp.com/authorize?client_id=abc&state=xyz&resource=https%3A%2F%2Flastfm-mcp.com'))
+
+			expect(res.status).toBe(308)
+			expect(res.headers.get('Location')).toBe(
+				'https://lastfm-mcp.com/authorize?client_id=abc&state=xyz&resource=https%3A%2F%2Flastfm-mcp.com',
+			)
+		})
+
+		it('should log the method and pathname, without the query, when it redirects', async () => {
+			await send(new Request('http://lastfm-mcp.com/authorize?client_id=abc&state=xyz&code=secret', { method: 'GET' }))
+
+			expect(logSpy).toHaveBeenCalledWith('[HTTP] redirect to https', { method: 'GET', path: '/authorize' })
+		})
+
+		it('should not log the redirect line for an https request', async () => {
+			await send(new Request('https://lastfm-mcp.com/health'))
+
+			expect(logSpy).not.toHaveBeenCalledWith('[HTTP] redirect to https', expect.anything())
+		})
+
+		it('should redirect plain http on a workers.dev host', async () => {
+			const res = await send(
+				new Request('http://lastfm-mcp.rian-db8.workers.dev/', { headers: { Host: 'lastfm-mcp.rian-db8.workers.dev' } }),
+			)
+
+			expect(res.status).toBe(308)
+			expect(res.headers.get('Location')).toBe('https://lastfm-mcp.rian-db8.workers.dev/')
+		})
+
+		it('should not redirect loopback http (wrangler dev)', async () => {
+			const res = await send(new Request('http://localhost:8787/health'))
+
+			expect(res.status).toBe(200)
+		})
+
+		it('should serve OAuth metadata over loopback http with the loopback origin as the resource', async () => {
+			const res = await send(new Request('http://localhost:8787/.well-known/oauth-protected-resource'))
+
+			expect(res.status).toBe(200)
+			const body = (await res.json()) as { resource?: string }
+			expect(body.resource).toBe('http://localhost:8787')
+		})
+	})
+
 	describe('static endpoints', () => {
 		it('should return marketing page for GET /', async () => {
-			const request = new Request('http://example.com/')
+			const request = new Request('https://example.com/')
 			const ctx = createExecutionContext()
 			const response = await worker.fetch(request, env, ctx)
 			await waitOnExecutionContext(ctx)
@@ -476,7 +561,7 @@ describe('Last.fm MCP Server (OAuth Entry Point)', () => {
 		})
 
 		it('should return health check for GET /health', async () => {
-			const request = new Request('http://example.com/health')
+			const request = new Request('https://example.com/health')
 			const ctx = createExecutionContext()
 			const response = await worker.fetch(request, env, ctx)
 			await waitOnExecutionContext(ctx)
@@ -488,7 +573,7 @@ describe('Last.fm MCP Server (OAuth Entry Point)', () => {
 		})
 
 		it('should return MCP discovery for GET /.well-known/mcp.json', async () => {
-			const request = new Request('http://example.com/.well-known/mcp.json')
+			const request = new Request('https://example.com/.well-known/mcp.json')
 			const ctx = createExecutionContext()
 			const response = await worker.fetch(request, env, ctx)
 			await waitOnExecutionContext(ctx)
@@ -505,7 +590,7 @@ describe('Last.fm MCP Server (OAuth Entry Point)', () => {
 		})
 
 		it('should handle CORS preflight requests', async () => {
-			const request = new Request('http://example.com/mcp', {
+			const request = new Request('https://example.com/mcp', {
 				method: 'OPTIONS',
 			})
 			const ctx = createExecutionContext()
