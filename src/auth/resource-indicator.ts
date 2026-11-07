@@ -48,5 +48,8 @@ export async function normalizeTokenResource(request: Request): Promise<Request>
 	const body = new TextDecoder().decode(await request.clone().arrayBuffer())
 	const rewritten = rewriteResources(new URLSearchParams(body), new URL(request.url).origin)
 	if (!rewritten) return request
-	return new Request(request.url, { method: request.method, headers: request.headers, body: rewritten.toString() })
+	// The rewrite shortens the body, so drop the incoming Content-Length and let the runtime set it
+	const headers = new Headers(request.headers)
+	headers.delete('content-length')
+	return new Request(request.url, { method: request.method, headers, body: rewritten.toString() })
 }

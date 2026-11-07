@@ -84,6 +84,27 @@ describe('normalizeTokenResource', () => {
 		expect(params.get('refresh_token')).toBe('r')
 	})
 
+	it('should not carry a stale Content-Length onto the rewritten body', async () => {
+		const body = form(['grant_type', 'refresh_token'], ['refresh_token', 'r'], ['resource', `${ORIGIN}/mcp`])
+		const request = new Request(`${ORIGIN}/oauth/token`, {
+			method: 'POST',
+			headers: {
+				'Content-Type': 'application/x-www-form-urlencoded',
+				'Content-Length': String(new TextEncoder().encode(body).length),
+				Authorization: 'Basic abc',
+			},
+			body,
+		})
+		const result = await normalizeTokenResource(request)
+		const newBody = await bodyText(result.clone())
+		const contentLength = result.headers.get('content-length')
+		expect(contentLength === null || contentLength === String(new TextEncoder().encode(newBody).length)).toBe(true)
+		const fields = await result.formData()
+		expect(fields.get('resource')).toBe(ORIGIN)
+		expect(fields.get('grant_type')).toBe('refresh_token')
+		expect(fields.get('refresh_token')).toBe('r')
+	})
+
 	it.each(UNCHANGED_RESOURCES)('should leave resource %s unchanged', async (resource) => {
 		const request = tokenRequest(form(['grant_type', 'refresh_token'], ['resource', resource]))
 		expect(await normalizeTokenResource(request)).toBe(request)
