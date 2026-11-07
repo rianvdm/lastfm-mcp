@@ -365,8 +365,8 @@ git commit -m "feat(auth): ask for consent before redirecting to Last.fm (#40)"
 ### Task 8: Ship PR 2 and close #40
 
 - [ ] **Step 1:** Open PR 2. **(gate)**
-- [ ] **Step 2:** `wrangler secret put CONSENT_SECRET` for staging, then `--env production`, each with a fresh 48-character random value. Rian runs these, or approves running them. **(gate)**
-- [ ] **Step 3:** `npm run deploy` (staging). **(gate)** In Chrome, check Approve end to end, Deny back to the client, a second connect that skips the page (fixed-callback client), the localhost warning (Claude Code), and the page at phone width.
+- [ ] **Step 2:** `wrangler secret put CONSENT_SECRET` for staging, then `--env production`, each with a fresh 48-character random value. Rian runs these, or approves running them. **(gate)** Before the merge, confirm both exist: `npx wrangler secret list` and `npx wrangler secret list --env production` must each list `CONSENT_SECRET`.
+- [ ] **Step 3:** `npm run deploy` (staging). **(gate)** In Chrome, check Approve end to end, Deny back to the client, a second connect that skips the page (fixed-callback client), the localhost warning (Claude Code), and the page at phone width. Then one Safari pass: Approve and Deny. Firefox and Safari may show the page again sooner than a year because their bounce-tracking protection can clear the approvals cookie; that's expected, not a bug. Check the staging Worker logs for `[OAUTH] Error in authorize`, `[OAUTH] Consent refused` and `[OAUTH] CONSENT_SECRET is missing`.
 - [ ] **Step 4:** Last.fm repeat-authorization check: open `/authorize` for a client already approved on Last.fm and note whether Last.fm prompts again.
-- [ ] **Step 5:** Merge. **(gate)** CI deploys production on every push to `main`, so the merge is the production deploy. Repeat one approve run on production.
+- [ ] **Step 5:** Merge. **(gate)** CI deploys production on every push to `main`, so the merge is the production deploy. Repeat one approve run on production, then repeat the Step 3 log check on the production Worker logs right after the deploy.
 - [ ] **Step 6:** Comment on #40 with the Last.fm finding and the PR links, and close it.

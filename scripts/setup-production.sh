@@ -38,7 +38,7 @@ echo "binding = \"MCP_SESSIONS\""
 echo "id = \"$SESSIONS_ID\""
 echo ""
 
-echo "🔐 Setting up secrets (you'll be prompted for each)..."
+echo "🔐 Setting up secrets (you'll be prompted for the two Last.fm values; CONSENT_SECRET is generated)..."
 echo "Please have your Last.fm app credentials ready."
 echo ""
 
