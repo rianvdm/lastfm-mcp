@@ -1,5 +1,6 @@
 // ABOUTME: KV records captured from workers-oauth-provider 0.10.3 for each requested resource variant, plus their plaintext refresh tokens.
 // ABOUTME: Loaded into OAUTH_KV by upgrade tests to prove 0.10.3 grants still refresh (or are rejected) on 1.x.
+// Test-only values: the refresh tokens and keys belong to fake `capture-*` users, not real credentials.
 // Captured from 0.10.3 on 2026-11-07. Never regenerate this on 1.x: its value is that it is real 0.10.3 data.
 
 export interface CapturedGrant {
@@ -103,9 +104,32 @@ export const OAUTH_0X_GRANTS: CapturedGrant[] = [
 	},
 ]
 
-/** Write every captured record into the namespace with no expiration. */
+/** Epoch seconds at which the records above were written (their `createdAt`). */
+export const OAUTH_0X_CAPTURED_AT = 1794061046
+
+/** Record fields holding epoch-second timestamps in 0.10.3 client, grant and token records. */
+const TIMESTAMP_FIELDS = ['createdAt', 'expiresAt', 'registrationDate']
+
+/** Shift the timestamp fields of one JSON record by `offsetSeconds`; everything else is left as captured. */
+function rebaseRecord(value: string, offsetSeconds: number): string {
+	const record = JSON.parse(value) as Record<string, unknown>
+	for (const field of TIMESTAMP_FIELDS) {
+		if (typeof record[field] === 'number') record[field] += offsetSeconds
+	}
+	return JSON.stringify(record)
+}
+
+/**
+ * Write every captured record into the namespace with no KV expiration.
+ *
+ * The library checks the in-record `expiresAt`, so records loaded long after capture would be expired. Timestamps are
+ * rebased by (now - capture time) so each record is as fresh relative to now as it was when captured, without fake timers.
+ * `OAUTH_0X_KV` itself is not modified.
+ */
 export async function loadOAuth0xFixture(kv: KVNamespace): Promise<void> {
+	const offsetSeconds = Math.floor(Date.now() / 1000) - OAUTH_0X_CAPTURED_AT
 	for (const entry of OAUTH_0X_KV) {
-		await kv.put(entry.key, entry.value, entry.metadata === undefined ? undefined : { metadata: entry.metadata })
+		const value = rebaseRecord(entry.value, offsetSeconds)
+		await kv.put(entry.key, value, entry.metadata === undefined ? undefined : { metadata: entry.metadata })
 	}
 }
