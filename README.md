@@ -148,6 +148,7 @@ Create `.dev.vars` (or copy `.dev.vars.example`):
 ```
 LASTFM_API_KEY=your_api_key
 LASTFM_SHARED_SECRET=your_shared_secret
+CONSENT_SECRET=any_random_string_of_32_or_more_characters
 ```
 
 ```bash
@@ -167,6 +168,7 @@ Set production secrets (or run `npm run setup:prod`, which creates the KV namesp
 ```bash
 echo "your_api_key" | wrangler secret put LASTFM_API_KEY --env production
 echo "your_shared_secret" | wrangler secret put LASTFM_SHARED_SECRET --env production
+openssl rand -base64 32 | wrangler secret put CONSENT_SECRET --env production
 ```
 
 Deploy:

@@ -2,9 +2,12 @@
 #
 #   cp .dev.vars.example .dev.vars
 #
-# Both come from your Last.fm API account: https://www.last.fm/api/account/create
-# Production uses the same two names via `wrangler secret put ... --env production`
+# The Last.fm values come from your Last.fm API account: https://www.last.fm/api/account/create
+# CONSENT_SECRET signs the remembered-consent cookie: any random string of 32+ characters
+# (e.g. `openssl rand -base64 32`).
+# Production uses the same three names via `wrangler secret put ... --env production`
 # (or `npm run setup:prod`). No other secrets are required.
 
 LASTFM_API_KEY=
 LASTFM_SHARED_SECRET=
+CONSENT_SECRET=

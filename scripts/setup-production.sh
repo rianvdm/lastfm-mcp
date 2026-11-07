@@ -49,6 +49,9 @@ wrangler secret put LASTFM_API_KEY --env production
 echo "Setting LASTFM_SHARED_SECRET..."
 wrangler secret put LASTFM_SHARED_SECRET --env production
 
+echo "Setting CONSENT_SECRET (a random string of 32+ characters)..."
+openssl rand -base64 32 | wrangler secret put CONSENT_SECRET --env production
+
 echo ""
 echo "✅ Production setup complete!"
 echo "You can now deploy to production with: npm run deploy:prod" 

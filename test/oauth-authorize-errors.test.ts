@@ -177,7 +177,7 @@ describe('GET /authorize with an invalid request', () => {
 			expect(res.headers.get('Content-Type')).toMatch(/^text\/plain/)
 		})
 
-		it('should still redirect a valid request to Last.fm', async () => {
+		it('should still show the consent page for a valid request', async () => {
 			const res = await authorize({
 				client_id: clientId,
 				redirect_uri: REDIRECT_URI,
@@ -187,8 +187,9 @@ describe('GET /authorize with an invalid request', () => {
 				state: 'client-state',
 			})
 
-			expect(res.status).toBe(302)
-			expect(new URL(res.headers.get('Location') ?? '').hostname).toBe('www.last.fm')
+			expect(res.status).toBe(200)
+			expect(res.headers.get('Location')).toBeNull()
+			expect(await res.text()).toContain('An app wants to read your Last.fm listening data')
 		})
 	})
 })

@@ -4,6 +4,8 @@ import { env } from 'cloudflare:test'
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 
 import worker from '../src/index-oauth'
+import { clientMetadataDocument, fetchTarget, mockMetadataFetch } from './helpers/cimd-fetch'
+import { lastfmStateFrom, openConsent, returnFromLastfm, submitConsent, toCookieHeader } from './helpers/oauth-flow'
 
 // The source does `new LastfmAuth(...)`, so the mock implementation must be a class.
 vi.mock('../src/auth/lastfm', () => ({
@@ -65,9 +67,9 @@ async function computeS256Challenge(verifier: string): Promise<string> {
 }
 
 /**
- * Build an /authorize request for the given client_id with PKCE
+ * Build an /authorize URL for the given client_id with PKCE
  */
-async function buildAuthorizeRequest(clientId: string, redirectUri: string = REDIRECT_URI): Promise<Request> {
+async function buildAuthorizeUrl(clientId: string, redirectUri: string = REDIRECT_URI): Promise<URL> {
 	const url = new URL(`${BASE_URL}/authorize`)
 	url.searchParams.set('client_id', clientId)
 	url.searchParams.set('redirect_uri', redirectUri)
@@ -75,43 +77,39 @@ async function buildAuthorizeRequest(clientId: string, redirectUri: string = RED
 	url.searchParams.set('code_challenge_method', 'S256')
 	url.searchParams.set('response_type', 'code')
 	url.searchParams.set('state', crypto.randomUUID())
-	return new Request(url.toString())
+	return url
+}
+
+/**
+ * Build an /authorize request for the given client_id with PKCE
+ */
+async function buildAuthorizeRequest(clientId: string, redirectUri: string = REDIRECT_URI): Promise<Request> {
+	return new Request((await buildAuthorizeUrl(clientId, redirectUri)).toString())
 }
 
 /**
  * Build a valid metadata document response for the given client_id URL
  */
 function validDocument(metadataUrl: string, overrides: Record<string, unknown> = {}): Response {
-	return new Response(
-		JSON.stringify({
-			client_id: metadataUrl,
-			client_name: 'Example CIMD Client',
-			redirect_uris: [REDIRECT_URI],
-			grant_types: ['authorization_code'],
-			response_types: ['code'],
-			token_endpoint_auth_method: 'none',
-			...overrides,
-		}),
-		{ status: 200, headers: { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' } },
-	)
+	return clientMetadataDocument(metadataUrl, { redirect_uris: [REDIRECT_URI], ...overrides })
 }
 
 /**
- * Recover the state token from the Last.fm callback URL embedded in an /authorize redirect
+ * Open the consent page and approve it, as the user would. Returns the Last.fm `state` and the browser's cookies.
  */
-function pendingStateFrom(authorizeRes: Response): string {
-	const cbParam = new URL(authorizeRes.headers.get('Location') ?? '').searchParams.get('cb') ?? ''
-	return new URL(cbParam).searchParams.get('state') ?? ''
+async function approveConsentPage(clientId: string, redirectUri: string = REDIRECT_URI): Promise<{ state: string; cookies: string }> {
+	const consent = await openConsent(worker, env, await buildAuthorizeUrl(clientId, redirectUri))
+	expect(consent.response.status).toBe(200)
+	const approveRes = await submitConsent(worker, env, BASE_URL, consent.handle, 'approve', consent.cookies)
+	expect(approveRes.status).toBe(302)
+	return { state: lastfmStateFrom(approveRes), cookies: toCookieHeader(approveRes, consent.cookies) }
 }
 
 /**
- * Build the request Last.fm's redirect back to /lastfm-callback would produce
+ * Return from Last.fm with a token, in the browser that approved
  */
-function buildLastfmCallbackRequest(stateToken: string): Request {
-	const url = new URL(`${BASE_URL}/lastfm-callback`)
-	url.searchParams.set('token', 'simulated-lastfm-token')
-	url.searchParams.set('state', stateToken)
-	return new Request(url.toString())
+function returnWithToken({ state, cookies }: { state: string; cookies: string }): Promise<Response> {
+	return returnFromLastfm(worker, env, { origin: BASE_URL, state, cookies, token: 'simulated-lastfm-token' })
 }
 
 /**
@@ -129,28 +127,6 @@ function postToken(params: Record<string, string>): Promise<Response> {
 	)
 }
 
-/**
- * Extract the URL string from a fetch input
- */
-function fetchTarget(input: RequestInfo | URL): string {
-	return input instanceof Request ? input.url : input.toString()
-}
-
-/**
- * Route outbound fetches for a single metadata URL to a canned response; everything else
- * goes to the real fetch. Each test uses a unique metadata URL so the provider's CIMD
- * cache can't carry a document over between tests.
- */
-function mockMetadataFetch(metadataUrl: string, response: () => Response) {
-	const realFetch = globalThis.fetch
-	return vi.spyOn(globalThis, 'fetch').mockImplementation((input: RequestInfo | URL, init?: RequestInit) => {
-		if (fetchTarget(input) === metadataUrl) {
-			return Promise.resolve(response())
-		}
-		return realFetch(input, init)
-	})
-}
-
 describe('OAuth Client ID Metadata Documents', () => {
 	let metadataUrl: string
 
@@ -164,14 +140,15 @@ describe('OAuth Client ID Metadata Documents', () => {
 	})
 
 	describe('GET /authorize with an HTTPS-URL client_id', () => {
-		it('should fetch the metadata document and redirect to Last.fm', async () => {
+		it('should fetch the metadata document and show the consent page', async () => {
 			const fetchSpy = mockMetadataFetch(metadataUrl, () => validDocument(metadataUrl))
 
 			const res = await worker.fetch(await buildAuthorizeRequest(metadataUrl), env, {} as ExecutionContext)
 
 			expect(fetchSpy.mock.calls.some(([input]) => fetchTarget(input) === metadataUrl)).toBe(true)
-			expect(res.status).toBe(302)
-			expect(res.headers.get('Location') ?? '').toContain('last.fm')
+			expect(res.status).toBe(200)
+			expect(res.headers.get('Location')).toBeNull()
+			expect(await res.text()).toContain('Published by client.example.com (verified)')
 		})
 
 		it('should return 400 without internals when the metadata document cannot be fetched', async () => {
@@ -225,7 +202,7 @@ describe('OAuth Client ID Metadata Documents', () => {
 
 	describe('GET /lastfm-callback for a CIMD client', () => {
 		it('should return 400 without internals when the document cannot be re-fetched at completion', async () => {
-			// Fetches during /authorize succeed; fetches during the callback (completeAuthorization) fail.
+			// Fetches during /authorize and consent succeed; fetches during the callback (completeAuthorization) fail.
 			// /authorize resolves the document more than once, so switch on phase rather than call count.
 			let failFetches = false
 			let failedFetches = 0
@@ -235,14 +212,11 @@ describe('OAuth Client ID Metadata Documents', () => {
 				return new Response('bad gateway detail', { status: 502 })
 			})
 
-			const authorizeRes = await worker.fetch(await buildAuthorizeRequest(metadataUrl), env, {} as ExecutionContext)
-			expect(authorizeRes.status).toBe(302)
-
-			const stateToken = pendingStateFrom(authorizeRes)
-			expect(stateToken).toBeTruthy()
+			const approved = await approveConsentPage(metadataUrl)
+			expect(approved.state).toBeTruthy()
 
 			failFetches = true
-			const res = await worker.fetch(buildLastfmCallbackRequest(stateToken), env, {} as ExecutionContext)
+			const res = await returnWithToken(approved)
 
 			expect(failedFetches).toBeGreaterThanOrEqual(1)
 			expect(res.status).toBe(400)
@@ -262,10 +236,7 @@ describe('OAuth Client ID Metadata Documents', () => {
 			async ({ redirectUris, grantTypes, redirectUri }) => {
 				mockMetadataFetch(metadataUrl, () => validDocument(metadataUrl, { redirect_uris: redirectUris, grant_types: grantTypes }))
 
-				const authorizeRes = await worker.fetch(await buildAuthorizeRequest(metadataUrl, redirectUri), env, {} as ExecutionContext)
-				expect(authorizeRes.status).toBe(302)
-
-				const callbackRes = await worker.fetch(buildLastfmCallbackRequest(pendingStateFrom(authorizeRes)), env, {} as ExecutionContext)
+				const callbackRes = await returnWithToken(await approveConsentPage(metadataUrl, redirectUri))
 				expect(callbackRes.status).toBe(302)
 
 				// The code goes back to the exact redirect_uri the client asked for
