@@ -105,6 +105,16 @@ describe('normalizeTokenResource', () => {
 		expect(fields.get('refresh_token')).toBe('r')
 	})
 
+	// The provider lowercases the media type before comparing, so a mixed-case header must be rewritten too
+	it('should map the /mcp resource when the Content-Type is mixed case with parameters', async () => {
+		const request = tokenRequest(form(['grant_type', 'refresh_token'], ['resource', `${ORIGIN}/mcp`]), {
+			contentType: 'Application/X-WWW-Form-URLEncoded; charset=UTF-8',
+		})
+		const result = await normalizeTokenResource(request)
+		expect(result).not.toBe(request)
+		expect(new URLSearchParams(await bodyText(result)).get('resource')).toBe(ORIGIN)
+	})
+
 	it.each(UNCHANGED_RESOURCES)('should leave resource %s unchanged', async (resource) => {
 		const request = tokenRequest(form(['grant_type', 'refresh_token'], ['resource', resource]))
 		expect(await normalizeTokenResource(request)).toBe(request)

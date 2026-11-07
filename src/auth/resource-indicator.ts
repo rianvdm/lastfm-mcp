@@ -40,8 +40,9 @@ export function normalizeAuthorizeResource(request: Request, url: URL): Request 
 /** Rewrite `resource` in the form body of a POST /oauth/token request. */
 export async function normalizeTokenResource(request: Request): Promise<Request> {
 	if (request.method !== 'POST') return request
+	// Match the media type the way the provider does (case-insensitive, parameters ignored), so every body it parses is rewritten
 	const contentType = request.headers.get('content-type') ?? ''
-	if (!contentType.includes('application/x-www-form-urlencoded')) return request
+	if (contentType.split(';')[0].trim().toLowerCase() !== 'application/x-www-form-urlencoded') return request
 
 	// Read a clone so the original body stays unconsumed when nothing changes. Decode the bytes directly:
 	// workerd warns on .text() for urlencoded bodies.
