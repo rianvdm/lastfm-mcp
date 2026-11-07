@@ -98,43 +98,67 @@ async function handleSessionBasedMcp(request: Request, env: Env, ctx: ExecutionC
 }
 
 /**
- * Create the OAuth provider instance
+ * Serves MCP requests that carry a valid OAuth access token
  */
-const oauthProvider = new OAuthProvider({
-	apiRoute: '/mcp',
-	apiHandler: {
-		async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
-			// This only gets called for OAuth-authenticated requests
-			const url = new URL(request.url)
-			const baseUrl = `${url.protocol}//${url.host}`
+const mcpApiHandler = {
+	async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
+		const url = new URL(request.url)
+		const baseUrl = `${url.protocol}//${url.host}`
 
-			// Use the shared server factory with OAuth auth messages
-			const { server, setContext } = createMcpServer(env, baseUrl, {
-				authMessages: buildOAuthAuthMessages(),
+		// Use the shared server factory with OAuth auth messages
+		const { server, setContext } = createMcpServer(env, baseUrl, {
+			authMessages: buildOAuthAuthMessages(),
+		})
+
+		// Set session from OAuth context.
+		// workers-oauth-provider injects the user props from completeAuthorization() into ctx.props.
+		const props = (ctx as unknown as { props?: LastfmUserProps }).props
+		if (props?.sessionKey && props?.username) {
+			setContext({
+				session: { username: props.username, sessionKey: props.sessionKey },
 			})
+		}
 
-			// Set session from OAuth context.
-			// workers-oauth-provider injects the user props from completeAuthorization() into ctx.props.
-			const props = (ctx as unknown as { props?: LastfmUserProps }).props
-			if (props?.sessionKey && props?.username) {
-				setContext({
-					session: { username: props.username, sessionKey: props.sessionKey },
-				})
-			}
-
-			return createMcpHandler(() => server, MCP_HANDLER_OPTIONS)(request, env, ctx)
-		},
+		return createMcpHandler(() => server, MCP_HANDLER_OPTIONS)(request, env, ctx)
 	},
-	authorizeEndpoint: '/authorize',
-	tokenEndpoint: '/oauth/token',
-	clientRegistrationEndpoint: '/oauth/register',
-	// Accept HTTPS-URL client_ids backed by a Client ID Metadata Document (CIMD), the
-	// MCP 2026-07-28 preferred registration path. Requires the global_fetch_strictly_public
-	// compatibility flag in wrangler.toml. Dynamic client registration stays enabled above
-	// for clients that don't support CIMD.
-	clientIdMetadataDocumentEnabled: true,
-	defaultHandler: LastfmOAuthHandler,
-})
+}
+
+const oauthProviders = new Map<string, OAuthProvider>()
+
+/**
+ * The OAuth provider for one origin, built on first use and reused after that.
+ *
+ * The protected resource is the bare origin, and it becomes every token's audience. The provider compares
+ * stored grants against it exactly (an empty path and `/` compare equal), and almost every grant issued by
+ * 0.10.3 carries the origin, with or without a trailing slash, or no resource at all. It must stay the bare
+ * origin: grants bound to `${origin}/mcp` would match neither way, and get `invalid_grant` on refresh so
+ * the client signs in again. The Worker answers on the custom domain and on workers.dev, so each origin
+ * gets its own provider.
+ */
+function getOAuthProvider(origin: string): OAuthProvider {
+	const existing = oauthProviders.get(origin)
+	if (existing) return existing
+
+	const provider = new OAuthProvider({
+		resourceMetadata: { resource: origin },
+		apiRoute: '/mcp',
+		apiHandler: mcpApiHandler,
+		authorizeEndpoint: '/authorize',
+		tokenEndpoint: '/oauth/token',
+		clientRegistrationEndpoint: '/oauth/register',
+		// Accept HTTPS-URL client_ids backed by a Client ID Metadata Document (CIMD), the
+		// MCP 2026-07-28 preferred registration path. Requires the global_fetch_strictly_public
+		// compatibility flag in wrangler.toml. Dynamic client registration stays enabled above
+		// for clients that don't support CIMD.
+		clientIdMetadataDocumentEnabled: true,
+		defaultHandler: LastfmOAuthHandler,
+		// Log the library's internal reason (e.g. grant_audience_unbound, resource_not_configured) so
+		// production logs can count them. The wire response stays generic.
+		onError: ({ status, code, internal }) => console.warn('[OAUTH] error', { status, code, ...internal }),
+	})
+	oauthProviders.set(origin, provider)
+	return provider
+}
 
 /**
  * Main entry point - checks for session_id before deferring to OAuth
@@ -310,10 +334,12 @@ Sitemap: https://lastfm-mcp.com/sitemap.xml`,
 		}
 
 		// Use OAuth provider for everything else
-		const response = await oauthProvider.fetch(request, env, ctx)
+		// Pass a per-request copy of env: the provider stores its helpers on `env.OAUTH_PROVIDER` only when that
+		// is unset, so on a shared env the first origin's helpers would serve every later origin's /authorize.
+		const response = await getOAuthProvider(url.origin).fetch(request, { ...env }, ctx)
 
-		// If it's a 401 from /mcp, add the resource_metadata to WWW-Authenticate header
-		// This is required by RFC 9728 for OAuth discovery
+		// Keep the 401 challenge on /mcp byte-identical to the one 0.10.3 clients saw. The provider's own challenge
+		// points at the same root metadata document (RFC 9728) but adds realm and error parameters.
 		if (response.status === 401 && url.pathname === '/mcp') {
 			const newHeaders = new Headers(response.headers)
 			newHeaders.set('WWW-Authenticate', `Bearer resource_metadata="${baseUrl}/.well-known/oauth-protected-resource"`)

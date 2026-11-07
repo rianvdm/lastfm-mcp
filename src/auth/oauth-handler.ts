@@ -56,9 +56,6 @@ export const LastfmOAuthHandler = {
 			case '/lastfm-callback':
 				return handleLastfmCallback(request, env)
 
-			case '/.well-known/oauth-protected-resource':
-				return handleProtectedResourceMetadata(request)
-
 			default:
 				return new Response('Not found', { status: 404 })
 		}
@@ -400,34 +397,4 @@ async function handleManualCallback(request: Request, env: OAuthEnv): Promise<Re
 			status: 500,
 		})
 	}
-}
-
-/**
- * OAuth Protected Resource Metadata (RFC 9728)
- * Required by MCP spec for OAuth discovery.
- *
- * The resource MUST be just the base URL (no path) because workers-oauth-provider
- * validates audience against `${protocol}//${host}` only. Including /mcp would cause
- * tokens to fail with "Token audience does not match resource server".
- */
-function handleProtectedResourceMetadata(request: Request): Response {
-	const url = new URL(request.url)
-	const baseUrl = `${url.protocol}//${url.host}`
-
-	return new Response(
-		JSON.stringify({
-			resource: baseUrl,
-			authorization_servers: [baseUrl],
-			bearer_methods_supported: ['header'],
-			scopes_supported: [],
-		}),
-		{
-			status: 200,
-			headers: {
-				'Content-Type': 'application/json',
-				'Access-Control-Allow-Origin': '*',
-				'Cache-Control': 'public, max-age=3600',
-			},
-		},
-	)
 }

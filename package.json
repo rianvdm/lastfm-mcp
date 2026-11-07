@@ -42,7 +42,7 @@
 		"wrangler": "4.124.0"
 	},
 	"dependencies": {
-		"@cloudflare/workers-oauth-provider": "^0.10.3",
+		"@cloudflare/workers-oauth-provider": "^1.2.4",
 		"@modelcontextprotocol/server": "2.0.0",
 		"agents": "^0.21.0",
 		"zod": "^4.1.13"

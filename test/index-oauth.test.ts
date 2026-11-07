@@ -23,7 +23,7 @@ describe('Last.fm MCP Server (OAuth Entry Point)', () => {
 		}
 
 		it('should return 401 when no auth is provided', async () => {
-			const request = new Request('http://example.com/mcp', {
+			const request = new Request('https://example.com/mcp', {
 				method: 'POST',
 				body: initBody,
 				headers: mcpHeaders,
@@ -37,7 +37,7 @@ describe('Last.fm MCP Server (OAuth Entry Point)', () => {
 		})
 
 		it('should include WWW-Authenticate header pointing to OAuth metadata', async () => {
-			const request = new Request('http://example.com/mcp', {
+			const request = new Request('https://example.com/mcp', {
 				method: 'POST',
 				body: initBody,
 				headers: mcpHeaders,
@@ -50,13 +50,13 @@ describe('Last.fm MCP Server (OAuth Entry Point)', () => {
 			expect(response.status).toBe(401)
 			const wwwAuth = response.headers.get('WWW-Authenticate')
 			expect(wwwAuth).not.toBeNull()
-			expect(wwwAuth).toContain('Bearer resource_metadata="http://example.com/.well-known/oauth-protected-resource"')
+			expect(wwwAuth).toContain('Bearer resource_metadata="https://example.com/.well-known/oauth-protected-resource"')
 		})
 
 		it('should ignore a legacy Mcp-Session-Id header and fall through to OAuth', async () => {
 			// MCP 2026-07-28 removed protocol sessions. A stale header from an old
 			// manual-login client must not be honoured, so this is a plain 401.
-			const request = new Request('http://example.com/mcp', {
+			const request = new Request('https://example.com/mcp', {
 				method: 'POST',
 				body: initBody,
 				headers: { ...mcpHeaders, 'Mcp-Session-Id': 'legacy-header-no-longer-routed' },
@@ -71,7 +71,7 @@ describe('Last.fm MCP Server (OAuth Entry Point)', () => {
 		})
 
 		it('should not include a /login?session_id= URL in the response body', async () => {
-			const request = new Request('http://example.com/mcp', {
+			const request = new Request('https://example.com/mcp', {
 				method: 'POST',
 				body: initBody,
 				headers: mcpHeaders,
@@ -100,7 +100,7 @@ describe('Last.fm MCP Server (OAuth Entry Point)', () => {
 			}
 
 			// Request with session_id that doesn't exist in KV
-			const request = new Request('http://example.com/mcp?session_id=nonexistent-session', {
+			const request = new Request('https://example.com/mcp?session_id=nonexistent-session', {
 				method: 'POST',
 				body: JSON.stringify(initRequest),
 				headers: {
@@ -133,7 +133,7 @@ describe('Last.fm MCP Server (OAuth Entry Point)', () => {
 				}),
 			)
 
-			const request = new Request(`http://example.com/mcp?session_id=${sessionId}`, {
+			const request = new Request(`https://example.com/mcp?session_id=${sessionId}`, {
 				method: 'POST',
 				body: JSON.stringify({
 					jsonrpc: '2.0',
@@ -175,7 +175,7 @@ describe('Last.fm MCP Server (OAuth Entry Point)', () => {
 				}),
 			)
 
-			const request = new Request(`http://example.com/mcp?session_id=${sessionId}`, {
+			const request = new Request(`https://example.com/mcp?session_id=${sessionId}`, {
 				method: 'POST',
 				body: JSON.stringify({
 					jsonrpc: '2.0',
@@ -359,7 +359,7 @@ describe('Last.fm MCP Server (OAuth Entry Point)', () => {
 				id: 1,
 			}
 
-			const request = new Request('http://example.com/mcp', {
+			const request = new Request('https://example.com/mcp', {
 				method: 'POST',
 				body: JSON.stringify(initRequest),
 				headers: {
@@ -391,7 +391,7 @@ describe('Last.fm MCP Server (OAuth Entry Point)', () => {
 				id: 1,
 			}
 
-			const request = new Request('http://example.com/mcp', {
+			const request = new Request('https://example.com/mcp', {
 				method: 'POST',
 				body: JSON.stringify(initRequest),
 				headers: {
@@ -407,7 +407,7 @@ describe('Last.fm MCP Server (OAuth Entry Point)', () => {
 
 			expect(response.status).toBe(401)
 			const wwwAuth = response.headers.get('WWW-Authenticate')
-			expect(wwwAuth).toContain('Bearer resource_metadata="http://example.com/.well-known/oauth-protected-resource"')
+			expect(wwwAuth).toContain('Bearer resource_metadata="https://example.com/.well-known/oauth-protected-resource"')
 		})
 
 		it.todo('should return 200 when valid bearer token provided — covered by oauth-roundtrip integration test')
@@ -415,7 +415,7 @@ describe('Last.fm MCP Server (OAuth Entry Point)', () => {
 		it('should not return a /login?session_id= URL in OAuth path tool responses', async () => {
 			// Even with an invalid bearer token (401 expected),
 			// the OAuth path must never fall back to session-based auth messages.
-			const request = new Request('http://example.com/mcp', {
+			const request = new Request('https://example.com/mcp', {
 				method: 'POST',
 				body: JSON.stringify({
 					jsonrpc: '2.0',
@@ -463,7 +463,7 @@ describe('Last.fm MCP Server (OAuth Entry Point)', () => {
 
 	describe('static endpoints', () => {
 		it('should return marketing page for GET /', async () => {
-			const request = new Request('http://example.com/')
+			const request = new Request('https://example.com/')
 			const ctx = createExecutionContext()
 			const response = await worker.fetch(request, env, ctx)
 			await waitOnExecutionContext(ctx)
@@ -476,7 +476,7 @@ describe('Last.fm MCP Server (OAuth Entry Point)', () => {
 		})
 
 		it('should return health check for GET /health', async () => {
-			const request = new Request('http://example.com/health')
+			const request = new Request('https://example.com/health')
 			const ctx = createExecutionContext()
 			const response = await worker.fetch(request, env, ctx)
 			await waitOnExecutionContext(ctx)
@@ -488,7 +488,7 @@ describe('Last.fm MCP Server (OAuth Entry Point)', () => {
 		})
 
 		it('should return MCP discovery for GET /.well-known/mcp.json', async () => {
-			const request = new Request('http://example.com/.well-known/mcp.json')
+			const request = new Request('https://example.com/.well-known/mcp.json')
 			const ctx = createExecutionContext()
 			const response = await worker.fetch(request, env, ctx)
 			await waitOnExecutionContext(ctx)
@@ -505,7 +505,7 @@ describe('Last.fm MCP Server (OAuth Entry Point)', () => {
 		})
 
 		it('should handle CORS preflight requests', async () => {
-			const request = new Request('http://example.com/mcp', {
+			const request = new Request('https://example.com/mcp', {
 				method: 'OPTIONS',
 			})
 			const ctx = createExecutionContext()

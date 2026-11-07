@@ -145,6 +145,25 @@ describe('GET /authorize with an invalid request', () => {
 			expect(res.headers.get('Location')).toBeNull()
 		})
 
+		// Only `${origin}/mcp` is mapped to the origin; every other resource must still be refused.
+		it.each(['https://evil.example/mcp', 'https://lastfm-mcp.com/other', 'https://lastfm-mcp.com/mcp/x'])(
+			'should return 400 without redirecting when the resource is %s',
+			async (resource) => {
+				const res = await authorize({
+					client_id: clientId,
+					redirect_uri: REDIRECT_URI,
+					response_type: 'code',
+					code_challenge: CODE_CHALLENGE,
+					code_challenge_method: 'S256',
+					state: 'client-state',
+					resource,
+				})
+
+				expect(res.status).toBe(400)
+				expect(res.headers.get('Location')).toBeNull()
+			},
+		)
+
 		it('should answer in plain text, because the message can echo a request parameter', async () => {
 			const res = await authorize({
 				client_id: clientId,
