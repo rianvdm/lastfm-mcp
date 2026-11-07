@@ -1,5 +1,5 @@
 // ABOUTME: Tests for the OAuth consent page renderer and its error page.
-// ABOUTME: Covers client-name verification states, loopback warning, escaping, form fields and CSP-friendliness.
+// ABOUTME: Covers client-name verification states, loopback warning, the remember line, escaping, form fields and CSP-friendliness.
 import { describe, it, expect } from 'vitest'
 import type { ConsentDescription } from '@cloudflare/workers-oauth-provider'
 
@@ -33,7 +33,8 @@ const loopback: ConsentDescription = {
 	redirectIsLoopback: true,
 }
 
-const render = (details: ConsentDescription, handle = 'handle-123') => renderConsentPage(details, handle, LASTFM_CONSENT_BRANDING)
+const render = (details: ConsentDescription, handle = 'handle-123', remembersApproval = true) =>
+	renderConsentPage(details, handle, LASTFM_CONSENT_BRANDING, { remembersApproval })
 
 describe('renderConsentPage', () => {
 	it('should show the verified domain for a CIMD client', () => {
@@ -63,6 +64,16 @@ describe('renderConsentPage', () => {
 		const html = render(dcr)
 		expect(html).toMatch(/You won(&#039;|')t be asked again for this app for a year\./)
 		expect(html).not.toContain(LOOPBACK_WARNING)
+	})
+
+	it('should omit the remember line when approvals are not remembered', () => {
+		const html = render(dcr, 'handle-123', false)
+		expect(html).not.toContain('for a year')
+		expect(html).toContain('href="https://elezea.com/privacy/#lastfm-mcp-server"')
+	})
+
+	it('should omit the remember line for a loopback redirect even when approvals are remembered', () => {
+		expect(render(loopback, 'handle-123', true)).not.toContain('for a year')
 	})
 
 	it('should link to the privacy page', () => {

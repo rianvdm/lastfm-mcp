@@ -1,7 +1,7 @@
 // ABOUTME: OAuth handler integrating Last.fm authentication with the MCP OAuth 2.1 flow.
 // ABOUTME: Handles /authorize (consent page and decision), /lastfm-callback, /login and /callback; discovery is served elsewhere.
 import { AuthorizationError, CimdFetchError, authorizationErrorRedirect } from '@cloudflare/workers-oauth-provider'
-import type { AuthRequest, OAuthHelpers } from '@cloudflare/workers-oauth-provider'
+import type { AuthRequest, OAuthHelpers, RememberConsentOptions } from '@cloudflare/workers-oauth-provider'
 import type { ExecutionContext } from '@cloudflare/workers-types'
 
 import type { Env } from '../types/env'
@@ -29,6 +29,12 @@ export interface LastfmUserProps {
  * No `subject` is passed with it: the Last.fm user is known only after consent, so approvals belong to the browser.
  */
 const CONSENT_REMEMBER_SECONDS = 365 * 24 * 60 * 60
+
+/** The library rejects a shorter `remember.secret` with a TypeError. */
+const CONSENT_SECRET_MIN_LENGTH = 32
+
+/** Set after the first warning about an unusable CONSENT_SECRET, so it's logged once per isolate, not per request. */
+let consentSecretWarningLogged = false
 
 /** Shown when a consent form or Last.fm callback can't be matched to an approved request in this browser. */
 const STALE_CONSENT_MESSAGE = 'This sign-in request expired, was already used, or was started in a different browser.'
@@ -95,6 +101,24 @@ function consentErrorResponse(message: string): Response {
 }
 
 /**
+ * The options for remembering approvals, or `undefined` when CONSENT_SECRET is missing or too short. Remembering
+ * is a convenience, so it fails safe: without a usable secret every sign-in shows the consent page, instead of
+ * every /authorize failing on the library's TypeError. Consent is enforced either way.
+ */
+function consentRememberOptions(env: Env): RememberConsentOptions | undefined {
+	if (typeof env.CONSENT_SECRET === 'string' && env.CONSENT_SECRET.length >= CONSENT_SECRET_MIN_LENGTH) {
+		return { secret: env.CONSENT_SECRET, maxAgeSeconds: CONSENT_REMEMBER_SECONDS }
+	}
+	if (!consentSecretWarningLogged) {
+		consentSecretWarningLogged = true
+		console.error(
+			`[OAUTH] CONSENT_SECRET is missing or shorter than ${CONSENT_SECRET_MIN_LENGTH} characters; consent will not be remembered`,
+		)
+	}
+	return undefined
+}
+
+/**
  * Start the Last.fm sign-in for an approved request. `beginUpstream` creates the `state` only now, after consent,
  * and binds it to this browser with a cookie. Last.fm sends the user back to the `cb` URL with `token` added,
  * so `state` rides in that URL's query string.
@@ -112,7 +136,7 @@ async function redirectToLastfm(request: Request, env: OAuthEnv, authRequest: Au
 
 /**
  * GET /authorize: validate the client's request, then show the consent page, or go straight to Last.fm when
- * this browser already approved the same client, redirect URI and resource.
+ * this browser already approved the same client, redirect URI and resource (only when remembering is available).
  */
 async function handleAuthorize(request: Request, env: OAuthEnv): Promise<Response> {
 	try {
@@ -120,7 +144,8 @@ async function handleAuthorize(request: Request, env: OAuthEnv): Promise<Respons
 		// Before beginConsent, so a failed client lookup leaves nothing in KV
 		const details = await env.OAUTH_PROVIDER.describeConsent(authRequest)
 
-		if (await env.OAUTH_PROVIDER.isConsentRemembered(request, authRequest, { secret: env.CONSENT_SECRET })) {
+		const remember = consentRememberOptions(env)
+		if (remember && (await env.OAUTH_PROVIDER.isConsentRemembered(request, authRequest, remember))) {
 			console.log('[OAUTH] Consent remembered, redirecting to Last.fm')
 			return await redirectToLastfm(request, env, authRequest)
 		}
@@ -129,7 +154,8 @@ async function handleAuthorize(request: Request, env: OAuthEnv): Promise<Respons
 		// The library's headers carry the binding cookie, no-store and anti-framing. No `form-action`: Chrome applies
 		// it to the redirects that follow the form POST, which would block both Last.fm and the Deny redirect.
 		consent.headers.set('Content-Type', 'text/html; charset=utf-8')
-		return new Response(renderConsentPage(details, consent.handle, LASTFM_CONSENT_BRANDING), { headers: consent.headers })
+		const html = renderConsentPage(details, consent.handle, LASTFM_CONSENT_BRANDING, { remembersApproval: remember !== undefined })
+		return new Response(html, { headers: consent.headers })
 	} catch (error) {
 		// A client_id that is a metadata document URL which couldn't be fetched or
 		// validated is a client-side problem, not a server fault. The detail can
@@ -157,7 +183,7 @@ async function handleAuthorize(request: Request, env: OAuthEnv): Promise<Respons
  * POST /authorize: the consent form. The form carries only the handle and the decision; the authorization
  * request comes back from storage, and only in the browser that opened the page.
  * - deny: redirect to the client's (already validated) redirect URI with `access_denied` and its `state`
- * - approve: remember the approval for a year, then start the Last.fm sign-in
+ * - approve: remember the approval for a year (when a usable CONSENT_SECRET is set), then start the Last.fm sign-in
  */
 async function handleConsentDecision(request: Request, env: OAuthEnv): Promise<Response> {
 	let form: FormData
@@ -175,9 +201,7 @@ async function handleConsentDecision(request: Request, env: OAuthEnv): Promise<R
 			return new Response(null, { status: 302, headers: denied.headers })
 		}
 
-		const approved = await env.OAUTH_PROVIDER.approveConsent(request, handle, {
-			remember: { secret: env.CONSENT_SECRET, maxAgeSeconds: CONSENT_REMEMBER_SECONDS },
-		})
+		const approved = await env.OAUTH_PROVIDER.approveConsent(request, handle, { remember: consentRememberOptions(env) })
 		console.log('[OAUTH] Consent approved, redirecting to Last.fm')
 		// Awaited so a storage failure in beginUpstream reaches the catch below
 		return await redirectToLastfm(request, env, approved.request, approved.headers)

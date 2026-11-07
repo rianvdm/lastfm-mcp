@@ -27,6 +27,15 @@ export const LASTFM_CONSENT_BRANDING: ConsentBranding = {
 	privacyUrl: 'https://elezea.com/privacy/#lastfm-mcp-server',
 }
 
+/** How the server handles an approval, which decides what the page may promise. */
+export interface ConsentPageOptions {
+	/**
+	 * Whether approving remembers the approval in this browser. When false (for example, no signing secret is
+	 * configured) the page must not promise to skip the question next time. Loopback redirects never show it.
+	 */
+	remembersApproval: boolean
+}
+
 const LOOPBACK_WARNING = 'This sends access to an app on your computer. Continue only if you just started connecting from that app.'
 const UNVERIFIED_NOTE = "The app chose this name itself. It hasn't been checked."
 const REMEMBER_NOTE = "You won't be asked again for this app for a year."
@@ -80,11 +89,16 @@ ${body}
  * Render the consent page. Every client-supplied string is escaped.
  * The form posts `handle` and a `decision` of approve or deny back to /authorize.
  */
-export function renderConsentPage(details: ConsentDescription, handle: string, branding: ConsentBranding): string {
+export function renderConsentPage(
+	details: ConsentDescription,
+	handle: string,
+	branding: ConsentBranding,
+	options: ConsentPageOptions,
+): string {
 	const appNote = details.clientDomain ? `Published by ${sanitizeText(details.clientDomain)} (verified)` : sanitizeText(UNVERIFIED_NOTE)
 	const appName = details.clientDomain ? sanitizeText(details.clientName) : `“${sanitizeText(details.clientName)}”`
 	const warning = details.redirectIsLoopback ? `<div class="warn">${sanitizeText(LOOPBACK_WARNING)}</div>\n` : ''
-	const remember = details.redirectIsLoopback ? '' : `${sanitizeText(REMEMBER_NOTE)} `
+	const remember = options.remembersApproval && !details.redirectIsLoopback ? `${sanitizeText(REMEMBER_NOTE)} ` : ''
 
 	const body = `<h1>${sanitizeText(branding.headline)}</h1>
 <p>${sanitizeText(branding.accessSentence)}</p>

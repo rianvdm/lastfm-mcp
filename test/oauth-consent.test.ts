@@ -1,9 +1,10 @@
 // ABOUTME: Integration tests for the consent step between /authorize and the redirect to Last.fm.
-// ABOUTME: Covers approve, deny, replayed/unbound/expired consent, remembered approvals, CIMD clients and the Last.fm callback.
+// ABOUTME: Covers approve, deny, replayed/unbound/expired consent, remembered approvals, a missing CONSENT_SECRET, CIMD clients and the Last.fm callback.
 import { env } from 'cloudflare:test'
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 
 import worker from '../src/index-oauth'
+import type { Env } from '../src/types/env'
 import { clientMetadataDocument, mockMetadataFetch } from './helpers/cimd-fetch'
 import {
 	buildAuthorizeUrl,
@@ -38,6 +39,7 @@ const HEADLINE = 'An app wants to read your Last.fm listening data'
 const WEB_REDIRECT_URI = 'https://client.example.com/oauth/callback'
 const OTHER_WEB_REDIRECT_URI = 'https://client.example.com/oauth/other-callback'
 const ONE_YEAR_SECONDS = 365 * 24 * 60 * 60
+const MISSING_SECRET_LOG = '[OAUTH] CONSENT_SECRET is missing or shorter than 32 characters; consent will not be remembered'
 
 /** The KV key the library stores a consent or upstream transaction under: the SHA-256 of its handle. */
 async function transactionKey(handle: string): Promise<string> {
@@ -232,6 +234,46 @@ describe('Consent before the Last.fm redirect', () => {
 
 			expect(newPort.response.status).toBe(200)
 			expect(await newPort.response.text()).toContain('This sends access to an app on your computer.')
+		})
+	})
+
+	describe('without a usable CONSENT_SECRET', () => {
+		const unusableSecrets: { label: string; secret: string | undefined }[] = [
+			{ label: 'missing', secret: undefined },
+			{ label: 'shorter than 32 characters', secret: 'only-31-characters-long-secret!' },
+		]
+
+		// The warning is logged once per isolate, so each test loads the Worker afresh to start from a clean module.
+		let freshWorker: typeof worker
+		beforeEach(async () => {
+			vi.resetModules()
+			freshWorker = (await import('../src/index-oauth')).default
+		})
+
+		it.each(unusableSecrets)('should still ask for consent but not remember it when CONSENT_SECRET is $label', async ({ secret }) => {
+			const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+			const noSecretEnv: Env = { ...env, CONSENT_SECRET: secret }
+			const clientId = await registerPublicClient(freshWorker, noSecretEnv, ORIGIN, WEB_REDIRECT_URI)
+			const authorizeUrl = await buildAuthorizeUrl({ origin: ORIGIN, clientId, redirectUri: WEB_REDIRECT_URI })
+
+			const consent = await openConsent(freshWorker, noSecretEnv, authorizeUrl)
+			expect(consent.response.status).toBe(200)
+			const body = await consent.response.text()
+			expect(body).toContain(HEADLINE)
+			expect(body).not.toContain('for a year')
+
+			const approveRes = await submitConsent(freshWorker, noSecretEnv, ORIGIN, consent.handle, 'approve', consent.cookies)
+			expect(approveRes.status).toBe(302)
+			expect(new URL(approveRes.headers.get('Location') ?? '').hostname).toBe('www.last.fm')
+			expect(approveRes.headers.getSetCookie().some((cookie) => cookie.startsWith('__Host-oauth-approvals='))).toBe(false)
+
+			// Nothing was remembered, so the same browser sees the page again
+			const again = await openConsent(freshWorker, noSecretEnv, authorizeUrl, toCookieHeader(approveRes, consent.cookies))
+			expect(again.response.status).toBe(200)
+
+			// Once per isolate, not once per request
+			expect(errorSpy).toHaveBeenCalledTimes(1)
+			expect(errorSpy).toHaveBeenCalledWith(MISSING_SECRET_LOG)
 		})
 	})
 

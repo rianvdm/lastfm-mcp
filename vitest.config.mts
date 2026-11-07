@@ -5,7 +5,7 @@ export default defineConfig({
 	plugins: [
 		cloudflareTest({
 			wrangler: { configPath: './wrangler.toml' },
-			// Secrets aren't in wrangler.toml; the consent helpers reject a CONSENT_SECRET under 32 characters
+			// Secrets aren't in wrangler.toml; without a CONSENT_SECRET of 32+ characters approvals aren't remembered
 			miniflare: { bindings: { CONSENT_SECRET: 'test-consent-secret-at-least-32-characters-long' } },
 		}),
 	],
