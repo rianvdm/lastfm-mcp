@@ -2,7 +2,7 @@
 
 A [Model Context Protocol](https://modelcontextprotocol.io/) (MCP) server for Last.fm. Gives AI assistants access to your listening history, music discovery, and detailed track/artist/album information.
 
-Runs on Cloudflare Workers with OAuth 2.0 authentication. Public tools (track info, artist info, similar artists) work without signing in -- connect your Last.fm account to access personal listening data.
+Runs on Cloudflare Workers. Your MCP client signs you in with OAuth the first time it connects, and after that every tool is available, from track and artist lookups to your own listening history.
 
 ## Quick start
 
@@ -55,13 +55,13 @@ npx @modelcontextprotocol/inspector https://lastfm-mcp.com/mcp
 
 ## Authentication
 
-The server uses OAuth 2.0. When you connect from a supported client, your browser opens to Last.fm to authorize access. Tokens persist across sessions.
+The server uses OAuth 2.0. The first time your client connects, your browser opens a short page on lastfm-mcp.com that names the app asking for access and the address that access will go to. Approve it, then sign in to Last.fm. That browser remembers the approval for a year, so reconnecting the same app skips the page.
 
-Public tools work without signing in. You only need to connect your account for personal listening data.
+Access is read-only: the server can read your listening history and profile, but it can't scrobble or change anything. Sign-ins expire after 30 days, and your client then asks you to sign in again.
 
 ## Available tools
 
-### Public tools
+### Lookups and diagnostics
 
 | Tool                    | Description                             |
 | ----------------------- | --------------------------------------- |
@@ -76,7 +76,7 @@ Public tools work without signing in. You only need to connect your account for 
 | `server_info`           | Server status and capabilities          |
 | `lastfm_auth_status`    | Check authentication status             |
 
-### Personal tools (requires sign-in)
+### Your listening data
 
 | Tool                        | Description                          |
 | --------------------------- | ------------------------------------ |
@@ -89,7 +89,7 @@ Public tools work without signing in. You only need to connect your account for 
 | `get_listening_stats`       | Listening statistics                 |
 | `get_music_recommendations` | Personalized recommendations         |
 
-### Temporal queries (requires sign-in)
+### Your listening history over time
 
 | Tool                      | Description                              |
 | ------------------------- | ---------------------------------------- |
@@ -131,7 +131,7 @@ lastfm://track/{artist}/{track}/similar  # Similar tracks
 
 ### Prerequisites
 
-- Node.js 20 or newer (CI runs 20)
+- Node.js 22 (see `.nvmrc`; CI runs 22)
 - Cloudflare Workers account
 - Last.fm API key ([create one here](https://www.last.fm/api/account/create))
 
@@ -173,7 +173,7 @@ openssl rand -base64 32 | wrangler secret put CONSENT_SECRET --env production
 
 `CONSENT_SECRET` signs the cookie that remembers which apps a browser approved. Rotating it shows the consent page again to everyone; if it's missing or shorter than 32 characters, approvals aren't remembered, but sign-ins still work.
 
-**Upgrading an existing deployment:** this version adds the consent page and the `CONSENT_SECRET` secret. Set it with the `openssl` line above before you deploy, or right after. Until it's set, the consent page shows on every sign-in.
+**Upgrading a deployment from v2.6.0 or earlier:** v2.7.0 added the consent page and the `CONSENT_SECRET` secret. Set it with the `openssl` line above before you deploy, or right after. Until it's set, the consent page shows on every sign-in.
 
 Deploy:
 
