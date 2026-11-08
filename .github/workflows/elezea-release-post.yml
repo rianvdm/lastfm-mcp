@@ -4,7 +4,11 @@ on:
     types: [published]
 jobs:
   post:
-    if: github.event.release.prerelease == false && github.event.release.draft == false
+    # Opt out per release by putting <!-- skip-elezea-post --> in the release body (invisible on GitHub).
+    if: >-
+      github.event.release.prerelease == false &&
+      github.event.release.draft == false &&
+      !contains(github.event.release.body, '<!-- skip-elezea-post -->')
     runs-on: ubuntu-latest
     steps:
       - uses: actions/github-script@v7
