@@ -1,25 +1,37 @@
-# CLAUDE.md
+# AGENTS.md
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+Guidance for coding agents (Claude Code, Codex) working in this repository.
 
-Cloudflare Worker implementing a Model Context Protocol (MCP) server that connects AI assistants to Last.fm listening data. Runs on workerd with KV-backed persistence for sessions, caching, rate limits, and logs.
+Cloudflare Worker implementing a Model Context Protocol (MCP) server that connects AI assistants to Last.fm listening data. Runs on workerd with three KV namespaces: `OAUTH_KV` (OAuth clients, grants and tokens), `MCP_SESSIONS` (Last.fm sessions, pending sign-ins and the Last.fm response cache) and `MCP_RL` (per-IP rate limits).
 
 ## Build / Test / Lint Commands
 
 ```bash
 npm run dev              # Local dev server (wrangler dev, port 8787)
 npm run build            # Dry-run deploy to validate build (wrangler deploy --dry-run)
-npm run deploy           # Deploy to staging
-npm run deploy:prod      # Deploy to production
+npm run deploy           # Deploy to staging (the default `lastfm-mcp` Worker)
+npm run deploy:prod      # Deploy to production (`lastfm-mcp-prod`); CI normally does this, see below
+npm run setup:prod       # Create production KV namespaces and set the three secrets
 npm run lint             # ESLint (src/**/*.ts)
 npm run format           # Prettier --write
 npm run format:check     # Prettier --check (CI)
+npm run test:multi-user  # Manual multi-user check against a running server (scripts/test-multi-user.js)
 npm run cf-typegen       # Regenerate Worker type bindings (run after changing wrangler.toml; produces worker-configuration.d.ts — generated, do not edit by hand)
 ```
 
+## Deploys and Releases
+
+**A merge to `main` is a production deploy.** CI (`.github/workflows/ci.yml`) lints, tests and builds every PR and push, then runs `npm run deploy:prod` on each push to `main`. Test risky auth changes on staging (`npm run deploy`) before merging.
+
+To release:
+
+1. In one PR, bump `version` in `package.json` and `package-lock.json` and `SERVER_VERSION` in `src/mcp/protocol.ts`. `server_info`, the server card and `/health` report `SERVER_VERSION`.
+2. After it merges, tag that merge commit and create the GitHub release.
+3. Publishing a release cross-posts it to elezea.com through `.github/workflows/elezea-release-post.yml`. The endpoint rejects a release whose name isn't `lastfm-mcp vX.Y.Z — <tagline>` or whose body lacks an opening paragraph before its `## What's new` / `## Fixes` / `## Under the hood` sections. To publish on GitHub only, put `<!-- skip-elezea-post -->` in the body. A release runs the workflow file from its tagged commit, so the tag must include the version of the workflow you expect.
+
 ### Running Tests
 
-Test runner: **vitest 4** with `@cloudflare/vitest-pool-workers` ≥0.15 (runs in workerd/miniflare). Requires **Node 22** (see `.nvmrc`); the config uses the `cloudflareTest()` plugin shape, not the removed `defineWorkersConfig`.
+Test runner: **vitest 4** with `@cloudflare/vitest-pool-workers` 0.22 (runs in workerd/miniflare). Requires **Node 22** (see `.nvmrc`); the config uses the `cloudflareTest()` plugin shape, not the removed `defineWorkersConfig`.
 
 **`wrangler` is pinned to the exact version `@cloudflare/vitest-pool-workers` depends on**, so tests, `npm run dev`, and deploys share one wrangler and one workerd. A caret range resolves to the newest wrangler and splits the tree in two again. When bumping vitest-pool-workers, move the pin in the same change:
 
@@ -105,7 +117,7 @@ import { toolError } from './error-handler'
 
 ### Error Handling
 
-Four patterns used at different layers:
+Three patterns used at different layers:
 
 1. **HTTP handlers** — try/catch, log with `console.error`, return `Response` with status code
 2. **MCP tools** — try/catch, return `toolError('tool_name', error)` from `src/mcp/tools/error-handler.ts`
@@ -137,21 +149,32 @@ describe('Feature', () => {
 - Mock fetch: `globalThis.fetch = vi.fn()`
 - Timer control: `vi.useFakeTimers()` / `vi.useRealTimers()` / `vi.advanceTimersByTimeAsync()`
 - Worker integration tests use `import { env, createExecutionContext, waitOnExecutionContext } from 'cloudflare:test'`
-- Test stubs for ajv in `test/stubs/` (workerd can't run ajv CJS modules)
+- OAuth flow helpers live in `test/helpers/` (`oauth-flow.ts`, `cimd-fetch.ts`); captured 0.10.3 KV records for the upgrade-survival test are in `test/fixtures/`
 
 ## Architecture Overview
 
 ```
 src/
-  index-oauth.ts        # Sole Worker entry point (OAuth 2.1 + session hybrid auth)
+  index-oauth.ts        # Sole Worker entry point: per-origin OAuth provider, plus the legacy ?session_id= path from /login
   marketing-page.ts     # Landing page HTML (served at /)
-  auth/                 # JWT, Last.fm auth flow, OAuth 2.1 handler
+  auth/                 # OAuth handler (consent, Last.fm sign-in, callback), consent page, /mcp resource rewrite
   clients/              # Last.fm API client + caching decorator
   mcp/                  # MCP SDK server, tools (public + authenticated), prompts, resources
-  types/                # Shared types: Env, MCP protocol, Last.fm catalogs
-  utils/                # Cache, rate limiting, retry, logging, security, mood mapping
+  types/                # Shared types: Env
+  utils/                # Cache, rate limiting, retry, https redirect, security, date formatting, mood mapping, breadcrumbs
 ```
 
 Single Worker entry point configured in `wrangler.toml`: `main = "src/index-oauth.ts"`. The `[env.production]` block points to the same entry — it only renames the deployed Worker.
 
-**Key dependencies:** `@modelcontextprotocol/sdk`, `@cloudflare/workers-oauth-provider`, `agents` (Cloudflare Agents SDK), `zod`.
+Every MCP request needs an OAuth bearer token: unauthenticated `POST /mcp` returns 401 with `WWW-Authenticate`, which starts the client's sign-in. The "public" tools in `src/mcp/tools/public.ts` are the ones that don't need the user's Last.fm session, not tools reachable without sign-in. `src/auth/jwt.ts` is no longer imported by any source file.
+
+**Key dependencies:** `@modelcontextprotocol/server` (MCP SDK v2), `@cloudflare/workers-oauth-provider` 1.x, `agents` (Cloudflare Agents SDK), `zod`.
+
+## OAuth Notes
+
+- `getOAuthProvider(origin)` builds one provider per request origin (custom domain, workers.dev, localhost) and is called with a per-request copy of `env`. The provider stores its helpers on `env.OAUTH_PROVIDER` only when unset, so a shared `env` would serve the first origin's helpers to every later origin.
+- `src/auth/resource-indicator.ts` rewrites exactly `resource=<origin>/mcp` to the origin on `/authorize` and `/oauth/token`. 1.x answers any other path with `invalid_target`, which clients don't recover from. Upstream request: [cloudflare/workers-oauth-provider#430](https://github.com/cloudflare/workers-oauth-provider/issues/430).
+- Plain-http requests to non-loopback hosts get a 308 to https before they reach the provider, which throws on an http resource outside loopback.
+- `/authorize` shows the consent page (`src/auth/consent-page.ts`) before redirecting to Last.fm. `CONSENT_SECRET` signs the cookie that remembers an approval for a year; when it's missing or shorter than 32 characters, approvals aren't remembered and sign-in still works.
+- Errors on `/authorize` render on this origin and are never redirected to the client's `redirect_uri`: registration is open, so redirecting would make the server an open redirector.
+- Grants expire 30 days after sign-in (the library's refresh-token default), so a `grant_not_found` or `invalid_grant` after about a month is expected.
