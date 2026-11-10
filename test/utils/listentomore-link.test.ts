@@ -17,6 +17,13 @@ describe('buildListenToMoreLine', () => {
 		)
 	})
 
+	it('omits the line when a name is longer than the lookup route accepts', () => {
+		const long = 'x'.repeat(301)
+		expect(buildListenToMoreLine({ type: 'album', artist: 'Fiona Apple', album: long })).toBe('')
+		expect(buildListenToMoreLine({ type: 'artist', artist: long })).toBe('')
+		expect(buildListenToMoreLine({ type: 'artist', artist: 'x'.repeat(300) })).toContain('listentomore.com/lookup')
+	})
+
 	it('encodes ampersands, slashes and quotes', () => {
 		expect(buildListenToMoreLine({ type: 'album', artist: 'AC/DC', album: 'Rock & "Roll"' })).toContain(
 			'artist=AC%2FDC&album=Rock+%26+%22Roll%22',
