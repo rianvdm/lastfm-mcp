@@ -5,6 +5,7 @@ import { z } from 'zod'
 
 import { CachedLastfmClient } from '../../clients/cachedLastfm'
 import { buildNextSteps } from '../../utils/breadcrumb'
+import { buildListenToMoreLine } from '../../utils/listentomore-link'
 import { PROTOCOL_VERSION, SERVER_VERSION } from '../protocol'
 import { toolError } from './error-handler'
 import { formatArtist, toArray } from './formatters'
@@ -191,6 +192,8 @@ ${userStats}
 
 ${data.artist.bio?.summary ? `**Bio:** ${data.artist.bio.summary.replace(/<[^>]*>/g, '')}` : ''}
 
+${buildListenToMoreLine({ type: 'artist', artist: data.artist.name })}
+
 ${!username ? '*Note: Sign in to see your personal listening stats for this artist*' : ''}${nextSteps}`,
 						},
 					],
@@ -255,6 +258,8 @@ ${userStats}
 ${tracks}
 
 ${data.album.wiki?.summary ? `**Description:** ${data.album.wiki.summary.replace(/<[^>]*>/g, '')}` : ''}
+
+${buildListenToMoreLine({ type: 'album', artist: albumArtist, album: data.album.name })}
 
 ${!username ? '*Note: Sign in to see your personal listening stats for this album*' : ''}${nextSteps}`,
 						},
