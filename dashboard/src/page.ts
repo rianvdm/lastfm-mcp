@@ -403,7 +403,7 @@ function renderClientsSection(model: DashboardModel): string {
 				? emptyNote()
 				: ''
 	return `<section class="panel"><h2>Clients</h2>
-<p class="caption">Labelled from a fixed list of known apps. Any other app shows as "other"; "unknown" is an app with no name, or one whose label is read on the next hourly run.</p>
+<p class="caption">Labelled from a fixed list of known apps. Any other app shows as "other"; "unknown" is an app with no name, or one whose label a later hourly refresh will read.</p>
 ${notes.join('\n')}
 ${body}
 </section>`

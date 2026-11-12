@@ -13,10 +13,10 @@ routes = [{ pattern = "stats.lastfm-mcp.com", custom_domain = true }]
 [triggers]
 crons = ["17 * * * *"]
 
-# Placeholder ID until the namespace is created; replace it before the first deploy. Tests use a local namespace.
+# The dashboard's own namespace (lastfm-mcp-stats-DASH_KV). Tests use a local namespace.
 [[kv_namespaces]]
 binding = "DASH_KV"
-id = "00000000000000000000000000000000"
+id = "4034b74e455d45d3875248bb761a6d74"
 
 [vars]
 ACCOUNT_ID = "db8ef1f4b492e4727e7fab0e12907871"
@@ -25,8 +25,8 @@ OAUTH_KV_NAMESPACE_ID = "8c3a19a93165452b9ab0215bdb3daa71"
 SCRIPT_NAME = "lastfm-mcp-prod"
 TOOL_EVENTS_DATASET = "lastfm_mcp_tool_events"
 ACCESS_TEAM_DOMAIN = "elezea.cloudflareaccess.com"
-# The Access application's audience (AUD) tag. While it's empty, every request gets a 403.
-ACCESS_AUD = ""
+# The audience (AUD) tag of the "lastfm-mcp stats" Access application. If it's ever empty, every request gets a 403.
+ACCESS_AUD = "ea1cfca6a9bf5417a02ab6c5afc173888cf88cfbba58d333c30643d2d4fa46a2"
 
 # Secrets (set via `npx wrangler secret put <NAME> -c dashboard/wrangler.toml`):
 # - CF_API_TOKEN (Cloudflare API token the dashboard uses to read the production Worker's KV and analytics)

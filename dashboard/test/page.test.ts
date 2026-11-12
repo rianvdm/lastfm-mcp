@@ -147,7 +147,7 @@ describe('renderDashboard', () => {
 		const html = renderDashboard(fixtureModel())
 
 		expect(html).toContain(
-			'<p class="caption">Labelled from a fixed list of known apps. Any other app shows as "other"; "unknown" is an app with no name, or one whose label is read on the next hourly run.</p>',
+			'<p class="caption">Labelled from a fixed list of known apps. Any other app shows as "other"; "unknown" is an app with no name, or one whose label a later hourly refresh will read.</p>',
 		)
 		expect(html).not.toContain('registered name')
 		expect(html).not.toContain('metadata URL')

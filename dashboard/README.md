@@ -56,8 +56,14 @@ Every step changes the live account. Run them in order.
 
 2. **Create the Access application** before the hostname exists, with `cf` or in the Zero Trust dashboard:
 
-   - Type `self_hosted`, name `lastfm-mcp stats`, domain `stats.lastfm-mcp.com`, session duration `24h`.
+   - Type `self_hosted`, name `lastfm-mcp stats`, domain `stats.lastfm-mcp.com`, session duration `24h`, hidden from the App Launcher.
    - One allow policy that includes the rule group `282d056b-0d72-49cf-95b7-a0b0228386a6`.
+
+   ```bash
+   CLOUDFLARE_ACCOUNT_ID=db8ef1f4b492e4727e7fab0e12907871 cf zero-trust access applications create --body '{"type":"self_hosted","name":"lastfm-mcp stats","domain":"stats.lastfm-mcp.com","session_duration":"24h","app_launcher_visible":false,"policies":[{"name":"Rian (Elezea group)","decision":"allow","include":[{"group":{"id":"282d056b-0d72-49cf-95b7-a0b0228386a6"}}]}]}'
+   ```
+
+   The application created on 2026-11-12 has ID `f0d19ac3-632a-4cb7-a686-a7aa02bc1564`.
 
    Put the application's `aud` tag in `ACCESS_AUD` in `dashboard/wrangler.toml`.
 
@@ -82,13 +88,13 @@ Every step changes the live account. Run them in order.
    curl -sI https://stats.lastfm-mcp.com/
 
    # Expect no response from the Worker (workers_dev = false)
-   curl -sI https://lastfm-mcp-stats.<your-subdomain>.workers.dev/
+   curl -sI https://lastfm-mcp-stats.rian-db8.workers.dev/
 
    # After the next :17 cron, the summary exists
-   npx wrangler kv key get summary:grants --namespace-id <DASH_KV id> --remote
+   npx wrangler kv key get summary:grants --namespace-id 4034b74e455d45d3875248bb761a6d74 --remote
    ```
 
-   Check `liveUsers` against the number of people you expect to be signed in. Run the last command again an hour later and confirm `unresolvedGrants` is 0. Then open the page on a phone and a laptop and check the requests chart against GraphQL.
+   Check `liveUsers` against the number of people you expect to be signed in. Run the last command after each hourly cron until `unresolvedGrants` reaches 0. Each run reads at most 400 values, so the first backfill of about 900 grants takes a few runs, and client labels fill in from whatever reads are left. Then open the page on a phone and a laptop and check the requests chart against GraphQL.
 
 The first page load before any summary exists starts a refresh in the background, so the grant panels say they're warming up rather than staying empty until the cron.
 

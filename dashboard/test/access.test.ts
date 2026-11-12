@@ -112,10 +112,10 @@ describe('requireAccess', () => {
 		expect(response?.status).toBe(403)
 	})
 
-	it('should ship wrangler.toml with an empty ACCESS_AUD, so an unconfigured deploy refuses everyone', async () => {
-		expect(env.ACCESS_AUD).toBe('')
-		const response = await requireAccess(requestWith(await signToken()), env)
-		expect(response?.status).toBe(403)
+	it('should ship wrangler.toml with the Access application AUD tag and the team domain', () => {
+		// A 64-hex AUD tag; an accidental empty value would lock everyone out (see the test above)
+		expect(env.ACCESS_AUD).toMatch(/^[0-9a-f]{64}$/)
+		expect(env.ACCESS_TEAM_DOMAIN).toBe('elezea.cloudflareaccess.com')
 	})
 
 	it('should let a valid token through', async () => {
