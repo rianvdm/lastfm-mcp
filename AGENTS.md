@@ -180,7 +180,7 @@ Every MCP request needs an OAuth bearer token: unauthenticated `POST /mcp` retur
 
 - It's deployed by hand with `npm run dashboard:deploy`, never by CI, and has no `workers.dev` or preview URL. CI lints and tests it but doesn't deploy it.
 - Cloudflare Access sits in front of it, and the Worker verifies the Access JWT on every request too. An empty `ACCESS_AUD` refuses everything.
-- It reads production `OAUTH_KV` only through the KV REST API, with a read-only token (Account Analytics Read and Workers KV Storage Read), and never writes it. It writes only its own `DASH_KV`, which holds no username, client URL or registered client name.
+- It reads production `OAUTH_KV` only through the KV REST API, with a read-only token (Account Analytics Read and Workers KV Storage Read), and never writes it. It writes only its own `DASH_KV`, which holds no username, client URL or registered client name. Active users are counted from `token:` key names, stored only as HMAC-SHA256 hashes of user IDs keyed with the `ACTIVE_USER_HMAC_KEY` secret, for 31 days.
 - It imports `labelForClient` and `CLIENT_LABELS` from `src/analytics/clientLabel.ts`, so the dashboard and the `TOOL_EVENTS` writer label clients from the same fixed list.
 
 ## OAuth Notes

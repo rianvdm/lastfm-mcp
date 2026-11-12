@@ -30,3 +30,5 @@ ACCESS_AUD = "ea1cfca6a9bf5417a02ab6c5afc173888cf88cfbba58d333c30643d2d4fa46a2"
 
 # Secrets (set via `npx wrangler secret put <NAME> -c dashboard/wrangler.toml`):
 # - CF_API_TOKEN (Cloudflare API token the dashboard uses to read the production Worker's KV and analytics)
+# - ACTIVE_USER_HMAC_KEY (at least 32 random characters; keys the hashes of active user IDs. While it's missing or shorter,
+#   active users aren't recorded and the page says they're not configured. Rotating it double-counts users for 30 days.)
