@@ -143,6 +143,16 @@ describe('renderDashboard', () => {
 		expect(html).toMatch(/<td>Goose<\/td>\s*<td class="num">—<\/td>\s*<td class="num">—<\/td>\s*<td class="num">512<\/td>/)
 	})
 
+	it('should say client labels come from a fixed list of known apps, with everything else shown as other', () => {
+		const html = renderDashboard(fixtureModel())
+
+		expect(html).toContain(
+			'<p class="caption">Labelled from a fixed list of known apps. Any other app shows as "other"; "unknown" is an app with no name, or one whose label is read on the next hourly run.</p>',
+		)
+		expect(html).not.toContain('registered name')
+		expect(html).not.toContain('metadata URL')
+	})
+
 	it('should compare registered clients with live grants in the hygiene section', () => {
 		const html = renderDashboard(fixtureModel())
 
