@@ -1,3 +1,5 @@
+// ABOUTME: Type declarations for the cloudflare:test env that Worker integration tests receive.
+// ABOUTME: Extends the Worker's Env with the test-only bindings that vitest.config.mts defines.
 import type { RateLimit } from '@cloudflare/workers-types'
 
 import type { Env } from '../src/types/env'
