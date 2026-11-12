@@ -2,6 +2,7 @@
 // ABOUTME: Every request passes the Access gate before routing; the hourly cron refreshes the dashboard's cached summaries.
 import { requireAccess } from './access'
 import type { DashEnv } from './env'
+import { refreshGrantSummary } from './grants'
 
 const STUB_PAGE = `<!doctype html>
 <html lang="en">
@@ -29,7 +30,12 @@ export default {
 		return new Response('Not found', { status: 404, headers: { 'Content-Type': 'text/plain; charset=utf-8' } })
 	},
 
-	async scheduled(_controller, _env, _ctx) {
-		// Task 7 wires refreshGrantSummary in here.
+	async scheduled(controller, env) {
+		try {
+			await refreshGrantSummary(env, new Date(controller.scheduledTime))
+		} catch (error) {
+			// The previous summary stays in DASH_KV, and index entries written before the failure are kept for the next run
+			console.error(`[STATS] grant summary refresh failed: ${error instanceof Error ? error.message : 'Unknown error'}`)
+		}
 	},
 } satisfies ExportedHandler<DashEnv>
