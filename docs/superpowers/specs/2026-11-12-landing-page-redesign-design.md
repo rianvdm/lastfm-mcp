@@ -21,6 +21,8 @@ Rian also wants the "just tell your agent to set this up" path that other projec
 - A Claude Code (or other agent) user can paste one prompt and have their agent set it up, then sign in themselves.
 - The page feels warm and a little playful, with a sound wave animation that says something about the product.
 - `/llms.txt` gives an agent everything it needs: setup per client, the tool list, and what the human still has to do.
+- A link to the site unfurls as a clear, on-brand card in Slack, iMessage, Bluesky and LinkedIn.
+- Search engines and AI answer engines (Google, ChatGPT search, Perplexity, Claude) can find the page and quote it when someone asks how to connect Last.fm to their AI. (Added 2026-11-12 after the first approval.)
 
 ## Non-goals
 
@@ -79,7 +81,7 @@ The labels are decorative and get `aria-hidden="true"`. With `prefers-reduced-mo
 
 Copy below is the approved draft. Final wording gets Rian's review before merge (see Review).
 
-**Head.** Title "Last.fm MCP: ask your AI about your listening history". Keep the canonical URL, OG/Twitter image (`https://file.elezea.com/lastfm-img.jpg`) and JSON-LD block, with descriptions updated to the new subline. Add `<link rel="alternate" type="text/plain" href="/llms.txt" title="Setup instructions for AI agents">`. Keep the favicon.
+**Head.** See "Sharing and search" below for the title, meta tags, share card and structured data. Add `<link rel="alternate" type="text/plain" href="/llms.txt" title="Setup instructions for AI agents">`. Keep the SVG favicon.
 
 **Nav.** Wordmark "Last.fm MCP" on the left. Links: Set up (`#setup`), What you can ask (`#ask`), GitHub.
 
@@ -113,6 +115,8 @@ Copy below is the approved draft. Final wording gets Rian's review before merge 
    - "Or do it yourself" → `claude mcp add --transport http lastfm https://lastfm-mcp.com/mcp` (copy button), then "Run `/mcp` in Claude Code and pick **lastfm** to sign in."
 3. *Other apps:* "Anything that supports remote MCP connectors works." A grid of apps, each expanding (`<details>`) to its exact config: ChatGPT, Cursor (`~/.cursor/mcp.json`), Windsurf (`~/.codeium/windsurf/mcp_config.json`), OpenCode (`opencode.json`), Codex (`~/.codex/config.toml`), and "Anything else" via `mcp-remote`. Carry the existing Cursor, Windsurf, OpenCode and `mcp-remote` snippets over from `marketing-page.ts`; ChatGPT and Codex are new.
 
+**Questions (`#faq`).** A short FAQ between Set it up and What you're agreeing to. Each question is an `h3` with its answer in plain paragraphs, always visible (not collapsed), so crawlers and answer engines read the same text people do. See "Sharing and search" for the questions and the matching structured data.
+
 **What you're agreeing to.** Three short columns:
 - *It only reads:* "It can look at your listening history. It can't scrobble, love tracks or change anything on your account."
 - *You sign in on Last.fm:* "Your password never touches this site. You sign in on Last.fm's own page, and each sign-in expires after 30 days."
@@ -144,13 +148,53 @@ Contents, in order:
 5. **Tools:** generated list.
 6. **Links:** GitHub, privacy page, release notes.
 
+### Sharing and search (SEO and AEO)
+
+Today the share image is a stock photo at 1200×797 that previews crop, the sitemap's `lastmod` changes on every request, and the JSON-LD is a bare `SoftwareApplication`. Live checks on 2026-11-12: `robots.txt` allows everything except `/mcp`, `/authorize` and `/oauth`, and spoofed GPTBot, ClaudeBot, PerplexityBot, OAI-SearchBot and Googlebot user agents all get 200.
+
+**Title and description.**
+- `<title>`: "Last.fm MCP: connect your Last.fm history to Claude, ChatGPT and other AI assistants". The visible headline stays "Ask your AI about everything you've ever listened to."
+- Meta description: "Ask your AI when you first heard an album, what you had on repeat last summer, or what to play next. Free and open source, and it only reads."
+- Remove the `keywords` meta tag.
+- `<meta name="theme-color" content="#ece6dc">`.
+
+**Share card (Rian picked option A, "the hero as a card").** A 1200×630 PNG: sand background, "Last.fm MCP" wordmark top left, the headline "Ask your AI about everything you've ever listened to." in Bricolage Grotesque 700 at about 76px, and a still frame of the wave along the bottom. Mockup: `.superpowers/brainstorm/9184-1794525134/content/og-card.html` (gitignored, reference only).
+- Source: `src/pages/share/og-card.html`, rendered to `src/pages/share/og.png` by a script with headless Chrome (`--screenshot`, exact window size). Both files are committed; the script reruns only when the card changes.
+- Served by the Worker at `GET /og.png` (`image/png`, `public, max-age=86400`), imported through a wrangler `Data` module rule for `**/*.png`.
+- Also render `src/pages/share/apple-touch-icon.png` (180×180: sand square with a small wave), served at `/apple-touch-icon.png` and linked with `<link rel="apple-touch-icon">`.
+- Tags: `og:type` website, `og:site_name` "Last.fm MCP", `og:title`, `og:description`, `og:url` `https://lastfm-mcp.com/`, `og:image` `https://lastfm-mcp.com/og.png`, `og:image:width` 1200, `og:image:height` 630, `og:image:alt` "Last.fm MCP: Ask your AI about everything you've ever listened to."; `twitter:card` `summary_large_image` with matching title, description, image and `twitter:image:alt`. Image and canonical URLs stay hardcoded to production.
+
+**FAQ.** Draft questions and answers below; Task 2's verification may change them, and the ChatGPT answer must match what the docs confirm.
+- *How do I connect Last.fm to Claude?* In Claude, go to Settings → Connectors, click Add custom connector, paste `https://lastfm-mcp.com/mcp`, and sign in to Last.fm. In Claude Code, run `claude mcp add --transport http lastfm https://lastfm-mcp.com/mcp`, then `/mcp` to sign in.
+- *Does it work with ChatGPT?* Yes, in ChatGPT plans that allow custom connectors (the exact plan and menu come from Task 2). Otherwise: any app that supports remote MCP servers.
+
+If Task 2 finds ChatGPT can connect only under conditions (a paid plan, developer mode), keep ChatGPT in the title, subline and share card and spell the conditions out in this answer. Drop ChatGPT from all of them only if it can't connect at all. *(Claude's call, from the second builder check.)*
+- *Do I need a Last.fm API key?* No. You sign in with your normal Last.fm account.
+- *Is it free?* Yes. It's free and open source under the MIT licence.
+- *Can it change my Last.fm account?* No. It only reads: it can't scrobble, love tracks or edit your profile.
+- *What is MCP?* The Model Context Protocol is an open standard that lets AI assistants connect to outside data and tools. This is an MCP server for Last.fm.
+
+The FAQ items live once, as data, and the Worker renders both the visible section and the `FAQPage` JSON-LD from them, so the two can't drift. FAQ answers use the production URL, not `{{ORIGIN}}`: they're reference text, not something to copy into a client.
+
+**Structured data.** One `application/ld+json` block with an `@graph`:
+- `WebSite`: name "Last.fm MCP", url.
+- `SoftwareApplication`: name, description, url, `applicationCategory` "MultimediaApplication", `operatingSystem` "Any", free `Offer`, MIT `license`, `author` as a `Person` (Rian van der Merwe, `https://elezea.com`), `codeRepository`-style link to GitHub via `sameAs`, `featureList` (a few plain phrases), `screenshot` `https://lastfm-mcp.com/og.png`.
+- `FAQPage` from the FAQ items.
+
+No `softwareVersion`: it would go stale between releases.
+
+**Crawlers.**
+- `robots.txt`: keep `User-agent: *` with the existing rules; add `Allow: /llms.txt` and `Allow: /og.png`. No per-bot groups and no `Crawl-delay` (a Crawl-delay-only group can merge into the next group's Disallow in Google's parser).
+- `sitemap.xml`: `lastmod` comes from a `LANDING_PAGE_UPDATED` date constant next to the page builder, changed when the page changes; drop `changefreq` and `priority`, which Google ignores.
+- Zone check (read-only): confirm the lastfm-mcp.com zone isn't blocking AI search crawlers through Cloudflare's AI bot or crawler controls, and isn't prepending a managed `robots.txt`. A spoofed user agent can't prove this, because those controls use verified bot identity. If something is blocked, report it to Rian; don't change zone settings.
+
 ### Server address
 
 The page's setup snippets, the agent prompt and `/llms.txt` use the origin they're served from, filled in by the Worker per request from a `{{ORIGIN}}` placeholder (production gives `https://lastfm-mcp.com`). That way the staging agent-prompt check sets up staging, not production. The canonical URL, OG/Twitter URLs and JSON-LD stay hardcoded to `https://lastfm-mcp.com`. *(Claude's call, from the builder check.)*
 
 ### Build
 
-- Add to `wrangler.toml`: `[[rules]] type = "Text" globs = ["**/*.html", "**/*.md"] fallthrough = true`. Confirm it applies to `[env.production]` (check `npx wrangler deploy --dry-run --env production` bundles both files).
+- Add to `wrangler.toml`: `[[rules]] type = "Text" globs = ["**/*.html", "**/*.md"] fallthrough = true`, and a second rule `type = "Data"` for `["**/*.png"]` (imports as `ArrayBuffer`). Confirm it applies to `[env.production]` (check `npx wrangler deploy --dry-run --env production` bundles both files).
 - Add a module declaration so TypeScript accepts `import landingHtml from './pages/landing.html'` and the `.md` import.
 - **First task: prove the rule works in tests.** Import a tiny `.html` file in a throwaway test under vitest-pool-workers. If it can't be made to work without hacks, stop and fall back to option 2 (TypeScript strings), keeping everything else in this spec.
 - Delete `src/marketing-page.ts` once nothing imports it.
@@ -166,13 +210,17 @@ The [privacy page](https://elezea.com/privacy/#lastfm-mcp-server) currently says
 
 - Update `should return marketing page for GET /` in `test/index-oauth.test.ts` to assert on new content (for example the headline and the MCP URL).
 - `GET /llms.txt`: 200, `text/plain; charset=utf-8`, contains the server URL, and contains every tool name from both catalogs.
-- `robots.txt` includes `Allow: /llms.txt`.
+- `robots.txt` includes `Allow: /llms.txt` and `Allow: /og.png`, and has no `Crawl-delay`.
+- `GET /og.png` and `GET /apple-touch-icon.png`: 200, `image/png`, body starts with the PNG signature; `og.png` is 1200×630 (read the IHDR bytes).
+- The page has every tag listed under "Sharing and search", no `keywords` meta, and a JSON-LD block that parses as JSON with `WebSite`, `SoftwareApplication` and `FAQPage` nodes; every FAQ question appears both in the visible section and in the JSON-LD.
+- `sitemap.xml`'s `lastmod` equals `LANDING_PAGE_UPDATED` and doesn't change between requests.
 
 ### Verification before merge
 
 - **Example questions:** for each one, confirm which tools answer it and try it against Rian's account (via the local `lastfm` MCP connection). Drop or reword failures.
 - **Setup steps:** check the Claude app, ChatGPT and Codex steps against each vendor's current docs, with links in the PR. Anything that can't be confirmed is cut, not guessed.
 - **Agent prompt:** run the "paste this to your agent" prompt in a fresh Claude Code session on staging (with the URL pointed at staging) and confirm it adds the server and tells the human to run `/mcp`.
+- **Share and search:** on staging, the page passes validator.schema.org with no errors, every share tag is present, and staging's own `/og.png` renders at 1200×630. Staging's `og:image` still points at production, which has no `/og.png` until merge, so the full unfurl check (Slack or iMessage, plus an Open Graph preview tool) happens once, right after the production deploy. *(Claude's call, from the second builder check.)*
 - **Visual:** staging deploy (`npm run deploy`), checked in Chrome and Safari, at desktop and phone width, with reduced motion on and off.
 
 ### Review
