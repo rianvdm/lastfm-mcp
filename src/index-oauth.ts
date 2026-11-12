@@ -11,13 +11,8 @@ import { PROTOCOL_VERSION, SERVER_VERSION } from './mcp/protocol'
 import { createMcpServer } from './mcp/server'
 import type { Env } from './types/env'
 import { httpsRedirect } from './utils/httpsRedirect'
-import {
-	REGISTRATION_RATE_LIMIT,
-	buildRateLimitResponse,
-	buildRegistrationRateLimitResponse,
-	checkRateLimit,
-	rateLimitKeyFromRequest,
-} from './utils/rateLimit'
+import { buildRateLimitResponse, checkRateLimit, rateLimitKeyFromRequest } from './utils/rateLimit'
+import { allowClientRegistration, buildRegistrationRateLimitResponse } from './utils/registrationRateLimit'
 
 /**
  * Options for the MCP handler.
@@ -277,17 +272,11 @@ Sitemap: https://lastfm-mcp.com/sitemap.xml`,
 		}
 
 		// Dynamic client registration is open by design (the MCP authorization spec requires it), so budget it per IP.
-		// Its own bucket: /mcp traffic must not use up registrations, and registrations must not use up /mcp.
+		// The Rate Limiting binding keeps its own counts, separate from the /mcp KV budget.
 		const isClientRegistration = url.pathname === '/oauth/register' && request.method === 'POST'
-		if (isClientRegistration) {
-			const rlResult = await checkRateLimit(env.MCP_RL, `register:${rateLimitKeyFromRequest(request)}`, REGISTRATION_RATE_LIMIT)
-			if (!rlResult.allowed) {
-				console.warn('[RATE_LIMIT] client registration refused', {
-					limit: REGISTRATION_RATE_LIMIT.limit,
-					windowSeconds: REGISTRATION_RATE_LIMIT.windowSeconds,
-				})
-				return buildRegistrationRateLimitResponse(rlResult)
-			}
+		if (isClientRegistration && !(await allowClientRegistration(env.REGISTRATION_RATE_LIMITER, rateLimitKeyFromRequest(request)))) {
+			console.warn('[RATE_LIMIT] client registration refused')
+			return buildRegistrationRateLimitResponse()
 		}
 
 		// Map a `resource` of `${origin}/mcp` to the origin on the two routes that validate it
@@ -303,7 +292,8 @@ Sitemap: https://lastfm-mcp.com/sitemap.xml`,
 		const response = await getOAuthProvider(url.origin).fetch(request, { ...env }, ctx)
 
 		if (isClientRegistration && response.status === 201) {
-			await logClientRegistration(response)
+			// Off the response path: the client gets its registration without waiting for the log line
+			ctx.waitUntil(logClientRegistration(response))
 		}
 
 		// Keep the 401 challenge on /mcp byte-identical to the one 0.10.3 clients saw. The provider's own challenge

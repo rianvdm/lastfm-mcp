@@ -2,7 +2,7 @@
 
 Guidance for coding agents (Claude Code, Codex) working in this repository.
 
-Cloudflare Worker implementing a Model Context Protocol (MCP) server that connects AI assistants to Last.fm listening data. Runs on workerd with three KV namespaces: `OAUTH_KV` (OAuth clients, grants and tokens), `MCP_SESSIONS` (the Last.fm response cache; the name predates OAuth) and `MCP_RL` (per-IP rate limits).
+Cloudflare Worker implementing a Model Context Protocol (MCP) server that connects AI assistants to Last.fm listening data. Runs on workerd with a Rate Limiting binding (`REGISTRATION_RATE_LIMITER`) and three KV namespaces: `OAUTH_KV` (OAuth clients, grants and tokens), `MCP_SESSIONS` (the Last.fm response cache; the name predates OAuth) and `MCP_RL` (per-IP rate limits).
 
 ## Build / Test / Lint Commands
 
@@ -149,7 +149,6 @@ describe('Feature', () => {
 - Mock fetch: `globalThis.fetch = vi.fn()`
 - Timer control: `vi.useFakeTimers()` / `vi.useRealTimers()` / `vi.advanceTimersByTimeAsync()`
 - Worker integration tests use `import { env, createExecutionContext, waitOnExecutionContext } from 'cloudflare:test'`
-- `test/setup/reset-rate-limits.ts` empties `MCP_RL` before every test: KV persists across tests in a file, and the registration budget would otherwise leak between them. It imports `env` from `cloudflare:workers`, because importing `cloudflare:test` in a setup file breaks each test file's `vi.mock`
 - OAuth flow helpers live in `test/helpers/` (`oauth-flow.ts`, `cimd-fetch.ts`); captured 0.10.3 KV records for the upgrade-survival test are in `test/fixtures/`
 
 ## Architecture Overview
@@ -178,5 +177,5 @@ Every MCP request needs an OAuth bearer token: unauthenticated `POST /mcp` retur
 - Plain-http requests to non-loopback hosts get a 308 to https before they reach the provider, which throws on an http resource outside loopback.
 - `/authorize` shows the consent page (`src/auth/consent-page.ts`) before redirecting to Last.fm. `CONSENT_SECRET` signs the cookie that remembers an approval for a year; when it's missing or shorter than 32 characters, approvals aren't remembered and sign-in still works.
 - Errors on `/authorize` render on this origin and are never redirected to the client's `redirect_uri`: registration is open, so redirecting would make the server an open redirector.
-- `MCP_RL` holds two per-IP budgets: 60 requests a minute on `/mcp`, and 5 registrations per 10 minutes on `POST /oauth/register` (`REGISTRATION_RATE_LIMIT` in `src/utils/rateLimit.ts`). Both fail open when KV errors.
+- Two per-IP budgets, both failing open: `/mcp` gets 60 requests a minute from a KV counter in `MCP_RL` (`src/utils/rateLimit.ts`), and `POST /oauth/register` gets 5 a minute from the `REGISTRATION_RATE_LIMITER` Rate Limiting binding (`src/utils/registrationRateLimit.ts`). The binding's limit and period live in `wrangler.toml`, once per environment; its counts are approximate and per Cloudflare location, and they hold up under bursts where a KV counter doesn't.
 - Grants expire 30 days after sign-in (the library's refresh-token default), so a `grant_not_found` or `invalid_grant` after about a month is expected.

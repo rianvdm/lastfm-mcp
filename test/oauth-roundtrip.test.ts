@@ -153,7 +153,7 @@ describe('OAuth round-trip integration', () => {
 					}),
 				}),
 				env,
-				{} as ExecutionContext,
+				createExecutionContext(),
 			)
 
 			expect(registrationRes.status).toBe(201)
@@ -199,7 +199,7 @@ describe('OAuth round-trip integration', () => {
 					}),
 				}),
 				env,
-				{} as ExecutionContext,
+				createExecutionContext(),
 			)
 			expect(registrationRes.status).toBe(201)
 			const { client_id } = (await registrationRes.json()) as { client_id: string }
@@ -270,7 +270,7 @@ describe('OAuth round-trip integration', () => {
 					}).toString(),
 				}),
 				env,
-				{} as ExecutionContext,
+				createExecutionContext(),
 			)
 
 			expect(tokenRes.status).toBe(200)
@@ -293,7 +293,7 @@ describe('OAuth round-trip integration', () => {
 					},
 				}),
 				env,
-				{} as ExecutionContext,
+				createExecutionContext(),
 			)
 
 			// A valid token should not be rejected as invalid_token — either 200 (success)

@@ -1,6 +1,6 @@
 // ABOUTME: Integration tests for how /authorize answers invalid authorization requests.
 // ABOUTME: Every invalid request gets a local 400 and is never redirected, whether or not the client is registered.
-import { env } from 'cloudflare:test'
+import { createExecutionContext, env } from 'cloudflare:test'
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 
 import worker from '../src/index-oauth'
@@ -37,7 +37,7 @@ async function registerClient(): Promise<string> {
 			}),
 		}),
 		env,
-		{} as ExecutionContext,
+		createExecutionContext(),
 	)
 	const { client_id } = (await res.json()) as { client_id: string }
 	return client_id
@@ -51,7 +51,7 @@ function authorize(params: Record<string, string>): Promise<Response> {
 	for (const [name, value] of Object.entries(params)) {
 		url.searchParams.set(name, value)
 	}
-	return worker.fetch(new Request(url.toString()), env, {} as ExecutionContext)
+	return worker.fetch(new Request(url.toString()), env, createExecutionContext())
 }
 
 describe('GET /authorize with an invalid request', () => {

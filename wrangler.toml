@@ -19,6 +19,16 @@ id = "a0bc40f523d54a6ab70fa947ac3daeaf"
 binding = "OAUTH_KV"
 id = "e04a5ec5441949ebb6e84281bf6598c3"
 
+# Per-IP budget for POST /oauth/register (dynamic client registration). The Rate Limiting binding is
+# approximate and counted per Cloudflare location, but unlike a KV counter it holds up under bursts.
+# `period` must be 10 or 60; REGISTRATION_RATE_LIMIT_PERIOD_SECONDS in src/utils/rateLimit.ts mirrors it.
+[[ratelimits]]
+name = "REGISTRATION_RATE_LIMITER"
+namespace_id = "2001"
+  [ratelimits.simple]
+  limit = 5
+  period = 60
+
 # Production environment
 [env.production]
 name = "lastfm-mcp-prod"
@@ -34,6 +44,14 @@ id = "e45edcc5347e4b409169c1d0a9b2ed5d"
 [[env.production.kv_namespaces]]
 binding = "OAUTH_KV"
 id = "8c3a19a93165452b9ab0215bdb3daa71"
+
+# Same budget as the default environment, with its own namespace so staging traffic doesn't count against production
+[[env.production.ratelimits]]
+name = "REGISTRATION_RATE_LIMITER"
+namespace_id = "2002"
+  [env.production.ratelimits.simple]
+  limit = 5
+  period = 60
 
 # Secrets (set via wrangler secret put):
 # - LASTFM_API_KEY

@@ -124,6 +124,7 @@ describe('sign-in guidance without a session', () => {
 		['get_recent_tracks', {}],
 	])('%s should point at OAuth, not a /login URL', async (name, args) => {
 		const text = await toolText(name, args)
+		expect(text).toContain('MCP client')
 		expect(text).not.toContain('/login')
 		expect(text).not.toContain('session_id')
 	})

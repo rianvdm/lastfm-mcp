@@ -1,13 +1,8 @@
-// ABOUTME: Tests for the per-IP fixed-window rate limiter used to guard /mcp and /oauth/register.
+// ABOUTME: Tests for the per-IP fixed-window rate limiter used to guard /mcp.
 
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 
-import {
-	buildRateLimitResponse,
-	buildRegistrationRateLimitResponse,
-	checkRateLimit,
-	rateLimitKeyFromRequest,
-} from '../../src/utils/rateLimit'
+import { buildRateLimitResponse, checkRateLimit, rateLimitKeyFromRequest } from '../../src/utils/rateLimit'
 
 const createMockKV = () => {
 	const storage = new Map<string, string>()
@@ -112,24 +107,5 @@ describe('buildRateLimitResponse', () => {
 		const body = (await res.json()) as { jsonrpc: string; error: { code: number; message: string } }
 		expect(body.jsonrpc).toBe('2.0')
 		expect(body.error.code).toBe(-32000)
-	})
-})
-
-describe('buildRegistrationRateLimitResponse', () => {
-	it('returns 429 with the same rate-limit headers and an OAuth error body', async () => {
-		const reset = Math.floor(Date.now() / 1000) + 120
-		const res = buildRegistrationRateLimitResponse({ allowed: false, limit: 5, remaining: 0, resetEpochSeconds: reset })
-
-		expect(res.status).toBe(429)
-		const retryAfter = Number(res.headers.get('Retry-After'))
-		expect(retryAfter).toBeGreaterThan(0)
-		expect(res.headers.get('X-RateLimit-Limit')).toBe('5')
-		expect(res.headers.get('X-RateLimit-Remaining')).toBe('0')
-		expect(res.headers.get('X-RateLimit-Reset')).toBe(String(reset))
-		expect(res.headers.get('Cache-Control')).toBe('no-store')
-
-		const body = (await res.json()) as { error: string; error_description: string }
-		expect(body.error).toBe('too_many_requests')
-		expect(body.error_description).toBe(`Too many client registrations from this address. Retry after ${retryAfter}s.`)
 	})
 })

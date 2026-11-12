@@ -1,22 +1,27 @@
 // ABOUTME: Integration tests for the per-IP rate limit on POST /oauth/register (dynamic client registration).
-// ABOUTME: Covers the registration budget, its separation from the /mcp budget, the 429 shape, fail-open and the registration log line.
+// ABOUTME: Covers bursts, per-IP keys, separation from the /mcp budget, other methods, fail-open, the 429 and the log lines.
 import { env, createExecutionContext, waitOnExecutionContext } from 'cloudflare:test'
+import type { RateLimit } from '@cloudflare/workers-types'
 import { afterEach, describe, it, expect, vi } from 'vitest'
 
 import worker from '../src/index-oauth'
 import type { Env } from '../src/types/env'
 
 const ORIGIN = 'https://lastfm-mcp.com'
+// simple.limit of REGISTRATION_RATE_LIMITER in wrangler.toml, mirrored by STRICT_REGISTRATION_RATE_LIMITER in vitest.config.mts
 const REGISTRATION_LIMIT = 5
 
-async function send(request: Request, testEnv: Env = env): Promise<Response> {
+// The suite-wide REGISTRATION_RATE_LIMITER is generous so other OAuth tests can register freely; these tests use the strict one
+const strictEnv: Env = { ...env, REGISTRATION_RATE_LIMITER: env.STRICT_REGISTRATION_RATE_LIMITER }
+
+async function send(request: Request, testEnv: Env = strictEnv): Promise<Response> {
 	const ctx = createExecutionContext()
 	const response = await worker.fetch(request, testEnv, ctx)
 	await waitOnExecutionContext(ctx)
 	return response
 }
 
-function register(ip: string, testEnv: Env = env): Promise<Response> {
+function register(ip: string, testEnv: Env = strictEnv): Promise<Response> {
 	return send(
 		new Request(`${ORIGIN}/oauth/register`, {
 			method: 'POST',
@@ -33,35 +38,38 @@ function register(ip: string, testEnv: Env = env): Promise<Response> {
 	)
 }
 
+/** Registrations already over budget for `ip`, so the next one is refused. */
+async function exhaust(ip: string): Promise<void> {
+	for (let i = 0; i < REGISTRATION_LIMIT; i++) expect((await register(ip)).status).toBe(201)
+}
+
+// Each test uses its own IPs: the binding's counts last a full period and aren't reset between tests.
 describe('POST /oauth/register rate limit', () => {
 	afterEach(() => {
 		vi.restoreAllMocks()
 	})
 
-	it('should accept registrations up to the per-IP budget', async () => {
-		for (let i = 0; i < REGISTRATION_LIMIT; i++) {
-			expect((await register('203.0.113.1')).status).toBe(201)
-		}
-	})
+	it('should refuse the registration over the per-IP budget with an OAuth-style 429', async () => {
+		await exhaust('203.0.113.1')
 
-	it('should answer the registration over the budget with a 429, Retry-After and an OAuth error body', async () => {
-		for (let i = 0; i < REGISTRATION_LIMIT; i++) await register('203.0.113.2')
-
-		const response = await register('203.0.113.2')
+		const response = await register('203.0.113.1')
 
 		expect(response.status).toBe(429)
-		const retryAfter = Number(response.headers.get('Retry-After'))
-		expect(retryAfter).toBeGreaterThan(0)
-		expect(retryAfter).toBeLessThanOrEqual(600)
-		expect(response.headers.get('X-RateLimit-Limit')).toBe(String(REGISTRATION_LIMIT))
-		expect(response.headers.get('Content-Type')).toBe('application/json')
-		const body = (await response.json()) as { error: string; error_description: string }
+		expect(response.headers.get('Retry-After')).toBe('60')
+		const body = (await response.json()) as { error: string }
 		expect(body.error).toBe('too_many_requests')
-		expect(body.error_description).toContain(`Retry after ${retryAfter}s`)
+	})
+
+	// Local rate limiting counts exactly. In production counts are approximate and per location, so a burst can slightly overshoot.
+	it('should hold the budget against a burst of simultaneous registrations', async () => {
+		const statuses = (await Promise.all(Array.from({ length: 2 * REGISTRATION_LIMIT }, () => register('203.0.113.2')))).map((r) => r.status)
+
+		expect(statuses.filter((s) => s === 201)).toHaveLength(REGISTRATION_LIMIT)
+		expect(statuses.filter((s) => s === 429)).toHaveLength(REGISTRATION_LIMIT)
 	})
 
 	it('should count each IP separately', async () => {
-		for (let i = 0; i < REGISTRATION_LIMIT; i++) await register('203.0.113.3')
+		await exhaust('203.0.113.3')
 		expect((await register('203.0.113.3')).status).toBe(429)
 
 		expect((await register('203.0.113.4')).status).toBe(201)
@@ -81,21 +89,24 @@ describe('POST /oauth/register rate limit', () => {
 		expect((await register('203.0.113.5')).status).toBe(201)
 	})
 
-	it('should not limit other methods on the registration path', async () => {
-		for (let i = 0; i < REGISTRATION_LIMIT; i++) await register('203.0.113.6')
+	it('should leave other methods on the registration path to the provider without using the budget', async () => {
+		const get = await send(new Request(`${ORIGIN}/oauth/register`, { headers: { 'CF-Connecting-IP': '203.0.113.6' } }))
+		expect(get.status).toBe(405)
 
-		const response = await send(new Request(`${ORIGIN}/oauth/register`, { headers: { 'CF-Connecting-IP': '203.0.113.6' } }))
+		for (let i = 0; i < 2 * REGISTRATION_LIMIT; i++) {
+			const preflight = await send(
+				new Request(`${ORIGIN}/oauth/register`, { method: 'OPTIONS', headers: { 'CF-Connecting-IP': '203.0.113.6' } }),
+			)
+			expect(preflight.status).toBe(200)
+		}
 
-		expect(response.status).not.toBe(429)
+		await exhaust('203.0.113.6')
 	})
 
-	it('should fail open and still register when the rate-limit KV is down', async () => {
+	it('should fail open and still register when the limiter throws', async () => {
 		vi.spyOn(console, 'error').mockImplementation(() => {})
-		const brokenKv = {
-			get: vi.fn().mockRejectedValue(new Error('KV unavailable')),
-			put: vi.fn().mockRejectedValue(new Error('KV unavailable')),
-		} as unknown as KVNamespace
-		const brokenEnv = { ...env, MCP_RL: brokenKv }
+		const brokenLimiter = { limit: vi.fn().mockRejectedValue(new Error('limiter unavailable')) } as unknown as RateLimit
+		const brokenEnv = { ...strictEnv, REGISTRATION_RATE_LIMITER: brokenLimiter }
 
 		for (let i = 0; i <= REGISTRATION_LIMIT; i++) {
 			expect((await register('203.0.113.7', brokenEnv)).status).toBe(201)
@@ -115,10 +126,10 @@ describe('POST /oauth/register rate limit', () => {
 
 	it('should log a refused registration without its body', async () => {
 		const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
-		for (let i = 0; i < REGISTRATION_LIMIT; i++) await register('203.0.113.9')
+		await exhaust('203.0.113.9')
 
 		await register('203.0.113.9')
 
-		expect(warn).toHaveBeenCalledWith('[RATE_LIMIT] client registration refused', { limit: REGISTRATION_LIMIT, windowSeconds: 600 })
+		expect(warn).toHaveBeenCalledWith('[RATE_LIMIT] client registration refused')
 	})
 })
