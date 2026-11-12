@@ -18,24 +18,30 @@ export interface ActiveUsersSummary {
 	activeSince: string | null
 }
 
-export interface ActiveUsersOptions {
-	/** Most new markers written in one run. Defaults to MAX_ACTIVE_USER_WRITES_PER_RUN. */
-	maxWrites?: number
-}
-
 /** Markers are kept 31 days, so the 30-day window is always covered and nothing older lingers */
 export const ACTIVE_USER_TTL_SECONDS = 31 * 86400
 
 /** The HMAC key must be at least this long; a shorter one is treated as missing, never used */
 export const MIN_HMAC_KEY_LENGTH = 32
 
-/**
- * Caps new marker writes per run. The grant summary can use about 850 DASH_KV operations in its worst run, and KV allows
- * 1,000 per invocation, so active users get these writes, a list page per 1,000 markers (about four at 100 users a day)
- * and one summary write. A user the cap leaves unwritten still counts in this run's numbers, and is written on the next
- * run if their client still holds a token then.
+/*
+ * Budget for one cron invocation, which runs this refresh and then the grant summary. Workers Paid allows 10,000 subrequests
+ * per invocation, and that limit counts requests to Cloudflare services such as KV as well as fetch() calls
+ * (https://developers.cloudflare.com/workers/platform/limits/#subrequests). The KV limits page still lists 1,000 operations
+ * per invocation (https://developers.cloudflare.com/kv/platform/limits/), so both figures are counted below.
+ *
+ * - Grant summary, worst run (a backfill): about 406 REST requests, up to about 400 of them value reads plus a few key
+ *   listings, each tried up to three times on a 429 or 5xx (about 1,218 fetches), and about 850 DASH_KV operations.
+ *   Steady-state runs read a handful of new grants.
+ * - Active users: one `token:` REST list page per 1,000 tokens (tried up to three times), one `au:` list page per 1,000
+ *   markers (about 31 x DAU markers: four pages at 100 a day), one marker write per user first seen today (at most the
+ *   distinct users holding a token, about 100 an hour today) and one summary write.
+ *
+ * That's about 2,200 subrequests in the worst case, well inside 10,000. Counting DASH_KV operations alone against the 1,000
+ * figure, a worst-case grant run leaves room for about 140 new active users in the same hour; outside a backfill the grant
+ * summary uses only a few, and active users have the rest. Every observed user is written: a marker skipped for budget is
+ * lost once that user's token is gone.
  */
-export const MAX_ACTIVE_USER_WRITES_PER_RUN = 120
 
 const SUMMARY_KEY = 'summary:active-users'
 const TOKEN_PREFIX = 'token:'
@@ -94,11 +100,7 @@ export async function hashUserId(key: CryptoKey, userId: string): Promise<string
  * Returns null, and records nothing, while the HMAC key is missing or too short: an unkeyed hash of a username could be
  * reversed by hashing candidate names.
  */
-export async function refreshActiveUsers(
-	env: DashEnv,
-	now: Date = new Date(),
-	options: ActiveUsersOptions = {},
-): Promise<ActiveUsersSummary | null> {
+export async function refreshActiveUsers(env: DashEnv, now: Date = new Date()): Promise<ActiveUsersSummary | null> {
 	const secret = activeUserKey(env)
 	if (secret === null) {
 		console.warn(SKIPPED_WARNING)
@@ -133,10 +135,9 @@ export async function refreshActiveUsers(
 
 	const markedToday = byDate.get(today) ?? new Set<string>()
 	const toWrite = hashesNow.filter((hash) => !markedToday.has(hash))
-	const writing = toWrite.slice(0, Math.max(0, options.maxWrites ?? MAX_ACTIVE_USER_WRITES_PER_RUN))
-	for (let i = 0; i < writing.length; i += WRITE_CONCURRENCY) {
+	for (let i = 0; i < toWrite.length; i += WRITE_CONCURRENCY) {
 		await Promise.all(
-			writing
+			toWrite
 				.slice(i, i + WRITE_CONCURRENCY)
 				.map((hash) => env.DASH_KV.put(`${MARKER_PREFIX}${today}:${hash}`, '', { expirationTtl: ACTIVE_USER_TTL_SECONDS })),
 		)

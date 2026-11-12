@@ -49,7 +49,7 @@ async function refreshActiveUsersSafely(env: DashEnv, now: Date): Promise<void> 
 
 /**
  * Runs both hourly refreshes, each failure contained to its own summary. Active users go first: they're the headline
- * numbers, and their few DASH_KV operations are bounded on their own (see MAX_ACTIVE_USER_WRITES_PER_RUN).
+ * numbers. The shared per-invocation budget is worked through in activeUsers.ts.
  */
 async function refreshAll(env: DashEnv, now: Date): Promise<void> {
 	await refreshActiveUsersSafely(env, now)

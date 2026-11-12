@@ -7,7 +7,6 @@ import {
 	ACTIVE_USER_TTL_SECONDS,
 	hashUserId,
 	importHmacKey,
-	MAX_ACTIVE_USER_WRITES_PER_RUN,
 	readActiveUsersSummary,
 	refreshActiveUsers,
 	userIdFromTokenKey,
@@ -263,20 +262,22 @@ describe('refreshActiveUsers', () => {
 		expect(await markerKeys()).toHaveLength(1)
 	})
 
-	it('should cap marker writes per run, count every user seen this run, and write the rest next run', async () => {
-		expect(MAX_ACTIVE_USER_WRITES_PER_RUN).toBe(120)
-		activeNow(ALICE, BOB, CAROL)
+	it('should persist every user seen in a run, so they still count after their tokens are gone', async () => {
+		// More users than the old 120-marker cap allowed, all active in one hour and gone by the next
+		const users = Array.from({ length: 121 }, (_, i) => `overflow-fixture-user-${i}`)
+		tokenKeys = users.map((userId, i) => ({ name: tokenKey(userId, i) }))
 
-		const first = await refreshActiveUsers(testEnv(), NOW, { maxWrites: 2 })
+		const first = await refreshActiveUsers(testEnv(), NOW)
 
-		expect(await markerKeys()).toHaveLength(2)
-		expect(first).toMatchObject({ dau: 3, wau: 3, mau: 3 })
-		expect(first?.activeByDay[29].count).toBe(3)
+		expect(first).toMatchObject({ dau: 121, wau: 121, mau: 121 })
+		expect(await markerKeys()).toHaveLength(121)
 
-		const second = await refreshActiveUsers(testEnv(), new Date(NOW.getTime() + 3600 * 1000), { maxWrites: 2 })
+		tokenKeys = []
+		const second = await refreshActiveUsers(testEnv(), new Date(NOW.getTime() + 3600 * 1000))
 
-		expect(await markerKeys()).toHaveLength(3)
-		expect(second?.dau).toBe(3)
+		expect(second).toMatchObject({ dau: 121, wau: 121, mau: 121 })
+		expect(second?.activeByDay[29]).toEqual({ date: utcDate(NOW), count: 121 })
+		expect(second?.activeByDay.reduce((sum, day) => sum + day.count, 0)).toBe(121)
 	})
 
 	it('should never store a username in DASH_KV keys, values or metadata', async () => {
