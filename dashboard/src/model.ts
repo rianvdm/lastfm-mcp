@@ -50,11 +50,8 @@ export function isNotConfigured(value: unknown): value is NotConfigured {
  * and so a username, so only the HTTP status or a category is shown.
  */
 export function loadFailureReason(error: unknown): string {
-	if (error instanceof CfApiError) {
-		if (error.status !== 200) return `HTTP ${error.status}`
-		// GraphQL reports query errors with a 200; the message prefix is ours, not upstream text
-		return error.message.startsWith('GraphQL') ? 'GraphQL error' : 'unexpected response'
-	}
+	// A CfApiError on a 200 is a body we couldn't use: not JSON, no rows, or a failure envelope
+	if (error instanceof CfApiError) return error.status === 200 ? 'unexpected response' : `HTTP ${error.status}`
 	// fetch rejects with a TypeError when the connection fails
 	if (error instanceof TypeError) return 'network error'
 	return 'unexpected error'

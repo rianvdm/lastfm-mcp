@@ -1,4 +1,4 @@
-// ABOUTME: Read-only Cloudflare API client for the dashboard: KV REST list and get, GraphQL Analytics, and Analytics Engine SQL.
+// ABOUTME: Read-only Cloudflare API client for the dashboard: KV REST list and get, the Analytics SQL API and Analytics Engine SQL.
 // ABOUTME: Sends the API token as a bearer token, retries 429/5xx twice (1 s, then 3 s), and throws CfApiError with a short message.
 import type { DashEnv } from './env'
 
@@ -13,7 +13,7 @@ const KV_LIST_LIMIT = 1000
 /** Keeps API error detail short enough for a dashboard tile */
 const MAX_DETAIL_LENGTH = 160
 
-/** A Cloudflare API call that failed, after retries where they apply. `status` is the HTTP status (200 for GraphQL errors). */
+/** A Cloudflare API call that failed, after retries where they apply. `status` is the HTTP status, 200 when a 200 had an unusable body. */
 export class CfApiError extends Error {
 	readonly status: number
 
@@ -35,11 +35,6 @@ interface KvListResponse {
 	errors?: Array<{ message?: string }>
 	result?: Array<{ name: string; expiration?: number }>
 	result_info?: { cursor?: string }
-}
-
-interface GraphqlResponse<T> {
-	data?: T | null
-	errors?: Array<{ message?: string }> | null
 }
 
 interface AnalyticsSqlResponse<T> {
@@ -157,23 +152,6 @@ export async function getKvJson<T>(env: DashEnv, key: string): Promise<T | null>
 	}
 	if (!response.ok) throw await failure(response, 'KV get')
 	return readJson<T>(response, 'KV get')
-}
-
-/** Runs a GraphQL Analytics query. The API reports query errors in `errors` with an HTTP 200, so those throw too. */
-export async function graphql<T>(env: DashEnv, query: string, variables: Record<string, unknown>): Promise<T> {
-	const response = await send(env, `${API_BASE}/graphql`, {
-		method: 'POST',
-		headers: { 'Content-Type': 'application/json' },
-		body: JSON.stringify({ query, variables }),
-	})
-	if (!response.ok) throw await failure(response, 'GraphQL')
-
-	const body = await readJson<GraphqlResponse<T>>(response, 'GraphQL')
-	if (body.errors && body.errors.length > 0) {
-		throw new CfApiError(response.status, `GraphQL failed: ${errorDetail(JSON.stringify({ errors: body.errors }))}`)
-	}
-	if (body.data == null) throw new CfApiError(response.status, 'GraphQL returned no data')
-	return body.data
 }
 
 /**

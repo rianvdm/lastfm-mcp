@@ -129,7 +129,7 @@ describe('buildDashboardModel', () => {
 	})
 
 	it('should log a failed load by its short reason only', async () => {
-		vi.mocked(fetchTraffic).mockRejectedValue(new CfApiError(429, 'GraphQL failed (429): grant:alice-user:abc'))
+		vi.mocked(fetchTraffic).mockRejectedValue(new CfApiError(429, 'Analytics SQL API failed (429): grant:alice-user:abc'))
 
 		await buildDashboardModel(env, NOW)
 
@@ -148,7 +148,7 @@ describe('buildDashboardModel', () => {
 	})
 
 	it('should retry a failed load on the next build instead of caching the failure', async () => {
-		vi.mocked(fetchTraffic).mockRejectedValueOnce(new CfApiError(500, 'GraphQL failed (500)'))
+		vi.mocked(fetchTraffic).mockRejectedValueOnce(new CfApiError(500, 'Analytics SQL API failed (500)'))
 
 		expect((await buildDashboardModel(env, NOW)).traffic).toEqual({ error: 'HTTP 500' })
 		expect((await buildDashboardModel(env, NOW)).traffic).toEqual(TRAFFIC)
@@ -160,8 +160,8 @@ describe('loadFailureReason', () => {
 		expect(loadFailureReason(new CfApiError(403, 'KV list failed (403): Authentication error'))).toBe('HTTP 403')
 	})
 
-	it('should name a GraphQL error, which arrives with HTTP 200', () => {
-		expect(loadFailureReason(new CfApiError(200, 'GraphQL failed: unknown field grant:bob:1'))).toBe('GraphQL error')
+	it('should not echo a failure envelope that arrives with HTTP 200', () => {
+		expect(loadFailureReason(new CfApiError(200, 'Analytics SQL API failed: unknown column grant:bob:1'))).toBe('unexpected response')
 	})
 
 	it('should name any other CfApiError on a 200 as an unexpected response', () => {

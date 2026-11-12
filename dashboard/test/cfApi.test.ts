@@ -1,10 +1,10 @@
-// ABOUTME: Tests the dashboard's read-only Cloudflare API client: KV list and get, GraphQL and Analytics Engine SQL.
+// ABOUTME: Tests the dashboard's read-only Cloudflare API client: KV list and get, the Analytics SQL API and Analytics Engine SQL.
 // ABOUTME: Mocks fetch to check URLs, auth, pagination, URL-encoding, retry backoff with fake timers, and error handling.
 import { env } from 'cloudflare:test'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { MockInstance } from 'vitest'
 
-import { analyticsSql, analyticsSqlApi, CfApiError, getKvJson, graphql, listKvKeys } from '../src/cfApi'
+import { analyticsSql, analyticsSqlApi, CfApiError, getKvJson, listKvKeys } from '../src/cfApi'
 import type { DashEnv } from '../src/env'
 
 const TOKEN = 'test-api-token'
@@ -173,41 +173,6 @@ describe('retries', () => {
 
 		expect(error.status).toBe(400)
 		expect(error.message.length).toBeLessThan(300)
-	})
-})
-
-describe('graphql', () => {
-	const QUERY = 'query ($accountTag: string!) { viewer { accounts(filter: { accountTag: $accountTag }) { __typename } } }'
-
-	it('should POST the query and variables and return data', async () => {
-		respondWith(() => Response.json({ data: { viewer: { accounts: [] } }, errors: null }))
-
-		const data = await graphql<{ viewer: { accounts: unknown[] } }>(apiEnv, QUERY, { accountTag: env.ACCOUNT_ID })
-
-		expect(data).toEqual({ viewer: { accounts: [] } })
-		expect(String(fetchMock.mock.calls[0][0])).toBe(`${API}/graphql`)
-		const init = callInit(0)
-		expect(init.method).toBe('POST')
-		const headers = new Headers(init.headers)
-		expect(headers.get('Authorization')).toBe(`Bearer ${TOKEN}`)
-		expect(headers.get('Content-Type')).toBe('application/json')
-		expect(JSON.parse(String(init.body))).toEqual({ query: QUERY, variables: { accountTag: env.ACCOUNT_ID } })
-	})
-
-	it('should throw a CfApiError when a 200 response carries errors', async () => {
-		respondWith(() => Response.json({ data: null, errors: [{ message: 'unknown field "foo"', path: ['viewer'] }] }))
-
-		const error = (await graphql(apiEnv, QUERY, {}).catch((e: unknown) => e)) as CfApiError
-
-		expect(error).toBeInstanceOf(CfApiError)
-		expect(error.status).toBe(200)
-		expect(error.message).toContain('unknown field "foo"')
-	})
-
-	it('should treat an empty errors array as success', async () => {
-		respondWith(() => Response.json({ data: { ok: 1 }, errors: [] }))
-
-		expect(await graphql(apiEnv, QUERY, {})).toEqual({ ok: 1 })
 	})
 })
 
