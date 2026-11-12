@@ -1,4 +1,4 @@
-// ABOUTME: Per-IP fixed-window rate limiter for the public /mcp endpoint.
+// ABOUTME: Per-IP fixed-window rate limiter for the public /mcp and /oauth/register endpoints.
 // ABOUTME: KV-backed, fails open on KV errors, returns Retry-After when limit exceeded.
 
 export interface RateLimitResult {
@@ -18,6 +18,16 @@ export interface RateLimitOptions {
 const DEFAULT_OPTIONS: RateLimitOptions = {
 	limit: 60,
 	windowSeconds: 60,
+}
+
+/**
+ * Budget for dynamic client registration (POST /oauth/register). A legitimate client registers once per install,
+ * so this is far tighter than the /mcp budget. It bounds KV writes from scripted registrations; it is a cost
+ * guard, not a security control, since a registration can only receive codes for flows it started itself.
+ */
+export const REGISTRATION_RATE_LIMIT: RateLimitOptions = {
+	limit: 5,
+	windowSeconds: 600,
 }
 
 /**
@@ -59,31 +69,52 @@ export function rateLimitKeyFromRequest(request: Request): string {
 	return `ip:${ip}`
 }
 
+function retryAfterSeconds(result: RateLimitResult): number {
+	return Math.max(1, result.resetEpochSeconds - Math.floor(Date.now() / 1000))
+}
+
+/** A 429 carrying `body` as JSON, with Retry-After and the standard rate-limit headers. */
+function rateLimitResponse(result: RateLimitResult, body: unknown, extraHeaders: Record<string, string> = {}): Response {
+	return new Response(JSON.stringify(body), {
+		status: 429,
+		headers: {
+			'Content-Type': 'application/json',
+			'Retry-After': String(retryAfterSeconds(result)),
+			'X-RateLimit-Limit': String(result.limit),
+			'X-RateLimit-Remaining': '0',
+			'X-RateLimit-Reset': String(result.resetEpochSeconds),
+			'Access-Control-Allow-Origin': '*',
+			'Access-Control-Expose-Headers': 'Retry-After, X-RateLimit-Limit, X-RateLimit-Remaining, X-RateLimit-Reset',
+			...extraHeaders,
+		},
+	})
+}
+
 /**
- * Build a 429 response with Retry-After and standard rate-limit headers.
+ * Build the 429 for /mcp: a JSON-RPC error body, since MCP clients parse the response as JSON-RPC.
  */
 export function buildRateLimitResponse(result: RateLimitResult): Response {
-	const retryAfter = Math.max(1, result.resetEpochSeconds - Math.floor(Date.now() / 1000))
-	return new Response(
-		JSON.stringify({
-			jsonrpc: '2.0',
-			error: {
-				code: -32000,
-				message: `Rate limit exceeded. Retry after ${retryAfter}s.`,
-			},
-			id: null,
-		}),
-		{
-			status: 429,
-			headers: {
-				'Content-Type': 'application/json',
-				'Retry-After': String(retryAfter),
-				'X-RateLimit-Limit': String(result.limit),
-				'X-RateLimit-Remaining': '0',
-				'X-RateLimit-Reset': String(result.resetEpochSeconds),
-				'Access-Control-Allow-Origin': '*',
-				'Access-Control-Expose-Headers': 'Retry-After, X-RateLimit-Limit, X-RateLimit-Remaining, X-RateLimit-Reset',
-			},
+	return rateLimitResponse(result, {
+		jsonrpc: '2.0',
+		error: {
+			code: -32000,
+			message: `Rate limit exceeded. Retry after ${retryAfterSeconds(result)}s.`,
 		},
+		id: null,
+	})
+}
+
+/**
+ * Build the 429 for /oauth/register: an OAuth-style `error` / `error_description` body (RFC 7591 §3.2.2),
+ * since registration clients parse OAuth errors, not JSON-RPC.
+ */
+export function buildRegistrationRateLimitResponse(result: RateLimitResult): Response {
+	return rateLimitResponse(
+		result,
+		{
+			error: 'too_many_requests',
+			error_description: `Too many client registrations from this address. Retry after ${retryAfterSeconds(result)}s.`,
+		},
+		{ 'Cache-Control': 'no-store' },
 	)
 }

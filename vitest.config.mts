@@ -10,6 +10,8 @@ export default defineConfig({
 		}),
 	],
 	test: {
+		// Each test starts with empty rate-limit buckets; see the file for why
+		setupFiles: ['./test/setup/reset-rate-limits.ts'],
 		exclude: [
 			// Default vitest excludes
 			'**/node_modules/**',

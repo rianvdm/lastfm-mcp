@@ -12,7 +12,13 @@ import { createMcpServer } from './mcp/server'
 import { buildOAuthAuthMessages } from './mcp/tools'
 import type { Env } from './types/env'
 import { httpsRedirect } from './utils/httpsRedirect'
-import { buildRateLimitResponse, checkRateLimit, rateLimitKeyFromRequest } from './utils/rateLimit'
+import {
+	REGISTRATION_RATE_LIMIT,
+	buildRateLimitResponse,
+	buildRegistrationRateLimitResponse,
+	checkRateLimit,
+	rateLimitKeyFromRequest,
+} from './utils/rateLimit'
 
 /**
  * Options shared by both MCP handler call sites.
@@ -122,6 +128,25 @@ const mcpApiHandler = {
 
 		return createMcpHandler(() => server, MCP_HANDLER_OPTIONS)(request, env, ctx)
 	},
+}
+
+/** Longest client_name kept in the registration log line. The name is self-asserted, so it is capped. */
+const LOGGED_CLIENT_NAME_MAX = 100
+
+/**
+ * Log an accepted dynamic client registration so abuse shows up in Workers logs. Reads the provider's 201 body
+ * (RFC 7591 §3.2.1), which echoes the validated metadata. Logging never affects the response.
+ */
+async function logClientRegistration(response: Response): Promise<void> {
+	try {
+		const client = (await response.clone().json()) as { client_name?: unknown; redirect_uris?: unknown }
+		const clientName = typeof client.client_name === 'string' ? client.client_name.slice(0, LOGGED_CLIENT_NAME_MAX) : null
+		const redirectUris = Array.isArray(client.redirect_uris) ? client.redirect_uris : []
+		const redirectHosts = [...new Set(redirectUris.flatMap((uri) => (URL.canParse(String(uri)) ? [new URL(String(uri)).host] : [])))]
+		console.log('[OAUTH] client registered', { clientName, redirectHosts })
+	} catch (error) {
+		console.warn('[OAUTH] client registered, response not readable for logging:', error instanceof Error ? error.message : 'Unknown error')
+	}
 }
 
 const oauthProviders = new Map<string, OAuthProvider>()
@@ -336,6 +361,20 @@ Sitemap: https://lastfm-mcp.com/sitemap.xml`,
 			// - No bearer token: OAuth provider returns 401 + WWW-Authenticate (triggers browser OAuth flow)
 		}
 
+		// Dynamic client registration is open by design (the MCP authorization spec requires it), so budget it per IP.
+		// Its own bucket: /mcp traffic must not use up registrations, and registrations must not use up /mcp.
+		const isClientRegistration = url.pathname === '/oauth/register' && request.method === 'POST'
+		if (isClientRegistration) {
+			const rlResult = await checkRateLimit(env.MCP_RL, `register:${rateLimitKeyFromRequest(request)}`, REGISTRATION_RATE_LIMIT)
+			if (!rlResult.allowed) {
+				console.warn('[RATE_LIMIT] client registration refused', {
+					limit: REGISTRATION_RATE_LIMIT.limit,
+					windowSeconds: REGISTRATION_RATE_LIMIT.windowSeconds,
+				})
+				return buildRegistrationRateLimitResponse(rlResult)
+			}
+		}
+
 		// Map a `resource` of `${origin}/mcp` to the origin on the two routes that validate it
 		if (url.pathname === '/authorize') {
 			request = normalizeAuthorizeResource(request, url)
@@ -347,6 +386,10 @@ Sitemap: https://lastfm-mcp.com/sitemap.xml`,
 		// Pass a per-request copy of env: the provider stores its helpers on `env.OAUTH_PROVIDER` only when that
 		// is unset, so on a shared env the first origin's helpers would serve every later origin's /authorize.
 		const response = await getOAuthProvider(url.origin).fetch(request, { ...env }, ctx)
+
+		if (isClientRegistration && response.status === 201) {
+			await logClientRegistration(response)
+		}
 
 		// Keep the 401 challenge on /mcp byte-identical to the one 0.10.3 clients saw. The provider's own challenge
 		// points at the same root metadata document (RFC 9728) but adds realm and error parameters.
