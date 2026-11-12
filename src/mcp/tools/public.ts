@@ -13,7 +13,7 @@ import { formatArtist, toArray } from './formatters'
 /**
  * Register all public (non-authenticated) tools with the MCP server.
  */
-export function registerPublicTools(server: McpServer, client: CachedLastfmClient, getBaseUrl: () => string): void {
+export function registerPublicTools(server: McpServer, client: CachedLastfmClient): void {
 	// ping - Test server connectivity
 	server.registerTool(
 		'ping',
@@ -48,9 +48,6 @@ export function registerPublicTools(server: McpServer, client: CachedLastfmClien
 			inputSchema: z.object({}),
 		},
 		async () => {
-			const baseUrl = getBaseUrl()
-			const authUrl = `${baseUrl}/login`
-
 			const nextSteps = buildNextSteps([
 				{ tool: 'lastfm_auth_status', args: '', hint: 'check whether the current session is authenticated' },
 				{ tool: 'ping', args: '', hint: 'test connectivity' },
@@ -66,10 +63,10 @@ Status: Running
 Protocol: MCP ${PROTOCOL_VERSION}
 Features:
 - Resources: User Listening Data, Track/Artist/Album Info
-- Authentication: Last.fm Web Auth
+- Authentication: OAuth 2.1 with Last.fm sign-in
 - Rate Limiting: Enabled
 
-To get started, authenticate at ${authUrl}${nextSteps}`,
+To get started, connect this server in your MCP client. It opens the Last.fm sign-in for you.${nextSteps}`,
 					},
 				],
 			}

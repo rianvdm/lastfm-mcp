@@ -1,5 +1,5 @@
 // ABOUTME: Registration smoke test for the MCP server built by createMcpServer.
-// ABOUTME: Snapshots the advertised tools, prompts, and resources so a bad registration change cannot pass silently.
+// ABOUTME: Snapshots the advertised tools, prompts, and resources, and checks sign-in guidance names only OAuth.
 import { env } from 'cloudflare:test'
 import { Client, InMemoryTransport } from '@modelcontextprotocol/client'
 import { describe, it, expect, beforeAll } from 'vitest'
@@ -15,9 +15,9 @@ const ZERO_ARG_TOOLS = ['server_info', 'lastfm_auth_status']
 // once a session exists; the five catalog templates (track/artist/album) have no list.
 const LISTED_USER_RESOURCES = 5
 
-async function connectClient() {
-	const { server, setContext } = createMcpServer(env, 'https://example.com')
-	setContext({ session: { username: 'testuser', sessionKey: 'test-session-key' } })
+async function connectClient({ signedIn = true } = {}) {
+	const { server, setContext } = createMcpServer(env)
+	if (signedIn) setContext({ session: { username: 'testuser', sessionKey: 'test-session-key' } })
 	const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair()
 	const client = new Client({ name: 'registration-smoke', version: '0.0.0' })
 	await Promise.all([server.connect(serverTransport), client.connect(clientTransport)])
@@ -102,5 +102,33 @@ describe('createMcpServer registration', () => {
 			expect(resource.mimeType).toBe('application/json')
 		}
 		expect(catalogue).toMatchSnapshot()
+	})
+})
+
+describe('sign-in guidance without a session', () => {
+	let client: Client
+
+	beforeAll(async () => {
+		client = await connectClient({ signedIn: false })
+	})
+
+	async function toolText(name: string, args: Record<string, unknown> = {}): Promise<string> {
+		const result = await client.callTool({ name, arguments: args })
+		return (result.content as { type: string; text: string }[]).map((c) => c.text).join('\n')
+	}
+
+	// The manual /login flow is gone; every client signs in through MCP OAuth.
+	it.each([
+		['server_info', {}],
+		['lastfm_auth_status', {}],
+		['get_recent_tracks', {}],
+	])('%s should point at OAuth, not a /login URL', async (name, args) => {
+		const text = await toolText(name, args)
+		expect(text).not.toContain('/login')
+		expect(text).not.toContain('session_id')
+	})
+
+	it('lastfm_auth_status should tell the user to reconnect so the client signs in', async () => {
+		expect(await toolText('lastfm_auth_status')).toContain('reconnect')
 	})
 })

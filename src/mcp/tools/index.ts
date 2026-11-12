@@ -3,11 +3,4 @@
 
 export { registerPublicTools } from './public'
 export { toolError } from './error-handler'
-export {
-	registerAuthenticatedTools,
-	buildSessionAuthMessages,
-	buildOAuthAuthMessages,
-	type AuthSession,
-	type AuthMessageConfig,
-	type LastfmOAuthProps,
-} from './authenticated'
+export { registerAuthenticatedTools, type AuthSession, type LastfmOAuthProps } from './authenticated'

@@ -25,7 +25,7 @@ if [ "$TOTAL_KEYS" -eq 0 ]; then
     echo "   • cache:userInfo:username"
     echo ""
     echo "🔧 To trigger caching:"
-    echo "   1. Visit: https://lastfm-mcp-prod.rian-db8.workers.dev/login"
+    echo "   1. Connect the server in an MCP client and sign in with Last.fm"
     echo "   2. Use MCP tools: get_recent_tracks, get_top_artists, get_track_info"
     echo "   3. Re-run this script to see cache population"
 else

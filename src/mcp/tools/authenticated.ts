@@ -1,5 +1,5 @@
 // ABOUTME: Authenticated MCP tools that require Last.fm authentication to access personal user data.
-// ABOUTME: Provides a single registration function with pluggable session getter for both OAuth and session-based auth.
+// ABOUTME: Reads the signed-in user's session through a getter; without one, tools explain that the MCP client signs in over OAuth.
 import { McpServer } from '@modelcontextprotocol/server'
 import { z } from 'zod'
 
@@ -32,70 +32,10 @@ export interface AuthSession {
 }
 
 /**
- * Configuration for how unauthenticated users are prompted to log in.
- * Allows the same tool code to work for both session-based and OAuth flows.
+ * Shown by lastfm_auth_status without a session. Every client signs in through MCP OAuth, which the client starts
+ * on the server's 401, so the only advice is to reconnect.
  */
-export interface AuthMessageConfig {
-	/** Generate the "not authenticated" message shown by lastfm_auth_status */
-	notAuthenticatedStatus: () => string
-	/** Generate the "auth required" message shown by tools that need a session */
-	requiresAuth: () => string
-}
-
-/**
- * Build auth message config for session-based auth (manual login flow).
- */
-export function buildSessionAuthMessages(getBaseUrl: () => string, getSessionId: () => string | null): AuthMessageConfig {
-	return {
-		notAuthenticatedStatus: () => {
-			const baseUrl = getBaseUrl()
-			const sessionId = getSessionId()
-			const loginUrl = sessionId ? `${baseUrl}/login?session_id=${sessionId}` : `${baseUrl}/login`
-			return `🔐 **Authentication Status: Not Authenticated**
-
-You are not currently authenticated with Last.fm. To access your personal listening data, you need to authenticate first.
-
-**How to authenticate:**
-1. Visit: ${loginUrl}
-2. Sign in with your Last.fm account
-3. Authorize access to your listening data
-4. Return here and try your query again
-
-**What you'll be able to do after authentication:**
-• Get your recent tracks and listening history
-• View your top artists and albums by time period
-• Access your loved tracks and user profile
-• Get detailed information about tracks, artists, and albums (with personal stats)
-• Discover similar music and get personalized recommendations
-• Analyze your listening patterns and statistics
-
-**Available without authentication:**
-${renderToolList(PUBLIC_TOOL_CATALOG)}`
-		},
-		requiresAuth: () => {
-			const baseUrl = getBaseUrl()
-			const sessionId = getSessionId()
-			const loginUrl = sessionId ? `${baseUrl}/login?session_id=${sessionId}` : `${baseUrl}/login`
-			return `🔐 **Authentication Required**
-
-This tool requires authentication with Last.fm. Please authenticate first:
-
-1. Visit: ${loginUrl}
-2. Sign in with your Last.fm account
-3. Return here and try again
-
-Use the \`lastfm_auth_status\` tool to check your current authentication status.`
-		},
-	}
-}
-
-/**
- * Build auth message config for OAuth-based auth (MCP client handles the flow).
- */
-export function buildOAuthAuthMessages(): AuthMessageConfig {
-	return {
-		notAuthenticatedStatus: () =>
-			`🔐 **Authentication Status: Not Authenticated**
+const NOT_AUTHENTICATED_STATUS = `🔐 **Authentication Status: Not Authenticated**
 
 You are not currently authenticated with Last.fm.
 
@@ -103,31 +43,22 @@ You are not currently authenticated with Last.fm.
 Your MCP client should automatically prompt you to authenticate. If not, try disconnecting and reconnecting to this server.
 
 **Available without authentication:**
-${renderToolList(PUBLIC_TOOL_CATALOG)}`,
-		requiresAuth: () =>
-			`🔐 **Authentication Required**
+${renderToolList(PUBLIC_TOOL_CATALOG)}`
+
+/** Shown by every tool that needs the user's Last.fm session when there is none. */
+const AUTH_REQUIRED = `🔐 **Authentication Required**
 
 This tool requires authentication with Last.fm.
 
 Your MCP client should automatically initiate the OAuth flow. If not, disconnect and reconnect to this server to start the authentication process.
 
-Once authenticated, your session will persist across conversations.`,
-	}
-}
+Once authenticated, your session will persist across conversations.`
 
 /**
- * Register all authenticated tools with the MCP server.
- *
- * This is the single implementation used by all auth paths. The getSession
- * callback and authMessages config are provided by the caller to adapt
- * to session-based auth, OAuth, or any future auth mechanism.
+ * Register all authenticated tools with the MCP server. `getSession` returns the signed-in user's
+ * Last.fm session from the OAuth grant, or null before sign-in.
  */
-export function registerAuthenticatedTools(
-	server: McpServer,
-	client: CachedLastfmClient,
-	getSession: () => AuthSession | null,
-	authMessages: AuthMessageConfig,
-): void {
+export function registerAuthenticatedTools(server: McpServer, client: CachedLastfmClient, getSession: () => AuthSession | null): void {
 	// lastfm_auth_status - Check authentication status
 	server.registerTool(
 		'lastfm_auth_status',
@@ -140,7 +71,7 @@ export function registerAuthenticatedTools(
 
 			if (!session) {
 				return {
-					content: [{ type: 'text', text: authMessages.notAuthenticatedStatus() }],
+					content: [{ type: 'text', text: NOT_AUTHENTICATED_STATUS }],
 				}
 			}
 
@@ -205,7 +136,7 @@ ${renderToolList(AUTHENTICATED_TOOL_CATALOG)}
 		async ({ username, limit, page, date, from, to, timezone }) => {
 			const session = getSession()
 			if (!session) {
-				return { content: [{ type: 'text', text: authMessages.requiresAuth() }] }
+				return { content: [{ type: 'text', text: AUTH_REQUIRED }] }
 			}
 
 			try {
@@ -307,7 +238,7 @@ ${currentPage > 1 ? `\n⬅️ **Previous page:** Use \`page: ${currentPage - 1}\
 		async ({ username, period, limit }) => {
 			const session = getSession()
 			if (!session) {
-				return { content: [{ type: 'text', text: authMessages.requiresAuth() }] }
+				return { content: [{ type: 'text', text: AUTH_REQUIRED }] }
 			}
 
 			try {
@@ -359,7 +290,7 @@ Total artists: ${data.topartists['@attr'].total}${nextSteps}`,
 		async ({ username, period, limit }) => {
 			const session = getSession()
 			if (!session) {
-				return { content: [{ type: 'text', text: authMessages.requiresAuth() }] }
+				return { content: [{ type: 'text', text: AUTH_REQUIRED }] }
 			}
 
 			try {
@@ -423,7 +354,7 @@ Total albums: ${data.topalbums['@attr'].total}${nextSteps}`,
 		async ({ username, period, limit }) => {
 			const session = getSession()
 			if (!session) {
-				return { content: [{ type: 'text', text: authMessages.requiresAuth() }] }
+				return { content: [{ type: 'text', text: AUTH_REQUIRED }] }
 			}
 
 			try {
@@ -492,7 +423,7 @@ Total tracks: ${data.toptracks['@attr'].total}${nextSteps}`,
 		async ({ username, limit }) => {
 			const session = getSession()
 			if (!session) {
-				return { content: [{ type: 'text', text: authMessages.requiresAuth() }] }
+				return { content: [{ type: 'text', text: AUTH_REQUIRED }] }
 			}
 
 			try {
@@ -559,7 +490,7 @@ Total loved tracks: ${data.lovedtracks['@attr'].total}${nextSteps}`,
 		async ({ username }) => {
 			const session = getSession()
 			if (!session) {
-				return { content: [{ type: 'text', text: authMessages.requiresAuth() }] }
+				return { content: [{ type: 'text', text: AUTH_REQUIRED }] }
 			}
 
 			try {
@@ -614,7 +545,7 @@ Total loved tracks: ${data.lovedtracks['@attr'].total}${nextSteps}`,
 		async ({ username, period }) => {
 			const session = getSession()
 			if (!session) {
-				return { content: [{ type: 'text', text: authMessages.requiresAuth() }] }
+				return { content: [{ type: 'text', text: AUTH_REQUIRED }] }
 			}
 
 			try {
@@ -664,7 +595,7 @@ Total loved tracks: ${data.lovedtracks['@attr'].total}${nextSteps}`,
 		async ({ username, limit, genre }) => {
 			const session = getSession()
 			if (!session) {
-				return { content: [{ type: 'text', text: authMessages.requiresAuth() }] }
+				return { content: [{ type: 'text', text: AUTH_REQUIRED }] }
 			}
 
 			try {
@@ -716,7 +647,7 @@ ${artistList}
 		async ({ username }) => {
 			const session = getSession()
 			if (!session) {
-				return { content: [{ type: 'text', text: authMessages.requiresAuth() }] }
+				return { content: [{ type: 'text', text: AUTH_REQUIRED }] }
 			}
 
 			try {
@@ -784,7 +715,7 @@ ${chartList}
 		async ({ username, from, to }) => {
 			const session = getSession()
 			if (!session) {
-				return { content: [{ type: 'text', text: authMessages.requiresAuth() }] }
+				return { content: [{ type: 'text', text: AUTH_REQUIRED }] }
 			}
 
 			try {
@@ -843,7 +774,7 @@ ${artists.length > 30 ? '\n📝 **Note:** Showing top 30 artists only' : ''}${ne
 		async ({ username, from, to }) => {
 			const session = getSession()
 			if (!session) {
-				return { content: [{ type: 'text', text: authMessages.requiresAuth() }] }
+				return { content: [{ type: 'text', text: AUTH_REQUIRED }] }
 			}
 
 			try {

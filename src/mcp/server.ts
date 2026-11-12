@@ -9,13 +9,7 @@ import type { Env } from '../types/env'
 import { SERVER_VERSION } from './protocol'
 import { registerPrompts } from './prompts/analysis'
 import { registerResources } from './resources/lastfm'
-import {
-	registerAuthenticatedTools,
-	registerPublicTools,
-	buildSessionAuthMessages,
-	type AuthSession,
-	type AuthMessageConfig,
-} from './tools'
+import { registerAuthenticatedTools, registerPublicTools, type AuthSession } from './tools'
 
 // Server metadata
 const SERVER_NAME = 'lastfm-mcp'
@@ -26,8 +20,6 @@ const SERVER_NAME = 'lastfm-mcp'
  */
 export interface McpRequestContext {
 	session: AuthSession | null
-	baseUrl: string
-	sessionId: string | null
 }
 
 /**
@@ -36,7 +28,6 @@ export interface McpRequestContext {
 export interface McpServerWithContext {
 	server: McpServer
 	setContext: (ctx: Partial<McpRequestContext>) => void
-	getContext: () => McpRequestContext
 }
 
 /**
@@ -46,10 +37,8 @@ export interface McpServerWithContext {
  * Returns both the server and a context setter for per-request session management.
  *
  * @param env - Cloudflare Worker environment bindings
- * @param initialBaseUrl - Base URL for the server (used for auth URLs)
- * @param options - Optional configuration (e.g. OAuth mode for auth messages)
  */
-export function createMcpServer(env: Env, initialBaseUrl: string, options?: { authMessages?: AuthMessageConfig }): McpServerWithContext {
+export function createMcpServer(env: Env): McpServerWithContext {
 	const server = new McpServer(
 		{
 			name: SERVER_NAME,
@@ -77,21 +66,16 @@ export function createMcpServer(env: Env, initialBaseUrl: string, options?: { au
 	// Mutable request context - updated per-request before handling
 	const context: McpRequestContext = {
 		session: null,
-		baseUrl: initialBaseUrl,
-		sessionId: null,
 	}
 
 	// Getters that tools use to access current context
 	const getSession = () => context.session
-	const getBaseUrl = () => context.baseUrl
-	const getSessionId = () => context.sessionId
 
 	// Register public tools (no auth required)
-	registerPublicTools(server, cachedClient, getBaseUrl)
+	registerPublicTools(server, cachedClient)
 
-	// Register authenticated tools with appropriate auth messages
-	const authMessages = options?.authMessages ?? buildSessionAuthMessages(getBaseUrl, getSessionId)
-	registerAuthenticatedTools(server, cachedClient, getSession, authMessages)
+	// Register authenticated tools (they explain how to sign in when there is no session)
+	registerAuthenticatedTools(server, cachedClient, getSession)
 
 	// Register resources
 	registerResources(server, cachedClient, getSession)
@@ -103,9 +87,6 @@ export function createMcpServer(env: Env, initialBaseUrl: string, options?: { au
 		server,
 		setContext: (ctx: Partial<McpRequestContext>) => {
 			if (ctx.session !== undefined) context.session = ctx.session
-			if (ctx.baseUrl !== undefined) context.baseUrl = ctx.baseUrl
-			if (ctx.sessionId !== undefined) context.sessionId = ctx.sessionId
 		},
-		getContext: () => ({ ...context }),
 	}
 }

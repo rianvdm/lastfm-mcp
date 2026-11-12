@@ -270,6 +270,23 @@ export async function refresh(
 	return postToken(worker, env, opts.origin, params)
 }
 
+/**
+ * Register a client, sign in and exchange the code: the access token a real MCP client would hold.
+ * The calling test file must mock `src/auth/lastfm`.
+ */
+export async function signInForAccessToken(
+	worker: WorkerLike,
+	env: Env,
+	origin: string,
+	redirectUri = 'https://client.example.com/oauth/callback',
+): Promise<string> {
+	const clientId = await registerPublicClient(worker, env, origin, redirectUri)
+	const { code, codeVerifier } = await signIn(worker, env, { origin, clientId, redirectUri })
+	const tokenRes = await exchangeCode(worker, env, { origin, clientId, redirectUri, code, codeVerifier })
+	if (tokenRes.status !== 200) throw new Error(`Token exchange failed with ${tokenRes.status}`)
+	return ((await tokenRes.json()) as { access_token: string }).access_token
+}
+
 /** Send an MCP `initialize` request with a bearer token. */
 export async function callMcp(worker: WorkerLike, env: Env, origin: string, accessToken: string): Promise<Response> {
 	return send(
