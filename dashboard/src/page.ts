@@ -212,7 +212,7 @@ function renderTiles(model: DashboardModel): string {
 			'Error rate, last 24 hours',
 			model.traffic,
 			(t) => formatPercent(ratio(t.last24h.errors, t.last24h.requests)),
-			(t) => `${formatCount(t.last24h.errors)} uncaught exceptions`,
+			(t) => `${formatCount(t.last24h.errors)} errors`,
 		),
 		sourcedTile(
 			'Tool calls, last 24 hours',
@@ -420,9 +420,9 @@ ${columnChart({
 	intervals: 4,
 	tooltips,
 })}
-<h3 class="chart-title">Errors (uncaught exceptions)</h3>
+<h3 class="chart-title">Errors</h3>
 ${columnChart({
-	label: 'Daily uncaught exceptions over the last 30 days',
+	label: 'Daily errors over the last 30 days',
 	dates,
 	values: days.map((day) => [day.errors]),
 	series: [{ name: 'Errors', color: '--series-errors' }],
@@ -604,8 +604,8 @@ function renderNotes(model: DashboardModel): string {
 	return `<footer class="panel notes"><h2>Notes</h2>
 ${activeUsersNote(model.activeUsers)}
 ${tracking}
-<p>Error rate counts uncaught exceptions; tool failures are in the Tools table.</p>
-<p>Traffic and tool numbers are cached for up to 5 minutes.</p>
+<p>Errors are requests that threw an uncaught exception or hit a Workers limit such as CPU or memory. Requests closed by the client aren't errors; tool failures are in the Tools table.</p>
+<p>Traffic comes from the Analytics SQL API (beta). Traffic and tool numbers are cached for up to 5 minutes.</p>
 <p>Page generated ${esc(formatTime(model.generatedAt))}.${computed}</p>
 </footer>`
 }

@@ -213,10 +213,23 @@ describe('renderDashboard', () => {
 
 		expect(html).toContain('Oldest retained tool event: 2026-11-10 08:15 UTC')
 		expect(html).not.toContain('Tool tracking started')
-		expect(html).toContain('Error rate counts uncaught exceptions; tool failures are in the Tools table.')
+		expect(html).toContain(
+			"Errors are requests that threw an uncaught exception or hit a Workers limit such as CPU or memory. Requests closed by the client aren't errors; tool failures are in the Tools table.",
+		)
+		expect(html).toContain('Traffic comes from the Analytics SQL API (beta). Traffic and tool numbers are cached for up to 5 minutes.')
+		expect(html).not.toContain('GraphQL')
 		expect(html).toContain('Page generated 2026-11-12 15:30 UTC')
 		expect(html).toContain('Grant summary computed 2026-11-12 15:17 UTC')
 		expect(html).not.toContain('session_id')
+	})
+
+	it('should call failed requests errors rather than only uncaught exceptions', () => {
+		const html = renderDashboard(fixtureModel())
+
+		expect(html).not.toContain('uncaught exceptions')
+		expect(html).toContain('<h3 class="chart-title">Errors</h3>')
+		expect(html).toContain('aria-label="Daily errors over the last 30 days"')
+		expect(tileText(html, 'Error rate, last 24 hours')).toMatch(/ errors$/)
 	})
 
 	it('should be a complete document with theme tokens, a dark-mode override and no scripts', () => {

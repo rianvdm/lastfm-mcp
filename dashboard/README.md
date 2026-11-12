@@ -15,7 +15,7 @@ Everything it reads from production goes through the Cloudflare REST API with on
 | ---------------------------------------------------------- | ------------------------------ | ------------------------------------------------------------------------------------------------------------ |
 | Production `OAUTH_KV` (`8c3a19a93165452b9ab0215bdb3daa71`) | KV REST: list keys, get values | The hourly grant summary: live users and grants, 30-day sign-ins, registered clients, live grants per client |
 | Production `OAUTH_KV` access-token keys (`token:`)         | KV REST: list keys only        | Daily, 7-day and 30-day active users. Token values are never read.                                           |
-| `workersInvocationsAdaptive` for `lastfm-mcp-prod`         | GraphQL Analytics              | Daily requests, errors and client disconnects, and the last 24 hours                                         |
+| `events.workersInvocations` for `lastfm-mcp-prod`          | Analytics SQL API (beta)       | Daily requests, errors and client disconnects, and the last 24 hours                                         |
 | `lastfm_mcp_tool_events` dataset                           | Analytics Engine SQL API       | Per-tool and per-client calls, error rates, cache hits and latency                                           |
 
 It never writes production `OAUTH_KV`. It writes only its own `DASH_KV`:
@@ -23,7 +23,7 @@ It never writes production `OAUTH_KV`. It writes only its own `DASH_KV`:
 - `summary:grants` and `summary:active-users`: the summaries the hourly cron (`17 * * * *`) computes.
 - `au:<YYYY-MM-DD>:<hash>`: one empty marker per active user per UTC day, deleted after 31 days. The hash is the first 32 hex characters of HMAC-SHA256 of the user ID, keyed with `ACTIVE_USER_HMAC_KEY`; the user ID itself is never stored. Each run lists the `token:` keys in production `OAUTH_KV`, so anyone whose AI client held a live access token (they last an hour and renew while a client is in use) during that hour's check counts as active that day.
 - `gi:<grantId>`, `gp:<grantId>` and `cl:<clientId>`: the grant index, pending-grant markers and memoised client labels that let each run read only grants it hasn't seen. They hold no username, no client URL and no registered client name. Client labels come only from the fixed list in `src/analytics/clientLabel.ts`.
-- `cache:traffic:v1` and `cache:tools:v1`: GraphQL and Analytics Engine results, cached for 5 minutes.
+- `cache:traffic:v1` and `cache:tools:v1`: Analytics SQL API and Analytics Engine results, cached for 5 minutes.
 
 Each run reads at most 400 values from production `OAUTH_KV`, grants first. See `MAX_FETCHES_PER_RUN` in `src/grants.ts` for the arithmetic.
 
@@ -70,7 +70,7 @@ Every step changes the live account. Run them in order.
 
    Put the application's `aud` tag in `ACCESS_AUD` in `dashboard/wrangler.toml`.
 
-3. **Create the API token in the Cloudflare dashboard** (`cf` can't create API tokens). Scope it to account `db8ef1f4b492e4727e7fab0e12907871` with exactly two permissions, **Account Analytics: Read** and **Workers KV Storage: Read**, and nothing else. Then store it:
+3. **Create the API token in the Cloudflare dashboard** (`cf` can't create API tokens). Scope it to account `db8ef1f4b492e4727e7fab0e12907871` with exactly two permissions, **Account Analytics: Read** and **Workers KV Storage: Read**, and nothing else. Account Analytics: Read covers both the Analytics SQL API (traffic) and the Analytics Engine SQL API (tools). Then store it:
 
    ```bash
    npx wrangler secret put CF_API_TOKEN -c dashboard/wrangler.toml
@@ -106,7 +106,7 @@ Every step changes the live account. Run them in order.
    npx wrangler kv key get summary:active-users --namespace-id 4034b74e455d45d3875248bb761a6d74 --remote
    ```
 
-   Check `liveUsers` against the number of people you expect to be signed in, and `dau` against the number of distinct users in the `token:` key listing (about 100 at a time on 2026-11-12). Run the last command after each hourly cron until `unresolvedGrants` reaches 0. Each run reads at most 400 values, so the first backfill of about 900 grants takes a few runs, and client labels fill in from whatever reads are left. Then open the page on a phone and a laptop and check the requests chart against GraphQL.
+   Check `liveUsers` against the number of people you expect to be signed in, and `dau` against the number of distinct users in the `token:` key listing (about 100 at a time on 2026-11-12). Run the last command after each hourly cron until `unresolvedGrants` reaches 0. Each run reads at most 400 values, so the first backfill of about 900 grants takes a few runs, and client labels fill in from whatever reads are left. Then open the page on a phone and a laptop and check the requests chart against the Worker's metrics in the Cloudflare dashboard.
 
 The first page load before either summary exists starts both refreshes in the background, so the panels say they're warming up rather than staying empty until the cron.
 
@@ -117,7 +117,7 @@ The first page load before either summary exists starts both refreshes in the ba
 3. Load the page and confirm the traffic and tool panels render, then wait for the next :17 cron and confirm `summary:grants` has a new `computedAt`.
 4. Delete the old token in the Cloudflare dashboard.
 
-A failed refresh logs `[STATS] grant summary refresh failed (status <code>)` or `[STATS] active user refresh failed (status <code>)` and keeps the previous summary, so a 401 or 403 status there usually means the token is wrong or missing a permission. Check with `npx wrangler tail lastfm-mcp-stats`.
+A failed refresh logs `[STATS] grant summary refresh failed (status <code>)` or `[STATS] active user refresh failed (status <code>)` and keeps the previous summary, so a 401 or 403 status there usually means the token is wrong or missing a permission. Check with `npx wrangler tail lastfm-mcp-stats`. If the traffic or tool panel says it couldn't load with `HTTP 403`, check that the token still has **Account Analytics: Read**.
 
 ## Development
 

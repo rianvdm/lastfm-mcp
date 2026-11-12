@@ -4,7 +4,7 @@
 export interface DashEnv {
 	/** The dashboard's own cache: summaries the hourly cron writes and the page reads */
 	DASH_KV: KVNamespace
-	/** Secret: Cloudflare API token for reading the production Worker's OAUTH_KV and Analytics Engine data */
+	/** Secret: Cloudflare API token for reading the production Worker's OAUTH_KV, Analytics SQL API traffic and Analytics Engine data */
 	CF_API_TOKEN: string
 	/**
 	 * Secret: the HMAC key that turns user IDs into the hashes active-user markers are keyed by. At least 32 characters;
