@@ -83,6 +83,24 @@ describe('fetchToolStats', () => {
 		expect(stats.last24h[0]).toMatchObject({ p50Ms: null, p95Ms: null, cacheHitRate: null })
 	})
 
+	it('should fold any client label outside CLIENT_LABELS into other', async () => {
+		serve({
+			clients: [
+				{ label: 'Claude', calls: '150' },
+				{ label: 'rianvdm-laptop', calls: '30' },
+				{ label: 'other', calls: '20' },
+				{ label: 'dc2.example', calls: '5' },
+			],
+		})
+
+		const stats = await fetchToolStats(env)
+
+		expect(stats.clients7d).toEqual([
+			{ label: 'Claude', calls: 150 },
+			{ label: 'other', calls: 55 },
+		])
+	})
+
 	it('should return null and empty arrays when the dataset has no events', async () => {
 		const stats = await fetchToolStats(env)
 

@@ -1,5 +1,6 @@
 // ABOUTME: Per-tool and per-client usage from the tool-call events the MCP Worker writes to Workers Analytics Engine.
 // ABOUTME: Counts are weighted by _sample_interval, latency quantiles by the same weight; four SQL queries run in parallel.
+import { CLIENT_LABELS } from '../../src/analytics/clientLabel'
 import { analyticsSql } from './cfApi'
 import type { DashEnv } from './env'
 
@@ -122,6 +123,19 @@ function toIsoTimestamp(value: unknown): string | null {
 	return Number.isFinite(ms) ? new Date(ms).toISOString() : null
 }
 
+/**
+ * Calls per client label, with any label outside CLIENT_LABELS folded into "other". The MCP Worker only writes allowlisted
+ * labels, so this guards the page against events written by an older or misconfigured version.
+ */
+function toClientRows(rows: ClientSqlRow[]): ToolStats['clients7d'] {
+	const callsByLabel = new Map<string, number>()
+	for (const row of rows) {
+		const label = CLIENT_LABELS.has(String(row.label)) ? String(row.label) : 'other'
+		callsByLabel.set(label, (callsByLabel.get(label) ?? 0) + toCount(row.calls))
+	}
+	return [...callsByLabel].map(([label, calls]) => ({ label, calls }))
+}
+
 function byCallsDescending<T extends { calls: number }>(rows: T[]): T[] {
 	return rows.sort((a, b) => b.calls - a.calls)
 }
@@ -143,6 +157,6 @@ export async function fetchToolStats(env: DashEnv): Promise<ToolStats> {
 		firstEventAt: firstRow && toCount(firstRow.events) > 0 ? toIsoTimestamp(firstRow.first_event) : null,
 		last24h: byCallsDescending(tools24h.map(toToolRow)),
 		last7d: byCallsDescending(tools7d.map(toToolRow)),
-		clients7d: byCallsDescending(clients.map((row) => ({ label: String(row.label), calls: toCount(row.calls) }))),
+		clients7d: byCallsDescending(toClientRows(clients)),
 	}
 }
