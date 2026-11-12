@@ -57,6 +57,15 @@ interface AnalyticsSqlApiResponse<T> {
 	errors?: Array<{ message?: string }> | null
 }
 
+/**
+ * A count from either SQL API's JSON output as a number. Both can quote 64-bit integers, so a count may arrive as a string;
+ * anything that isn't a finite number counts as 0.
+ */
+export function toCount(value: unknown): number {
+	const n = typeof value === 'string' ? Number(value) : value
+	return typeof n === 'number' && Number.isFinite(n) ? n : 0
+}
+
 function isRetryable(status: number): boolean {
 	return status === 429 || status >= 500
 }

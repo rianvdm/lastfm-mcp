@@ -1,7 +1,7 @@
 // ABOUTME: Per-tool and per-client usage from the tool-call events the MCP Worker writes to Workers Analytics Engine.
 // ABOUTME: Counts are weighted by _sample_interval, latency quantiles by the same weight; four SQL queries run in parallel.
 import { CLIENT_LABELS } from '../../src/analytics/clientLabel'
-import { analyticsSql } from './cfApi'
+import { analyticsSql, toCount } from './cfApi'
 import type { DashEnv } from './env'
 
 export interface ToolRow {
@@ -89,11 +89,6 @@ function firstEventSql(dataset: string): string {
 	min(timestamp) AS first_event,
 	SUM(_sample_interval) AS events
 FROM ${dataset}`
-}
-
-function toCount(value: unknown): number {
-	const n = typeof value === 'string' ? Number(value) : value
-	return typeof n === 'number' && Number.isFinite(n) ? n : 0
 }
 
 function toMs(value: unknown): number | null {
