@@ -94,10 +94,10 @@ echo ""
 echo "🔐 Authentication Tests"
 echo "─────────────────────────"
 
-# Test 7: Login endpoint
-run_test "Login endpoint" \
-    "curl -s -f '$WORKER_URL/login'" \
-    "last.fm/api/auth"
+# Test 7: OAuth discovery advertises dynamic client registration
+run_test "OAuth registration endpoint" \
+    "curl -s -f '$WORKER_URL/.well-known/oauth-authorization-server'" \
+    '"registration_endpoint"'
 
 # Test 8: Unauthenticated tool call (should fail)
 run_test "Unauthenticated tool rejection" \
@@ -145,7 +145,7 @@ if [ $TESTS_FAILED -eq 0 ]; then
     echo ""
     echo "Next steps:"
     echo "1. Configure Claude Desktop with this server URL"
-    echo "2. Test authentication flow by visiting: $WORKER_URL/login"
+    echo "2. Test authentication by connecting the server in an MCP client and signing in with Last.fm"
     echo "3. Monitor the server using: wrangler tail --env production"
     exit 0
 else

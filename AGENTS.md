@@ -2,7 +2,7 @@
 
 Guidance for coding agents (Claude Code, Codex) working in this repository.
 
-Cloudflare Worker implementing a Model Context Protocol (MCP) server that connects AI assistants to Last.fm listening data. Runs on workerd with three KV namespaces: `OAUTH_KV` (OAuth clients, grants and tokens), `MCP_SESSIONS` (Last.fm sessions, pending sign-ins and the Last.fm response cache) and `MCP_RL` (per-IP rate limits).
+Cloudflare Worker implementing a Model Context Protocol (MCP) server that connects AI assistants to Last.fm listening data. Runs on workerd with a Rate Limiting binding (`REGISTRATION_RATE_LIMITER`) and three KV namespaces: `OAUTH_KV` (OAuth clients, grants and tokens), `MCP_SESSIONS` (the Last.fm response cache; the name predates OAuth) and `MCP_RL` (per-IP rate limits).
 
 ## Build / Test / Lint Commands
 
@@ -155,7 +155,7 @@ describe('Feature', () => {
 
 ```
 src/
-  index-oauth.ts        # Sole Worker entry point: per-origin OAuth provider, plus the legacy ?session_id= path from /login
+  index-oauth.ts        # Sole Worker entry point: static routes, per-IP rate limits, per-origin OAuth provider
   marketing-page.ts     # Landing page HTML (served at /)
   auth/                 # OAuth handler (consent, Last.fm sign-in, callback), consent page, /mcp resource rewrite
   clients/              # Last.fm API client + caching decorator
@@ -166,7 +166,7 @@ src/
 
 Single Worker entry point configured in `wrangler.toml`: `main = "src/index-oauth.ts"`. The `[env.production]` block points to the same entry — it only renames the deployed Worker.
 
-Every MCP request needs an OAuth bearer token: unauthenticated `POST /mcp` returns 401 with `WWW-Authenticate`, which starts the client's sign-in. The "public" tools in `src/mcp/tools/public.ts` are the ones that don't need the user's Last.fm session, not tools reachable without sign-in. `src/auth/jwt.ts` is no longer imported by any source file.
+Every MCP request needs an OAuth bearer token: unauthenticated `POST /mcp` returns 401 with `WWW-Authenticate`, which starts the client's sign-in. OAuth is the only sign-in path: the manual `/login` → `?session_id=` flow was removed in #34, so Last.fm session keys are only stored inside encrypted grant `props`. The "public" tools in `src/mcp/tools/public.ts` are the ones that don't need the user's Last.fm session, not tools reachable without sign-in. `src/auth/jwt.ts` is no longer imported by any source file.
 
 **Key dependencies:** `@modelcontextprotocol/server` (MCP SDK v2), `@cloudflare/workers-oauth-provider` 1.x, `agents` (Cloudflare Agents SDK), `zod`.
 
@@ -177,4 +177,5 @@ Every MCP request needs an OAuth bearer token: unauthenticated `POST /mcp` retur
 - Plain-http requests to non-loopback hosts get a 308 to https before they reach the provider, which throws on an http resource outside loopback.
 - `/authorize` shows the consent page (`src/auth/consent-page.ts`) before redirecting to Last.fm. `CONSENT_SECRET` signs the cookie that remembers an approval for a year; when it's missing or shorter than 32 characters, approvals aren't remembered and sign-in still works.
 - Errors on `/authorize` render on this origin and are never redirected to the client's `redirect_uri`: registration is open, so redirecting would make the server an open redirector.
+- Two per-IP budgets, both failing open: `/mcp` gets 60 requests a minute from a KV counter in `MCP_RL` (`src/utils/rateLimit.ts`), and `POST /oauth/register` gets 5 a minute from the `REGISTRATION_RATE_LIMITER` Rate Limiting binding (`src/utils/registrationRateLimit.ts`). The binding's limit and period live in `wrangler.toml`, once per environment. Its counts are approximate and per Cloudflare location, so it slows a flood without capping it (on staging it admitted 59 of 100 concurrent registrations from one IP); the `[OAUTH] client registered` log line is what makes abuse visible.
 - Grants expire 30 days after sign-in (the library's refresh-token default), so a `grant_not_found` or `invalid_grant` after about a month is expected.

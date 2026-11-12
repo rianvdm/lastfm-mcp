@@ -1,5 +1,7 @@
 // ABOUTME: TypeScript interface for Cloudflare Worker environment bindings.
-// ABOUTME: Defines API keys, secrets, and KV namespace bindings used by the worker.
+// ABOUTME: Defines API keys, secrets, KV namespaces and the rate limiting binding used by the worker.
+import type { RateLimit } from '@cloudflare/workers-types'
+
 export interface Env {
 	// Last.fm API credentials
 	LASTFM_API_KEY: string
@@ -16,4 +18,7 @@ export interface Env {
 
 	// OAuth provider KV namespace (required by @cloudflare/workers-oauth-provider)
 	OAUTH_KV: KVNamespace
+
+	// Per-IP budget for POST /oauth/register (Rate Limiting binding, configured in wrangler.toml)
+	REGISTRATION_RATE_LIMITER: RateLimit
 }

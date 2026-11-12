@@ -1,11 +1,10 @@
 // ABOUTME: OAuth handler integrating Last.fm authentication with the MCP OAuth 2.1 flow.
-// ABOUTME: Handles /authorize (consent page and decision), /lastfm-callback, /login and /callback; discovery is served elsewhere.
+// ABOUTME: Handles /authorize (consent page and decision) and /lastfm-callback; discovery is served elsewhere.
 import { AuthorizationError, CimdFetchError, authorizationErrorRedirect } from '@cloudflare/workers-oauth-provider'
 import type { AuthRequest, OAuthHelpers, RememberConsentOptions } from '@cloudflare/workers-oauth-provider'
 import type { ExecutionContext } from '@cloudflare/workers-types'
 
 import type { Env } from '../types/env'
-import { generateCSRFProtection, validateCSRFToken, buildSecurityHeaders, sanitizeText } from '../utils/security'
 
 import { LASTFM_CONSENT_BRANDING, renderConsentErrorPage, renderConsentPage } from './consent-page'
 import { LastfmAuth } from './lastfm'
@@ -63,17 +62,6 @@ export const LastfmOAuthHandler = {
 					return handleConsentDecision(request, env)
 				}
 				return new Response('Method not allowed', { status: 405 })
-
-			case '/login':
-				// Manual login flow for clients that don't support OAuth
-				if (request.method === 'GET') {
-					return handleManualLogin(request, env)
-				}
-				return new Response('Method not allowed', { status: 405 })
-
-			case '/callback':
-				// Manual login callback
-				return handleManualCallback(request, env)
 
 			case '/lastfm-callback':
 				return handleLastfmCallback(request, env)
@@ -284,194 +272,6 @@ async function handleLastfmCallback(request: Request, env: OAuthEnv): Promise<Re
 			return consentErrorResponse(CIMD_FAILURE_MESSAGE)
 		}
 		console.error('[OAUTH] Error in callback:', error)
-		return new Response(`Authentication failed: ${error instanceof Error ? error.message : 'Unknown error'}`, {
-			status: 500,
-		})
-	}
-}
-
-/**
- * Manual login handler for clients that don't support OAuth (like Claude Desktop)
- *
- * Users visit /login directly, authenticate with Last.fm, and get a success page.
- * The session is stored in KV and associated with a session_id they can use.
- *
- * CSRF protection: A random token is stored in a __Host- secure cookie and
- * included in the callback state. The callback validates the cookie matches.
- */
-async function handleManualLogin(request: Request, env: OAuthEnv): Promise<Response> {
-	try {
-		const url = new URL(request.url)
-
-		// Generate a session ID for this login attempt
-		// Track whether it came from an active MCP session (provided) or was generated fresh
-		const providedSessionId = url.searchParams.get('session_id')
-		const sessionId = providedSessionId || crypto.randomUUID()
-		const fromMcpClient = !!providedSessionId
-
-		// Generate CSRF token and store in secure cookie
-		const { token: csrfToken, setCookie } = generateCSRFProtection()
-
-		// Store pending login with CSRF token for validation on callback
-		await env.MCP_SESSIONS.put(
-			`login-pending:${sessionId}`,
-			JSON.stringify({
-				sessionId,
-				csrfToken,
-				fromMcpClient,
-				timestamp: Date.now(),
-			}),
-			{ expirationTtl: 600 }, // 10 minutes
-		)
-
-		// Build callback URL - include session_id so we can look up the pending login
-		const callbackUrl = `${url.protocol}//${url.host}/callback?session_id=${sessionId}`
-
-		// Redirect to Last.fm auth
-		const lastfmAuth = new LastfmAuth(env.LASTFM_API_KEY, env.LASTFM_SHARED_SECRET)
-		const lastfmAuthUrl = lastfmAuth.getAuthUrl(callbackUrl)
-
-		console.log(`[LOGIN] Manual login started, session: ${sessionId}`)
-
-		// Redirect with CSRF cookie set
-		return new Response(null, {
-			status: 302,
-			headers: {
-				Location: lastfmAuthUrl,
-				'Set-Cookie': setCookie,
-			},
-		})
-	} catch (error) {
-		console.error('[LOGIN] Error:', error)
-		return new Response(`Login error: ${error instanceof Error ? error.message : 'Unknown error'}`, {
-			status: 500,
-		})
-	}
-}
-
-/**
- * Manual login callback - validates CSRF, exchanges token, stores session in KV.
- */
-async function handleManualCallback(request: Request, env: OAuthEnv): Promise<Response> {
-	try {
-		const url = new URL(request.url)
-		const baseUrl = `${url.protocol}//${url.host}`
-		const token = url.searchParams.get('token')
-		const sessionId = url.searchParams.get('session_id')
-
-		if (!token) {
-			return new Response('Missing Last.fm token', { status: 400 })
-		}
-
-		if (!sessionId) {
-			return new Response('Missing session_id', { status: 400 })
-		}
-
-		// Verify pending login exists
-		const pendingKey = `login-pending:${sessionId}`
-		const pendingDataStr = await env.MCP_SESSIONS.get(pendingKey)
-
-		if (!pendingDataStr) {
-			return new Response('Login session expired. Please try again.', { status: 400 })
-		}
-
-		const pendingData = JSON.parse(pendingDataStr)
-		console.log(`[LOGIN] Pending data found for session: ${sessionId}, hasCsrfToken: ${!!pendingData.csrfToken}`)
-
-		// Validate CSRF token from cookie matches the one stored with the pending login
-		let clearCookie: string
-		const cookieHeader = request.headers.get('Cookie') || ''
-		console.log(`[LOGIN] Cookie header present: ${!!cookieHeader}, length: ${cookieHeader.length}`)
-		try {
-			const result = validateCSRFToken(pendingData.csrfToken, request)
-			clearCookie = result.clearCookie
-			console.log(`[LOGIN] CSRF validation passed`)
-		} catch (csrfError) {
-			console.error('[LOGIN] CSRF validation failed:', csrfError)
-			// Clean up the pending login since it's been compromised
-			await env.MCP_SESSIONS.delete(pendingKey)
-			return new Response(
-				`Authentication failed: ${csrfError instanceof Error ? csrfError.message : 'CSRF validation failed'}. Please try logging in again.`,
-				{ status: 403 },
-			)
-		}
-
-		// Clean up pending login
-		await env.MCP_SESSIONS.delete(pendingKey)
-
-		// Exchange Last.fm token for session
-		const lastfmAuth = new LastfmAuth(env.LASTFM_API_KEY, env.LASTFM_SHARED_SECRET)
-		const { sessionKey, username } = await lastfmAuth.getSessionKey(token)
-
-		console.log(`[LOGIN] Last.fm auth successful for user: ${username}, session: ${sessionId}`)
-
-		// Store session in KV (this is what the MCP tools will look up)
-		const sessionData = {
-			userId: username,
-			sessionKey,
-			username,
-			timestamp: Date.now(),
-			expiresAt: Date.now() + 30 * 24 * 60 * 60 * 1000, // 30 days
-			sessionId,
-		}
-
-		const kvKey = `session:${sessionId}`
-		console.log(`[LOGIN] Writing session to KV: key=${kvKey}, username=${username}`)
-		await env.MCP_SESSIONS.put(kvKey, JSON.stringify(sessionData), {
-			expirationTtl: 30 * 24 * 60 * 60, // 30 days
-		})
-		console.log(`[LOGIN] Session written to KV successfully`)
-
-		// Sanitize username for HTML output to prevent XSS
-		const safeUsername = sanitizeText(username)
-		const safeSessionId = sanitizeText(sessionId)
-
-		// Show different messages depending on whether the user came from an active MCP session
-		const fromMcpClient = !!pendingData.fromMcpClient
-
-		const instructionsHtml = fromMcpClient
-			? `<div class="instructions">
-		<p>Your MCP session is now connected. You can close this window and return to your conversation.</p>
-		<p style="margin-top: 12px; color: #64748b; font-size: 14px;">
-			Session valid for 30 days.
-		</p>
-	</div>`
-			: `<div class="instructions">
-		<h3>Next Step: Add to Your MCP Client</h3>
-		<p>Use this URL in your MCP client configuration:</p>
-		<div class="code">${sanitizeText(baseUrl)}/mcp?session_id=${safeSessionId}</div>
-		<p style="margin-top: 12px; color: #64748b; font-size: 14px;">
-			Session valid for 30 days. You can close this window.
-		</p>
-	</div>`
-
-		// Return success page with security headers
-		const successHtml = `<!DOCTYPE html>
-<html>
-<head>
-	<title>Last.fm MCP - Authentication Successful</title>
-	<style>
-		body { font-family: -apple-system, system-ui, sans-serif; max-width: 600px; margin: 50px auto; padding: 20px; }
-		.success { color: #22c55e; }
-		.code { background: #f1f5f9; padding: 12px; border-radius: 6px; font-family: monospace; word-break: break-all; }
-		.instructions { margin-top: 20px; padding: 16px; background: #f8fafc; border-radius: 8px; }
-	</style>
-</head>
-<body>
-	<h1 class="success">Authentication Successful!</h1>
-	<p>You're now authenticated as <strong>${safeUsername}</strong> on Last.fm.</p>
-	${instructionsHtml}
-</body>
-</html>`
-
-		return new Response(successHtml, {
-			status: 200,
-			headers: {
-				...buildSecurityHeaders({ setCookie: clearCookie }),
-			},
-		})
-	} catch (error) {
-		console.error('[LOGIN] Callback error:', error)
 		return new Response(`Authentication failed: ${error instanceof Error ? error.message : 'Unknown error'}`, {
 			status: 500,
 		})
