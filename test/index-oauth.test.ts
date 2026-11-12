@@ -291,7 +291,8 @@ describe('Last.fm MCP Server (OAuth Entry Point)', () => {
 	})
 
 	describe('/mcp endpoint - tool-call events', () => {
-		it('should write one anonymous data point for a tools/call of ping', async () => {
+		/** Signs in, makes `call` over Streamable HTTP, and returns the data points the Worker wrote meanwhile. */
+		async function dataPointsFor(call: (client: Client) => Promise<unknown>) {
 			const origin = 'https://lastfm-mcp.com'
 			const accessToken = await signInForAccessToken(worker, env, origin)
 			const writeDataPoint = vi.fn()
@@ -309,17 +310,73 @@ describe('Last.fm MCP Server (OAuth Entry Point)', () => {
 			})
 			const client = new Client({ name: 'events-test', version: '0.0.0' }, { versionNegotiation: { mode: 'legacy' } })
 			await client.connect(transport)
-			await client.callTool({ name: 'ping', arguments: { message: 'events check' } })
+			await call(client)
 			await client.close()
+			return writeDataPoint.mock.calls.map((args) => args[0] as { blobs: string[] })
+		}
 
-			expect(writeDataPoint).toHaveBeenCalledTimes(1)
-			const point = writeDataPoint.mock.calls[0][0] as { blobs: string[] }
+		it('should write one anonymous data point for a tools/call of ping', async () => {
+			const points = await dataPointsFor((client) => client.callTool({ name: 'ping', arguments: { message: 'events check' } }))
+
+			expect(points).toHaveLength(1)
+			const [point] = points
 			expect(point.blobs[0]).toBe('ping')
 			// signInForAccessToken registers its DCR client as 'Resource Compat Test Client', which isn't a known app
 			expect(point.blobs[1]).toBe('other')
 			expect(point.blobs[2]).toBe('ok')
 			// The mocked Last.fm sign-in is for 'testuser'; no part of the event may identify the user
 			expect(point.blobs.some((blob) => blob.includes('testuser'))).toBe(false)
+		})
+
+		it('should write one error data point for a call the SDK rejects for invalid arguments', async () => {
+			const points = await dataPointsFor((client) => client.callTool({ name: 'get_artist_info', arguments: { artist: 42 } }))
+
+			expect(points.map((point) => point.blobs.slice(0, 4))).toEqual([['get_artist_info', 'other', 'error', 'none']])
+		})
+
+		it('should write one data point per call in a JSON-RPC batch, each with its own cache outcome', async () => {
+			const origin = 'https://lastfm-mcp.com'
+			const accessToken = await signInForAccessToken(worker, env, origin)
+			const writeDataPoint = vi.fn()
+			const artist = `Artist ${crypto.randomUUID()}`
+			vi.spyOn(console, 'log').mockImplementation(() => {})
+			const lastfmFetch = vi
+				.spyOn(globalThis, 'fetch')
+				.mockImplementation(async () => Response.json({ artist: { name: artist, url: 'https://www.last.fm/music/x' } }))
+			const batch = [
+				{ jsonrpc: '2.0', id: 1, method: 'tools/call', params: { name: 'get_artist_info', arguments: { artist } } },
+				{ jsonrpc: '2.0', id: 2, method: 'tools/call', params: { name: 'ping', arguments: {} } },
+				{ jsonrpc: '2.0', id: 3, method: 'tools/call', params: { name: 'not_a_tool', arguments: {} } },
+			]
+
+			const ctx = createExecutionContext()
+			const response = await worker.fetch(
+				new Request(`${origin}/mcp`, {
+					method: 'POST',
+					body: JSON.stringify(batch),
+					headers: {
+						'Content-Type': 'application/json',
+						Accept: 'application/json, text/event-stream',
+						Authorization: `Bearer ${accessToken}`,
+						'MCP-Protocol-Version': '2025-03-26',
+					},
+				}),
+				{ ...env, TOOL_EVENTS: { writeDataPoint } },
+				ctx,
+			)
+			await response.text()
+			await waitOnExecutionContext(ctx)
+			lastfmFetch.mockRestore()
+
+			expect(response.status).toBe(200)
+			// blobs: tool, client label, outcome, cache. The mocked artist payload is minimal, so only the cache outcome of
+			// get_artist_info matters here.
+			const blobs = writeDataPoint.mock.calls.map(([point]) => (point as { blobs: string[] }).blobs)
+			expect(blobs).toHaveLength(3)
+			const cacheByTool = Object.fromEntries(blobs.map(([tool, , , cache]) => [tool, cache]))
+			expect(cacheByTool).toEqual({ get_artist_info: 'miss', ping: 'none', unknown_tool: 'none' })
+			expect(blobs.find(([tool]) => tool === 'unknown_tool')?.[2]).toBe('error')
+			expect(JSON.stringify(blobs)).not.toContain('not_a_tool')
 		})
 	})
 

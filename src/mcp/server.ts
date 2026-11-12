@@ -67,7 +67,7 @@ export function createMcpServer(env: Env, options: CreateMcpServerOptions = {}):
 		},
 	)
 
-	// Instrumentation must wrap registerTool before any tool is registered.
+	// Instrumentation must run before any tool is registered: registering the first tool installs the tools/call handler it wraps.
 	if (options.onToolCall) instrumentTools(server, options.onToolCall)
 
 	// Create Last.fm client with caching

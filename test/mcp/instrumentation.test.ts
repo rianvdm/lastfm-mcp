@@ -123,6 +123,61 @@ describe('instrumentTools', () => {
 		})
 	})
 
+	describe('calls the SDK rejects before the tool runs', () => {
+		/** Registers `needs_artist`, whose input schema requires a string `artist`, on a plain or an instrumented server. */
+		async function artistServer(instrumented: boolean) {
+			const server = new McpServer({ name: 'instrumentation-test', version: '0.0.0' })
+			if (instrumented) instrumentTools(server, onToolCall)
+			server.registerTool('needs_artist', { description: 'test tool', inputSchema: z.object({ artist: z.string() }) }, async () => okResult)
+			return connect(server)
+		}
+
+		it('should report one error event, without arguments or error text, for invalid arguments', async () => {
+			const plainClient = await artistServer(false)
+			const instrumentedClient = await artistServer(true)
+
+			const expected = await plainClient.callTool({ name: 'needs_artist', arguments: { artist: 42 } })
+			const actual = await instrumentedClient.callTool({ name: 'needs_artist', arguments: { artist: 42 } })
+
+			expect(actual).toEqual(expected)
+			expect(actual.isError).toBe(true)
+			expect(events).toHaveLength(1)
+			expect(events[0]).toMatchObject({ tool: 'needs_artist', outcome: 'error', cache: 'none' })
+			expect(Object.keys(events[0]).sort()).toEqual(['cache', 'durationMs', 'outcome', 'tool'])
+		})
+
+		it('should report one unknown_tool error event, never the requested name, for an unknown tool', async () => {
+			const plainClient = await artistServer(false)
+			const instrumentedClient = await artistServer(true)
+			const call = (client: Client) => client.callTool({ name: 'rianvdm_secret_tool', arguments: {} }).catch((error: unknown) => error)
+
+			const expected = await call(plainClient)
+			const actual = await call(instrumentedClient)
+
+			expect(actual).toEqual(expected)
+			expect(events).toHaveLength(1)
+			expect(events[0]).toMatchObject({ tool: 'unknown_tool', outcome: 'error', cache: 'none' })
+			expect(JSON.stringify(events)).not.toContain('rianvdm')
+		})
+
+		it('should report one event per call for a valid call', async () => {
+			const client = await artistServer(true)
+
+			await client.callTool({ name: 'needs_artist', arguments: { artist: 'Radiohead' } })
+
+			expect(events).toEqual([expect.objectContaining({ tool: 'needs_artist', outcome: 'ok' })])
+		})
+	})
+
+	describe('setup', () => {
+		it('should refuse a server whose tools/call handler is already installed', () => {
+			const server = new McpServer({ name: 'instrumentation-test', version: '0.0.0' })
+			registerTools(server, { plain: () => okResult })
+
+			expect(() => instrumentTools(server, onToolCall)).toThrow(/tools\/call/)
+		})
+	})
+
 	describe('callback failures', () => {
 		it('should return the uninstrumented result when onToolCall throws', async () => {
 			const errorLog = vi.spyOn(console, 'error').mockImplementation(() => {})
