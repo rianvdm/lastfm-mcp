@@ -299,7 +299,7 @@ function tableView(headers: Array<{ label: string; numeric?: boolean }>, rows: s
 
 const REQUEST_SERIES: ChartSeries[] = [
 	{ name: 'Served', color: '--series-1' },
-	{ name: 'Client disconnected', color: '--series-2' },
+	{ name: 'Closed by client', color: '--series-2' },
 ]
 
 function renderTrafficSection(traffic: TrafficSummary | LoadError): string {
@@ -311,11 +311,12 @@ function renderTrafficSection(traffic: TrafficSummary | LoadError): string {
 		const dates = days.map((day) => day.date)
 		const tooltips = days.map(
 			(day) =>
-				`${formatDay(day.date)}: ${formatCount(day.requests)} requests (${formatCount(day.disconnected)} client disconnected), ${formatCount(day.errors)} errors`,
+				`${formatDay(day.date)}: ${formatCount(day.requests)} requests (${formatCount(day.disconnected)} closed by client), ${formatCount(day.errors)} errors`,
 		)
 		body = `${legend(REQUEST_SERIES)}
+<p class="caption">Closed by client means the client hung up before the response finished. Most are MCP session streams held open for minutes or hours and dropped when a session ends, so they aren't errors.</p>
 ${columnChart({
-	label: 'Daily requests over the last 30 days, split into served and client-disconnected',
+	label: 'Daily requests over the last 30 days, split into served and closed by the client',
 	dates,
 	values: days.map((day) => [Math.max(0, day.requests - day.disconnected), day.disconnected]),
 	series: REQUEST_SERIES,
@@ -337,7 +338,7 @@ ${tableView(
 	[
 		{ label: 'Date' },
 		{ label: 'Requests', numeric: true },
-		{ label: 'Client disconnected', numeric: true },
+		{ label: 'Closed by client', numeric: true },
 		{ label: 'Errors', numeric: true },
 	],
 	days.map((day) => [esc(day.date), formatCount(day.requests), formatCount(day.disconnected), formatCount(day.errors)]),
@@ -514,7 +515,7 @@ const LIGHT_TOKENS = `
 	--border: rgba(11, 11, 11, 0.1);
 	--hover: rgba(11, 11, 11, 0.05);
 	--series-1: #2a78d6;
-	--series-2: #eb6834;
+	--series-2: #b4b2a9;
 	--series-errors: #e34948;
 	--series-signins: #6250d6;
 	--critical: #d03b3b;`
@@ -531,7 +532,7 @@ const DARK_TOKENS = `
 	--border: rgba(255, 255, 255, 0.1);
 	--hover: rgba(255, 255, 255, 0.06);
 	--series-1: #3987e5;
-	--series-2: #d95926;
+	--series-2: #6b6a64;
 	--series-errors: #e66767;
 	--series-signins: #9085e9;
 	--critical: #d03b3b;`
