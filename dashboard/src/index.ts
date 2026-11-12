@@ -1,6 +1,7 @@
 // ABOUTME: Entry point for the lastfm-mcp-stats Worker, the private usage dashboard at stats.lastfm-mcp.com.
 // ABOUTME: Every request passes the Access gate before routing; the hourly cron refreshes the dashboard's cached summaries.
 import { requireAccess } from './access'
+import { CfApiError } from './cfApi'
 import type { DashEnv } from './env'
 import { refreshGrantSummary } from './grants'
 
@@ -34,8 +35,11 @@ export default {
 		try {
 			await refreshGrantSummary(env, new Date(controller.scheduledTime))
 		} catch (error) {
-			// The previous summary stays in DASH_KV, and index entries written before the failure are kept for the next run
-			console.error(`[STATS] grant summary refresh failed: ${error instanceof Error ? error.message : 'Unknown error'}`)
+			// The previous summary stays in DASH_KV, and index entries written before the failure are kept for the next run.
+			// Only the status is logged: error messages can carry upstream body text or a request URL, and both can hold a grant
+			// key, which contains a username.
+			const status = error instanceof CfApiError ? ` (status ${error.status})` : ''
+			console.error(`[STATS] grant summary refresh failed${status}`)
 		}
 	},
 } satisfies ExportedHandler<DashEnv>

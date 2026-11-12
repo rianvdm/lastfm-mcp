@@ -3,12 +3,14 @@
 import { createScheduledController, env } from 'cloudflare:test'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-import { listKvKeys, getKvJson } from '../src/cfApi'
-import { readGrantSummary, refreshGrantSummary } from '../src/grants'
+import { CfApiError, getKvJson, listKvKeys } from '../src/cfApi'
+import { MAX_FETCHES_PER_RUN, readGrantSummary, refreshGrantSummary } from '../src/grants'
 import type { GrantSummary } from '../src/grants'
 import worker from '../src/index'
 
-vi.mock('../src/cfApi', () => ({
+// Keep the real CfApiError, which the scheduled handler checks for
+vi.mock('../src/cfApi', async (importOriginal) => ({
+	...(await importOriginal<typeof import('../src/cfApi')>()),
 	listKvKeys: vi.fn(),
 	getKvJson: vi.fn(),
 }))
@@ -164,6 +166,54 @@ describe('refreshGrantSummary', () => {
 		expect(summary.pendingGrants).toBe(0)
 		expect(summary.liveGrants).toBe(4)
 		expect(summary.signInsLast7d).toBe(2)
+		expect(await env.DASH_KV.get('gp:grantB2')).toBeNull()
+	})
+
+	it('should mark a pending grant until after the next hourly run', async () => {
+		await refreshGrantSummary(env, NOW)
+
+		const { keys } = await env.DASH_KV.list({ prefix: 'gp:' })
+		expect(keys.map(({ name }) => name)).toEqual(['gp:grantB2'])
+		// The marker has to survive to the next :17 run to keep pending grants behind unread ones
+		expect(keys[0].expiration).toBeGreaterThan(Date.now() / 1000 + 3600)
+	})
+
+	it('should not let pending grants starve the backlog', async () => {
+		oauthKv.clear()
+		// More than one cap's worth of pending grants, listed ahead of a completed one
+		for (let i = 0; i < 5; i++) {
+			grant(ALICE, `pending${i}`, { clientId: CIMD_CHATGPT, createdAt: NOW_S - 60, expiresAt: NOW_S + DAY, authCodeId: `code${i}` })
+		}
+		grant(BOB, 'completed', { clientId: CIMD_CHATGPT, createdAt: NOW_S - DAY, expiresAt: NOW_S + DAY, refreshTokenId: 'r' })
+
+		const first = await refreshGrantSummary(env, NOW, { maxFetches: 3 })
+		expect(first.pendingGrants).toBe(3)
+		expect(first.unresolvedGrants).toBe(3)
+		expect(first.liveGrants).toBe(0)
+
+		valueReads = []
+		const second = await refreshGrantSummary(env, NOW, { maxFetches: 3 })
+
+		// The three grants never read take the whole budget; the marked pending ones count from their markers
+		expect(valueReads).toEqual([`grant:${ALICE}:pending3`, `grant:${ALICE}:pending4`, `grant:${BOB}:completed`])
+		expect(second.liveGrants).toBe(1)
+		expect(second.liveUsers).toBe(1)
+		expect(second.unresolvedGrants).toBe(0)
+		expect(second.pendingGrants).toBe(5)
+	})
+
+	it('should read at most MAX_FETCHES_PER_RUN values by default', async () => {
+		expect(MAX_FETCHES_PER_RUN).toBe(400)
+		oauthKv.clear()
+		for (let i = 0; i <= MAX_FETCHES_PER_RUN; i++) {
+			grant(ALICE, `bulk${i}`, { clientId: CIMD_CHATGPT, createdAt: NOW_S - DAY, expiresAt: NOW_S + DAY, refreshTokenId: `r${i}` })
+		}
+
+		const summary = await refreshGrantSummary(env, NOW)
+
+		expect(grantReads()).toHaveLength(MAX_FETCHES_PER_RUN)
+		expect(summary.liveGrants).toBe(MAX_FETCHES_PER_RUN)
+		expect(summary.unresolvedGrants).toBe(1)
 	})
 
 	it('should leave grants past the read cap unresolved and resolve them on the next run', async () => {
@@ -249,13 +299,27 @@ describe('scheduled', () => {
 		expect(summary.liveUsers).toBe(2)
 	})
 
-	it('should log a failed refresh instead of rejecting', async () => {
-		const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
-		vi.mocked(listKvKeys).mockRejectedValue(new Error('KV list failed (403): Authentication error'))
+	it('should log a failed refresh with its status and nothing from the upstream body', async () => {
+		const consoleSpies = (['error', 'warn', 'log', 'info', 'debug'] as const).map((method) =>
+			vi.spyOn(console, method).mockImplementation(() => {}),
+		)
+		vi.mocked(getKvJson).mockRejectedValue(new CfApiError(500, `KV get failed (500): could not read grant:${ALICE}:grantA1`))
 
 		await expect(worker.scheduled(createScheduledController({ cron: '17 * * * *' }), env)).resolves.toBeUndefined()
 
-		expect(errorSpy).toHaveBeenCalledWith(expect.stringContaining('KV list failed (403): Authentication error'))
+		const [errorSpy] = consoleSpies
+		expect(errorSpy).toHaveBeenCalledExactlyOnceWith('[STATS] grant summary refresh failed (status 500)')
+		const logged = JSON.stringify(consoleSpies.flatMap((spy) => spy.mock.calls))
+		for (const username of USERNAMES) expect(logged).not.toContain(username)
 		expect(await readGrantSummary(env)).toBeNull()
+	})
+
+	it('should log a fixed message for an error that is not a CfApiError', async () => {
+		const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+		vi.mocked(listKvKeys).mockRejectedValue(new TypeError(`fetch failed for grant:${BOB}:grantB1`))
+
+		await expect(worker.scheduled(createScheduledController({ cron: '17 * * * *' }), env)).resolves.toBeUndefined()
+
+		expect(errorSpy).toHaveBeenCalledExactlyOnceWith('[STATS] grant summary refresh failed')
 	})
 })

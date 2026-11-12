@@ -24,13 +24,17 @@ export interface RefreshOptions {
 	maxFetches?: number
 }
 
-/** Keeps one run's production reads well inside the Worker's subrequest budget; the rest are picked up next run */
-export const MAX_FETCHES_PER_RUN = 500
+/**
+ * Keeps one run inside the Workers Paid per-invocation limits with retries counted: at worst about 406 REST requests and
+ * about 420 DASH_KV operations. The rest are picked up next run, so a full backfill of about 924 grants takes three runs.
+ */
+export const MAX_FETCHES_PER_RUN = 400
 
 const SUMMARY_KEY = 'summary:grants'
 const GRANT_PREFIX = 'grant:'
 const CLIENT_PREFIX = 'client:'
 const INDEX_PREFIX = 'gi:'
+const PENDING_PREFIX = 'gp:'
 const LABEL_PREFIX = 'cl:'
 
 const DAY_SECONDS = 86400
@@ -38,6 +42,13 @@ const SIGN_IN_DAYS = 30
 
 /** Index entries outlive their grant by a day, and are never written to expire sooner than a day from now */
 const INDEX_GRACE_SECONDS = DAY_SECONDS
+
+/**
+ * How long a `gp:<grantId>` marker says a grant was pending when last read. The provider gives a pending grant a 600 s TTL,
+ * but a marker that short would expire before the next hourly run, and pending grants that outlive it (0.x records with no
+ * TTL) could again take every read. Two hours covers the next run; marked grants are re-read with any budget left over.
+ */
+const PENDING_MARKER_TTL_SECONDS = 2 * 3600
 
 /** Registered client names can't change, but clients can be deleted, so labels are re-read monthly */
 const LABEL_TTL_SECONDS = 30 * DAY_SECONDS
@@ -101,7 +112,8 @@ class FetchBudget {
  * Recomputes the grant summary and stores it at `summary:grants` in DASH_KV.
  *
  * Every run lists all grant and client keys, but reads a grant's value only when it isn't indexed yet. Pending grants (an
- * authorization code that was never exchanged) are never indexed, so they're re-read until they complete or expire.
+ * authorization code that was never exchanged) are never indexed: they get a short-lived `gp:` marker instead and are
+ * re-read, after every unread grant, until they complete or expire.
  */
 export async function refreshGrantSummary(env: DashEnv, now: Date = new Date(), options: RefreshOptions = {}): Promise<GrantSummary> {
 	const nowSeconds = Math.floor(now.getTime() / 1000)
@@ -110,33 +122,41 @@ export async function refreshGrantSummary(env: DashEnv, now: Date = new Date(), 
 	const [grantKeys, clientKeys] = await Promise.all([listKvKeys(env, GRANT_PREFIX), listKvKeys(env, CLIENT_PREFIX)])
 	const listed = grantKeys.map(({ name }) => parseGrantKey(name)).filter((grant): grant is ListedGrant => grant !== null)
 
-	const indexed = await bulkGet(
+	const stored = await bulkGet(
 		env.DASH_KV,
-		listed.map(({ grantId }) => `${INDEX_PREFIX}${grantId}`),
+		listed.flatMap(({ grantId }) => [`${INDEX_PREFIX}${grantId}`, `${PENDING_PREFIX}${grantId}`]),
 	)
 
 	const resolved: ResolvedGrant[] = []
-	const toFetch: ListedGrant[] = []
+	const unread: ListedGrant[] = []
+	const markedPending: ListedGrant[] = []
 	for (const grant of listed) {
-		const entry = indexed.get(`${INDEX_PREFIX}${grant.grantId}`)
+		const entry = stored.get(`${INDEX_PREFIX}${grant.grantId}`)
 		if (entry) resolved.push({ ...(JSON.parse(entry) as GrantIndexEntry), userId: grant.userId })
-		else toFetch.push(grant)
+		else if (stored.has(`${PENDING_PREFIX}${grant.grantId}`)) markedPending.push(grant)
+		else unread.push(grant)
 	}
 
-	const fetchable = toFetch.slice(0, budget.take(toFetch.length))
-	const unresolvedGrants = toFetch.length - fetchable.length
-	let pendingGrants = 0
+	// Unread grants go first, so pending grants can't hold the backlog back. Known-pending ones are rechecked with what's left,
+	// and the ones the budget doesn't reach count as pending from their marker.
+	const toRead = [...unread, ...markedPending]
+	const reading = toRead.slice(0, budget.take(toRead.length))
+	const unresolvedGrants = Math.max(0, unread.length - reading.length)
+	let pendingGrants = toRead.length - reading.length - unresolvedGrants
+	const marked = new Set(markedPending)
 
-	await forEachConcurrently(fetchable, async (grant) => {
+	await forEachConcurrently(reading, async (grant) => {
 		const record = await getKvJson<GrantRecord>(env, grant.key)
 		// Deleted between the list and the read: the grant is gone, so it isn't counted
 		if (!record) return
 		if (record.authCodeId && !record.refreshTokenId) {
 			pendingGrants++
+			await env.DASH_KV.put(`${PENDING_PREFIX}${grant.grantId}`, '1', { expirationTtl: PENDING_MARKER_TTL_SECONDS })
 			return
 		}
 		const entry = toIndexEntry(record)
 		await env.DASH_KV.put(`${INDEX_PREFIX}${grant.grantId}`, JSON.stringify(entry), indexExpiration(entry, nowSeconds))
+		if (marked.has(grant)) await env.DASH_KV.delete(`${PENDING_PREFIX}${grant.grantId}`)
 		resolved.push({ ...entry, userId: grant.userId })
 	})
 
