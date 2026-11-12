@@ -20,6 +20,7 @@ const DAY = 86400
 /** Noon UTC today, so every fixture time lands on a predictable UTC day and every KV expiration is in the real future */
 const NOW = new Date(Math.floor(Date.now() / (DAY * 1000)) * DAY * 1000 + 12 * 3600 * 1000)
 const NOW_S = NOW.getTime() / 1000
+const HOUR_LATER = new Date(NOW.getTime() + 3600 * 1000)
 
 const USERNAMES = ['alice-fixture-user', 'bob-fixture-user', 'carol-fixture-user'] as const
 const [ALICE, BOB, CAROL] = USERNAMES
@@ -70,6 +71,14 @@ function clientReads(): string[] {
 
 function utcDate(seconds: number): string {
 	return new Date(seconds * 1000).toISOString().slice(0, 10)
+}
+
+/** Deletes DASH_KV keys whose expiration has passed at `atSeconds`, as KV would by then */
+async function expireDashKv(atSeconds: number): Promise<void> {
+	const { keys } = await env.DASH_KV.list()
+	await Promise.all(
+		keys.filter(({ expiration }) => expiration !== undefined && expiration <= atSeconds).map(({ name }) => env.DASH_KV.delete(name)),
+	)
 }
 
 async function clearDashKv(): Promise<void> {
@@ -157,51 +166,72 @@ describe('refreshGrantSummary', () => {
 		expect(second).toEqual(first)
 	})
 
-	it('should count the pending grant once its code is exchanged', async () => {
-		await refreshGrantSummary(env, NOW)
+	it('should count a grant that was pending in one run and completed by the next as live', async () => {
+		const first = await refreshGrantSummary(env, NOW)
+		expect(first.pendingGrants).toBe(1)
 		grant(BOB, 'grantB2', { clientId: CIMD_CHATGPT, createdAt: NOW_S - 60, expiresAt: NOW_S + 30 * DAY, refreshTokenId: 'r4' })
 
-		const summary = await refreshGrantSummary(env, NOW)
+		const second = await refreshGrantSummary(env, HOUR_LATER)
 
-		expect(summary.pendingGrants).toBe(0)
-		expect(summary.liveGrants).toBe(4)
-		expect(summary.signInsLast7d).toBe(2)
+		expect(second.pendingGrants).toBe(0)
+		expect(second.unresolvedGrants).toBe(0)
+		expect(second.liveGrants).toBe(4)
+		expect(second.signInsLast7d).toBe(2)
+		expect(await env.DASH_KV.get('gi:grantB2', 'json')).toEqual({
+			clientId: CIMD_CHATGPT,
+			createdAt: NOW_S - 60,
+			expiresAt: NOW_S + 30 * DAY,
+		})
 		expect(await env.DASH_KV.get('gp:grantB2')).toBeNull()
 	})
 
-	it('should mark a pending grant until after the next hourly run', async () => {
+	it('should re-read a pending grant on every run while the backlog fits the cap, recording when it was checked', async () => {
 		await refreshGrantSummary(env, NOW)
-
-		const { keys } = await env.DASH_KV.list({ prefix: 'gp:' })
-		expect(keys.map(({ name }) => name)).toEqual(['gp:grantB2'])
-		// The marker has to survive to the next :17 run to keep pending grants behind unread ones
-		expect(keys[0].expiration).toBeGreaterThan(Date.now() / 1000 + 3600)
-	})
-
-	it('should not let pending grants starve the backlog', async () => {
-		oauthKv.clear()
-		// More than one cap's worth of pending grants, listed ahead of a completed one
-		for (let i = 0; i < 5; i++) {
-			grant(ALICE, `pending${i}`, { clientId: CIMD_CHATGPT, createdAt: NOW_S - 60, expiresAt: NOW_S + DAY, authCodeId: `code${i}` })
-		}
-		grant(BOB, 'completed', { clientId: CIMD_CHATGPT, createdAt: NOW_S - DAY, expiresAt: NOW_S + DAY, refreshTokenId: 'r' })
-
-		const first = await refreshGrantSummary(env, NOW, { maxFetches: 3 })
-		expect(first.pendingGrants).toBe(3)
-		expect(first.unresolvedGrants).toBe(3)
-		expect(first.liveGrants).toBe(0)
+		expect(grantReads()).toContain(`grant:${BOB}:grantB2`)
+		expect(await env.DASH_KV.get('gp:grantB2', 'json')).toEqual({ lastCheckedAt: NOW_S })
 
 		valueReads = []
-		const second = await refreshGrantSummary(env, NOW, { maxFetches: 3 })
+		const second = await refreshGrantSummary(env, HOUR_LATER)
 
-		// The three grants never read take the whole budget; the marked pending ones count from their markers
-		expect(valueReads).toEqual([`grant:${ALICE}:pending3`, `grant:${ALICE}:pending4`, `grant:${BOB}:completed`])
-		expect(second.liveGrants).toBe(1)
-		expect(second.liveUsers).toBe(1)
-		expect(second.unresolvedGrants).toBe(0)
-		expect(second.pendingGrants).toBe(5)
+		expect(grantReads()).toEqual([`grant:${BOB}:grantB2`])
+		expect(second.pendingGrants).toBe(1)
+		expect(await env.DASH_KV.get('gp:grantB2', 'json')).toEqual({ lastCheckedAt: NOW_S + 3600 })
 	})
 
+	it('should count marked grants the budget does not reach as unresolved, not pending', async () => {
+		await refreshGrantSummary(env, NOW)
+		// Two new grants, never read, go ahead of the marked pending one and take the whole budget
+		grant(CAROL, 'grantC2', { clientId: CIMD_CHATGPT, createdAt: NOW_S - 60, expiresAt: NOW_S + DAY, refreshTokenId: 'r5' })
+		grant(CAROL, 'grantC3', { clientId: CIMD_CHATGPT, createdAt: NOW_S - 30, expiresAt: NOW_S + DAY, refreshTokenId: 'r6' })
+
+		valueReads = []
+		const second = await refreshGrantSummary(env, HOUR_LATER, { maxFetches: 2 })
+
+		expect(grantReads()).toEqual([`grant:${CAROL}:grantC2`, `grant:${CAROL}:grantC3`])
+		expect(second.unresolvedGrants).toBe(1)
+		expect(second.pendingGrants).toBe(0)
+		expect(second.liveGrants).toBe(5)
+	})
+
+	it('should not let persistent pending grants starve a completed grant listed after them', async () => {
+		oauthKv.clear()
+		for (let i = 0; i < 6; i++) {
+			grant(ALICE, `pending${i}`, { clientId: CIMD_CHATGPT, createdAt: NOW_S - 60, expiresAt: NOW_S + 7 * DAY, authCodeId: `code${i}` })
+		}
+		grant(BOB, 'completed', { clientId: CIMD_CHATGPT, createdAt: NOW_S - DAY, expiresAt: NOW_S + 7 * DAY, refreshTokenId: 'r' })
+
+		const runs: GrantSummary[] = []
+		for (let run = 0; run < 3; run++) {
+			const at = new Date(NOW.getTime() + run * 3601 * 1000)
+			await expireDashKv(at.getTime() / 1000)
+			runs.push(await refreshGrantSummary(env, at, { maxFetches: 3 }))
+		}
+
+		expect(runs.map(({ liveGrants }) => liveGrants)).toEqual([0, 0, 1])
+		// Run 3 reads the completed grant, then the two pending grants checked longest ago (run 1)
+		expect(grantReads().slice(-3)).toEqual([`grant:${BOB}:completed`, `grant:${ALICE}:pending0`, `grant:${ALICE}:pending1`])
+		expect(runs[2]).toMatchObject({ liveUsers: 1, pendingGrants: 2, unresolvedGrants: 4 })
+	})
 	it('should read at most MAX_FETCHES_PER_RUN values by default', async () => {
 		expect(MAX_FETCHES_PER_RUN).toBe(400)
 		oauthKv.clear()

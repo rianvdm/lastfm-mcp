@@ -44,11 +44,10 @@ const SIGN_IN_DAYS = 30
 const INDEX_GRACE_SECONDS = DAY_SECONDS
 
 /**
- * How long a `gp:<grantId>` marker says a grant was pending when last read. The provider gives a pending grant a 600 s TTL,
- * but a marker that short would expire before the next hourly run, and pending grants that outlive it (0.x records with no
- * TTL) could again take every read. Two hours covers the next run; marked grants are re-read with any budget left over.
+ * A `gp:<grantId>` marker records when a pending grant was last read, to order re-reads fairly. It isn't a skip window:
+ * the long expiry only cleans up markers for grants that have disappeared from OAUTH_KV.
  */
-const PENDING_MARKER_TTL_SECONDS = 2 * 3600
+const PENDING_MARKER_SECONDS = 30 * DAY_SECONDS
 
 /** Registered client names can't change, but clients can be deleted, so labels are re-read monthly */
 const LABEL_TTL_SECONDS = 30 * DAY_SECONDS
@@ -79,6 +78,12 @@ interface GrantRecord {
 
 interface ClientRecord {
 	clientName?: string
+}
+
+/** The value of a `gp:<grantId>` marker */
+interface PendingMarker {
+	/** Seconds since the epoch */
+	lastCheckedAt: number
 }
 
 interface ListedGrant {
@@ -112,8 +117,8 @@ class FetchBudget {
  * Recomputes the grant summary and stores it at `summary:grants` in DASH_KV.
  *
  * Every run lists all grant and client keys, but reads a grant's value only when it isn't indexed yet. Pending grants (an
- * authorization code that was never exchanged) are never indexed: they get a short-lived `gp:` marker instead and are
- * re-read, after every unread grant, until they complete or expire.
+ * authorization code that was never exchanged) are never indexed. They get a `gp:` marker with the time they were last
+ * checked instead, and are re-read after every never-read grant, least recently checked first, until they complete or expire.
  */
 export async function refreshGrantSummary(env: DashEnv, now: Date = new Date(), options: RefreshOptions = {}): Promise<GrantSummary> {
 	const nowSeconds = Math.floor(now.getTime() / 1000)
@@ -128,22 +133,25 @@ export async function refreshGrantSummary(env: DashEnv, now: Date = new Date(), 
 	)
 
 	const resolved: ResolvedGrant[] = []
-	const unread: ListedGrant[] = []
-	const markedPending: ListedGrant[] = []
+	const neverRead: ListedGrant[] = []
+	const marked: Array<{ grant: ListedGrant; lastCheckedAt: number }> = []
 	for (const grant of listed) {
 		const entry = stored.get(`${INDEX_PREFIX}${grant.grantId}`)
+		const marker = stored.get(`${PENDING_PREFIX}${grant.grantId}`)
 		if (entry) resolved.push({ ...(JSON.parse(entry) as GrantIndexEntry), userId: grant.userId })
-		else if (stored.has(`${PENDING_PREFIX}${grant.grantId}`)) markedPending.push(grant)
-		else unread.push(grant)
+		else if (marker) marked.push({ grant, lastCheckedAt: (JSON.parse(marker) as PendingMarker).lastCheckedAt })
+		else neverRead.push(grant)
 	}
 
-	// Unread grants go first, so pending grants can't hold the backlog back. Known-pending ones are rechecked with what's left,
-	// and the ones the budget doesn't reach count as pending from their marker.
-	const toRead = [...unread, ...markedPending]
+	// Grants never read go first, in listing order, then pending ones, least recently checked first. Every grant is
+	// therefore read within a bounded number of runs, however many pending grants are listed ahead of it.
+	marked.sort((a, b) => a.lastCheckedAt - b.lastCheckedAt)
+	const markedGrants = new Set(marked.map(({ grant }) => grant))
+	const toRead = [...neverRead, ...markedGrants]
 	const reading = toRead.slice(0, budget.take(toRead.length))
-	const unresolvedGrants = Math.max(0, unread.length - reading.length)
-	let pendingGrants = toRead.length - reading.length - unresolvedGrants
-	const marked = new Set(markedPending)
+	// A grant the budget didn't reach is unresolved, even if it was pending when last read: it may have completed since
+	const unresolvedGrants = toRead.length - reading.length
+	let pendingGrants = 0
 
 	await forEachConcurrently(reading, async (grant) => {
 		const record = await getKvJson<GrantRecord>(env, grant.key)
@@ -151,12 +159,15 @@ export async function refreshGrantSummary(env: DashEnv, now: Date = new Date(), 
 		if (!record) return
 		if (record.authCodeId && !record.refreshTokenId) {
 			pendingGrants++
-			await env.DASH_KV.put(`${PENDING_PREFIX}${grant.grantId}`, '1', { expirationTtl: PENDING_MARKER_TTL_SECONDS })
+			const marker: PendingMarker = { lastCheckedAt: nowSeconds }
+			await env.DASH_KV.put(`${PENDING_PREFIX}${grant.grantId}`, JSON.stringify(marker), {
+				expiration: nowSeconds + PENDING_MARKER_SECONDS,
+			})
 			return
 		}
 		const entry = toIndexEntry(record)
 		await env.DASH_KV.put(`${INDEX_PREFIX}${grant.grantId}`, JSON.stringify(entry), indexExpiration(entry, nowSeconds))
-		if (marked.has(grant)) await env.DASH_KV.delete(`${PENDING_PREFIX}${grant.grantId}`)
+		if (markedGrants.has(grant)) await env.DASH_KV.delete(`${PENDING_PREFIX}${grant.grantId}`)
 		resolved.push({ ...entry, userId: grant.userId })
 	})
 
