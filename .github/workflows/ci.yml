@@ -33,6 +33,9 @@ jobs:
       - name: Run tests
         run: npx vitest run
 
+      - name: Run dashboard tests
+        run: npx vitest run --config dashboard/vitest.config.mts
+
       - name: Build project
         run: npm run build
 

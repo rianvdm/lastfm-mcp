@@ -59,6 +59,8 @@ export default defineConfig({
 			'**/dist/**',
 			// Exclude worktrees to prevent duplicate test discovery when running from repo root
 			'**/.worktrees/**',
+			// The dashboard Worker has its own wrangler.toml and runs under dashboard/vitest.config.mts (npm run test:dashboard)
+			'dashboard/**',
 		],
 	},
 })

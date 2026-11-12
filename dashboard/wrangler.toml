@@ -1,0 +1,32 @@
+# Private usage dashboard for lastfm-mcp, served at stats.lastfm-mcp.com behind Cloudflare Access.
+# Deployed by hand (`npm run dashboard:deploy`), never from CI. Only reachable through Access: no workers.dev or preview URLs.
+name = "lastfm-mcp-stats"
+main = "src/index.ts"
+compatibility_date = "2026-04-01"
+compatibility_flags = ["global_fetch_strictly_public", "nodejs_compat"]
+workers_dev = false
+preview_urls = false
+
+routes = [{ pattern = "stats.lastfm-mcp.com", custom_domain = true }]
+
+# Hourly at :17 rather than :00, so the Cloudflare API calls don't land with every other top-of-hour cron
+[triggers]
+crons = ["17 * * * *"]
+
+# Placeholder ID until the namespace is created; replace it before the first deploy. Tests use a local namespace.
+[[kv_namespaces]]
+binding = "DASH_KV"
+id = "00000000000000000000000000000000"
+
+[vars]
+ACCOUNT_ID = "db8ef1f4b492e4727e7fab0e12907871"
+# The production MCP Worker's OAUTH_KV namespace, script and Analytics Engine dataset, which the dashboard reads
+OAUTH_KV_NAMESPACE_ID = "8c3a19a93165452b9ab0215bdb3daa71"
+SCRIPT_NAME = "lastfm-mcp-prod"
+TOOL_EVENTS_DATASET = "lastfm_mcp_tool_events"
+ACCESS_TEAM_DOMAIN = "elezea.cloudflareaccess.com"
+# The Access application's audience (AUD) tag. While it's empty, every request gets a 403.
+ACCESS_AUD = ""
+
+# Secrets (set via `npx wrangler secret put <NAME> -c dashboard/wrangler.toml`):
+# - CF_API_TOKEN (Cloudflare API token the dashboard uses to read the production Worker's KV and analytics)

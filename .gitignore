@@ -170,6 +170,7 @@ dist
 
 .dev.vars
 .wrangler/
+dashboard/dist/
 
 # OS generated files
 .DS_Store
