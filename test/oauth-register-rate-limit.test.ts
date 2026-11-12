@@ -5,11 +5,13 @@ import type { RateLimit } from '@cloudflare/workers-types'
 import { afterEach, describe, it, expect, vi } from 'vitest'
 
 import worker from '../src/index-oauth'
+import { REGISTRATION_RATE_LIMIT_PERIOD_SECONDS } from '../src/utils/registrationRateLimit'
 import type { Env } from '../src/types/env'
 
 const ORIGIN = 'https://lastfm-mcp.com'
-// simple.limit of REGISTRATION_RATE_LIMITER in wrangler.toml, mirrored by STRICT_REGISTRATION_RATE_LIMITER in vitest.config.mts
-const REGISTRATION_LIMIT = 5
+// simple.limit of REGISTRATION_RATE_LIMITER in wrangler.toml, which STRICT_REGISTRATION_RATE_LIMITER uses (vitest.config.mts)
+const REGISTRATION_LIMIT = (JSON.parse(env.TEST_REGISTRATION_RATE_LIMITERS) as { staging: { simple: { limit: number } } }).staging.simple
+	.limit
 
 // The suite-wide REGISTRATION_RATE_LIMITER is generous so other OAuth tests can register freely; these tests use the strict one
 const strictEnv: Env = { ...env, REGISTRATION_RATE_LIMITER: env.STRICT_REGISTRATION_RATE_LIMITER }
@@ -55,13 +57,14 @@ describe('POST /oauth/register rate limit', () => {
 		const response = await register('203.0.113.1')
 
 		expect(response.status).toBe(429)
-		expect(response.headers.get('Retry-After')).toBe('60')
+		expect(response.headers.get('Retry-After')).toBe(String(REGISTRATION_RATE_LIMIT_PERIOD_SECONDS))
 		const body = (await response.json()) as { error: string }
 		expect(body.error).toBe('too_many_requests')
 	})
 
-	// Local rate limiting counts exactly. In production counts are approximate and per location, so a burst can slightly overshoot.
-	it('should hold the budget against a burst of simultaneous registrations', async () => {
+	// Proves the wiring: local rate limiting counts exactly. In production counts are approximate and per location, and
+	// a burst gets well past the budget (59 of 100 concurrent registrations admitted on staging).
+	it('should refuse the registrations over budget in a burst of simultaneous registrations (counted exactly locally)', async () => {
 		const statuses = (await Promise.all(Array.from({ length: 2 * REGISTRATION_LIMIT }, () => register('203.0.113.2')))).map((r) => r.status)
 
 		expect(statuses.filter((s) => s === 201)).toHaveLength(REGISTRATION_LIMIT)

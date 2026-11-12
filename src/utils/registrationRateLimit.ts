@@ -10,9 +10,10 @@ export const REGISTRATION_RATE_LIMIT_PERIOD_SECONDS = 60
 
 /**
  * Whether `key` may register another client. A legitimate client registers once per install, so the budget is
- * small; it bounds KV writes from scripted registrations. It's a cost guard, not a security control: a registration
- * can only receive codes for flows it started itself. Counts are approximate and kept per Cloudflare location.
- * Fails open when the binding throws, so a limiter problem never blocks sign-in.
+ * small. It slows scripted registrations (and their KV writes) without capping them: the binding counts
+ * approximately and per Cloudflare location, and on staging it admitted 59 of 100 concurrent registrations from one
+ * IP against a budget of 5 a minute. It's a cost guard, not a security control: a registration can only receive codes
+ * for flows it started itself. Fails open when the binding throws, so a limiter problem never blocks sign-in.
  */
 export async function allowClientRegistration(limiter: RateLimit, key: string): Promise<boolean> {
 	try {

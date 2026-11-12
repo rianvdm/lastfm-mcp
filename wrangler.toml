@@ -19,9 +19,11 @@ id = "a0bc40f523d54a6ab70fa947ac3daeaf"
 binding = "OAUTH_KV"
 id = "e04a5ec5441949ebb6e84281bf6598c3"
 
-# Per-IP budget for POST /oauth/register (dynamic client registration). The Rate Limiting binding is
-# approximate and counted per Cloudflare location, but unlike a KV counter it holds up under bursts.
-# `period` must be 10 or 60; REGISTRATION_RATE_LIMIT_PERIOD_SECONDS in src/utils/rateLimit.ts mirrors it.
+# Per-IP budget for POST /oauth/register (dynamic client registration). A best-effort brake: the Rate Limiting
+# binding counts approximately and per Cloudflare location, and on staging it admitted 59 of 100 concurrent
+# registrations from one IP. Accepted registrations are logged, so a flood still shows up in Workers logs.
+# `period` must be 10 or 60; REGISTRATION_RATE_LIMIT_PERIOD_SECONDS in src/utils/registrationRateLimit.ts mirrors it
+# (test/wrangler-config.test.ts checks both environments).
 [[ratelimits]]
 name = "REGISTRATION_RATE_LIMITER"
 namespace_id = "2001"
