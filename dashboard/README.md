@@ -1,0 +1,112 @@
+<!--
+ABOUTME: Runbook for lastfm-mcp-stats, the private usage dashboard Worker served at stats.lastfm-mcp.com.
+ABOUTME: Covers what it reads and stores, its bindings and secret, and how to provision, deploy, verify and rotate its token.
+-->
+
+# lastfm-mcp-stats
+
+A private usage dashboard for the production MCP Worker (`lastfm-mcp-prod`), served at `stats.lastfm-mcp.com` behind Cloudflare Access. It's a separate Worker with its own `wrangler.toml` in this folder. It's deployed by hand with `npm run dashboard:deploy`, never from CI, and has no `workers.dev` or preview URL.
+
+## What it reads and stores
+
+Everything it reads from production goes through the Cloudflare REST API with one read-only API token. It has no bindings to the MCP Worker's resources.
+
+| Source                                                     | API                            | Used for                                                                                                     |
+| ---------------------------------------------------------- | ------------------------------ | ------------------------------------------------------------------------------------------------------------ |
+| Production `OAUTH_KV` (`8c3a19a93165452b9ab0215bdb3daa71`) | KV REST: list keys, get values | The hourly grant summary: live users and grants, 30-day sign-ins, registered clients, live grants per client |
+| `workersInvocationsAdaptive` for `lastfm-mcp-prod`         | GraphQL Analytics              | Daily requests, errors and client disconnects, and the last 24 hours                                         |
+| `lastfm_mcp_tool_events` dataset                           | Analytics Engine SQL API       | Per-tool and per-client calls, error rates, cache hits and latency                                           |
+
+It never writes production `OAUTH_KV`. It writes only its own `DASH_KV`:
+
+- `summary:grants`: the summary the hourly cron (`17 * * * *`) computes.
+- `gi:<grantId>`, `gp:<grantId>` and `cl:<clientId>`: the grant index, pending-grant markers and memoised client labels that let each run read only grants it hasn't seen. They hold no username, no client URL and no registered client name. Client labels come only from the fixed list in `src/analytics/clientLabel.ts`.
+- `cache:traffic:v1` and `cache:tools:v1`: GraphQL and Analytics Engine results, cached for 5 minutes.
+
+Each run reads at most 400 values from production `OAUTH_KV`, grants first. See `MAX_FETCHES_PER_RUN` in `src/grants.ts` for the arithmetic.
+
+## Configuration
+
+Set in `dashboard/wrangler.toml`:
+
+| Name                    | Kind       | Value                                                                                       |
+| ----------------------- | ---------- | ------------------------------------------------------------------------------------------- |
+| `DASH_KV`               | KV binding | The dashboard's own namespace (step 1 below)                                                |
+| `ACCOUNT_ID`            | var        | `db8ef1f4b492e4727e7fab0e12907871`                                                          |
+| `OAUTH_KV_NAMESPACE_ID` | var        | The production MCP Worker's `OAUTH_KV` namespace                                            |
+| `SCRIPT_NAME`           | var        | `lastfm-mcp-prod`                                                                           |
+| `TOOL_EVENTS_DATASET`   | var        | `lastfm_mcp_tool_events`                                                                    |
+| `ACCESS_TEAM_DOMAIN`    | var        | `elezea.cloudflareaccess.com`                                                               |
+| `ACCESS_AUD`            | var        | The Access application's audience tag (step 2). While it's empty, every request gets a 403. |
+| `CF_API_TOKEN`          | secret     | The read-only API token (step 3)                                                            |
+
+The Worker verifies the `Cf-Access-Jwt-Assertion` header on every request as well, so a request that reaches it without passing Access gets a 403.
+
+## Provisioning runbook
+
+Every step changes the live account. Run them in order.
+
+1. **Create the KV namespace.**
+
+   ```bash
+   npx wrangler kv namespace create lastfm-mcp-stats-DASH_KV
+   ```
+
+   Put the returned ID in the `[[kv_namespaces]]` block of `dashboard/wrangler.toml`, replacing the all-zero placeholder.
+
+2. **Create the Access application** before the hostname exists, with `cf` or in the Zero Trust dashboard:
+
+   - Type `self_hosted`, name `lastfm-mcp stats`, domain `stats.lastfm-mcp.com`, session duration `24h`.
+   - One allow policy that includes the rule group `282d056b-0d72-49cf-95b7-a0b0228386a6`.
+
+   Put the application's `aud` tag in `ACCESS_AUD` in `dashboard/wrangler.toml`.
+
+3. **Create the API token in the Cloudflare dashboard** (`cf` can't create API tokens). Scope it to account `db8ef1f4b492e4727e7fab0e12907871` with exactly two permissions, **Account Analytics: Read** and **Workers KV Storage: Read**, and nothing else. Then store it:
+
+   ```bash
+   npx wrangler secret put CF_API_TOKEN -c dashboard/wrangler.toml
+   ```
+
+4. **Deploy.**
+
+   ```bash
+   npm run dashboard:deploy
+   ```
+
+   The deploy should attach the custom domain `stats.lastfm-mcp.com` and print no `workers.dev` URL.
+
+5. **Verify.**
+
+   ```bash
+   # Access answers first: expect a 302 to elezea.cloudflareaccess.com
+   curl -sI https://stats.lastfm-mcp.com/
+
+   # Expect no response from the Worker (workers_dev = false)
+   curl -sI https://lastfm-mcp-stats.<your-subdomain>.workers.dev/
+
+   # After the next :17 cron, the summary exists
+   npx wrangler kv key get summary:grants --namespace-id <DASH_KV id> --remote
+   ```
+
+   Check `liveUsers` against the number of people you expect to be signed in. Run the last command again an hour later and confirm `unresolvedGrants` is 0. Then open the page on a phone and a laptop and check the requests chart against GraphQL.
+
+The first page load before any summary exists starts a refresh in the background, so the grant panels say they're warming up rather than staying empty until the cron.
+
+## Rotating the API token
+
+1. Create a new token with the same account and the same two permissions (step 3).
+2. Store it with `npx wrangler secret put CF_API_TOKEN -c dashboard/wrangler.toml`. The new secret takes effect without a redeploy.
+3. Load the page and confirm the traffic and tool panels render, then wait for the next :17 cron and confirm `summary:grants` has a new `computedAt`.
+4. Delete the old token in the Cloudflare dashboard.
+
+A failed refresh logs `[STATS] grant summary refresh failed (status <code>)` and keeps the previous summary, so a 401 or 403 status there usually means the token is wrong or missing a permission. Check with `npx wrangler tail lastfm-mcp-stats`.
+
+## Development
+
+```bash
+npm run dashboard:dev     # Local dev server for this Worker
+npm run test:dashboard    # Its tests (dashboard/vitest.config.mts)
+npm run dashboard:deploy  # Deploy by hand
+```
+
+Local requests carry no Access JWT, so `dashboard:dev` answers every page request with a 403. The tests render the page from fixtures instead.

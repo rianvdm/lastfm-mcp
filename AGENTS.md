@@ -12,11 +12,14 @@ npm run build            # Dry-run deploy to validate build (wrangler deploy --d
 npm run deploy           # Deploy to staging (the default `lastfm-mcp` Worker)
 npm run deploy:prod      # Deploy to production (`lastfm-mcp-prod`); CI normally does this, see below
 npm run setup:prod       # Create production KV namespaces and set the three secrets
-npm run lint             # ESLint (src/**/*.ts)
+npm run lint             # ESLint (src and dashboard/src)
 npm run format           # Prettier --write
 npm run format:check     # Prettier --check (CI)
 npm run test:multi-user  # Manual multi-user check against a running server (scripts/test-multi-user.js)
 npm run cf-typegen       # Regenerate Worker type bindings (run after changing wrangler.toml; produces worker-configuration.d.ts — generated, do not edit by hand)
+npm run test:dashboard   # Dashboard Worker tests (dashboard/vitest.config.mts)
+npm run dashboard:dev    # Dashboard Worker local dev server (every page request gets a 403 without an Access JWT)
+npm run dashboard:deploy # Deploy the dashboard Worker by hand; CI never does
 ```
 
 ## Deploys and Releases
@@ -170,6 +173,15 @@ Single Worker entry point configured in `wrangler.toml`: `main = "src/index-oaut
 Every MCP request needs an OAuth bearer token: unauthenticated `POST /mcp` returns 401 with `WWW-Authenticate`, which starts the client's sign-in. OAuth is the only sign-in path: the manual `/login` → `?session_id=` flow was removed in #34, so Last.fm session keys are only stored inside encrypted grant `props`. The "public" tools in `src/mcp/tools/public.ts` are the ones that don't need the user's Last.fm session, not tools reachable without sign-in. `src/auth/jwt.ts` is no longer imported by any source file.
 
 **Key dependencies:** `@modelcontextprotocol/server` (MCP SDK v2), `@cloudflare/workers-oauth-provider` 1.x, `agents` (Cloudflare Agents SDK), `zod`.
+
+## Dashboard Worker
+
+`dashboard/` holds a separate Worker, `lastfm-mcp-stats`, with its own `wrangler.toml`, tests and `tsconfig.json`. It's the private usage dashboard at `stats.lastfm-mcp.com`. The runbook for provisioning, deploying and rotating its token is in [`dashboard/README.md`](dashboard/README.md).
+
+- It's deployed by hand with `npm run dashboard:deploy`, never by CI, and has no `workers.dev` or preview URL. CI lints and tests it but doesn't deploy it.
+- Cloudflare Access sits in front of it, and the Worker verifies the Access JWT on every request too. An empty `ACCESS_AUD` refuses everything.
+- It reads production `OAUTH_KV` only through the KV REST API, with a read-only token (Account Analytics Read and Workers KV Storage Read), and never writes it. It writes only its own `DASH_KV`, which holds no username, client URL or registered client name.
+- It imports `labelForClient` and `CLIENT_LABELS` from `src/analytics/clientLabel.ts`, so the dashboard and the `TOOL_EVENTS` writer label clients from the same fixed list.
 
 ## OAuth Notes
 
