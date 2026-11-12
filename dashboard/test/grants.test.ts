@@ -1,4 +1,4 @@
-// ABOUTME: Tests the hourly grant summary: live/pending/expired counts, 30-day sign-ins, client labels and the username-free index.
+// ABOUTME: Tests the hourly grant summary: live/pending/expired counts, retained 30-day sign-ins, client labels and the index.
 // ABOUTME: Replaces cfApi with an in-memory OAUTH_KV and uses the test DASH_KV, counting every production value read.
 import { createScheduledController, env } from 'cloudflare:test'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -142,8 +142,8 @@ describe('refreshGrantSummary', () => {
 			{ label: 'Claude', grants: 2, users: 2 },
 			{ label: 'ChatGPT', grants: 1, users: 1 },
 		])
-		// The CIMD client has no client: record, so only the registered one is read
-		expect(clientReads()).toEqual([`client:${DCR_CLAUDE}`])
+		// Every registered client is read once, before the grants; the CIMD client has no client: record and needs no read
+		expect(clientReads()).toEqual([`client:${DCR_CLAUDE}`, `client:${DCR_UNUSED}`])
 	})
 
 	it('should store the summary for readGrantSummary', async () => {
@@ -178,7 +178,7 @@ describe('refreshGrantSummary', () => {
 		expect(second.liveGrants).toBe(4)
 		expect(second.signInsLast7d).toBe(2)
 		expect(await env.DASH_KV.get('gi:grantB2', 'json')).toEqual({
-			clientId: CIMD_CHATGPT,
+			label: 'ChatGPT',
 			createdAt: NOW_S - 60,
 			expiresAt: NOW_S + 30 * DAY,
 		})
@@ -249,8 +249,9 @@ describe('refreshGrantSummary', () => {
 	it('should leave grants past the read cap unresolved and resolve them on the next run', async () => {
 		const capped = await refreshGrantSummary(env, NOW, { maxFetches: 4 })
 
-		expect(valueReads).toHaveLength(4)
-		expect(capped.unresolvedGrants).toBe(1)
+		// Both registered clients first, then the first two grants
+		expect(valueReads).toEqual([`client:${DCR_CLAUDE}`, `client:${DCR_UNUSED}`, `grant:${ALICE}:grantA1`, `grant:${ALICE}:grantA2`])
+		expect(capped.unresolvedGrants).toBe(3)
 
 		valueReads = []
 		const next = await refreshGrantSummary(env, NOW, { maxFetches: 4 })
@@ -264,6 +265,25 @@ describe('refreshGrantSummary', () => {
 			{ label: 'Claude', grants: 2, users: 2 },
 			{ label: 'ChatGPT', grants: 1, users: 1 },
 		])
+	})
+
+	it('should label a grant whose registered client was deleted unknown, and index it', async () => {
+		grant(CAROL, 'grantOrphan', { clientId: 'dcr0client0deleted', createdAt: NOW_S - DAY, expiresAt: NOW_S + DAY, refreshTokenId: 'r9' })
+
+		const summary = await refreshGrantSummary(env, NOW)
+
+		expect(summary.unresolvedGrants).toBe(0)
+		expect(summary.clients).toContainEqual({ label: 'unknown', grants: 1, users: 1 })
+		expect(await env.DASH_KV.get('gi:grantOrphan', 'json')).toEqual({ label: 'unknown', createdAt: NOW_S - DAY, expiresAt: NOW_S + DAY })
+		expect(clientReads()).not.toContain('client:dcr0client0deleted')
+	})
+
+	it('should leave a grant unresolved when the budget runs out before its client is read', async () => {
+		const first = await refreshGrantSummary(env, NOW, { maxFetches: 1 })
+
+		expect(valueReads).toEqual([`client:${DCR_CLAUDE}`])
+		expect(first.unresolvedGrants).toBe(5)
+		expect(first.liveGrants).toBe(0)
 	})
 
 	it('should drop a grant that is deleted between the list and the read', async () => {
@@ -286,24 +306,63 @@ describe('refreshGrantSummary', () => {
 		const summary = await refreshGrantSummary(env, NOW)
 
 		expect(summary.liveUsers).toBe(1)
-		expect(await env.DASH_KV.get('gi:grantX', 'json')).toEqual({ clientId: CIMD_CHATGPT, createdAt: NOW_S - DAY, expiresAt: NOW_S + DAY })
+		expect(await env.DASH_KV.get('gi:grantX', 'json')).toEqual({ label: 'ChatGPT', createdAt: NOW_S - DAY, expiresAt: NOW_S + DAY })
 	})
 
 	it('should index grants without usernames and expire entries a day after the grant', async () => {
 		await refreshGrantSummary(env, NOW)
 
 		expect(await env.DASH_KV.get('gi:grantA1', 'json')).toEqual({
-			clientId: DCR_CLAUDE,
+			label: 'Claude',
 			createdAt: NOW_S - 2 * DAY,
 			expiresAt: NOW_S + 28 * DAY,
 		})
-		expect(await env.DASH_KV.get('gi:grantB1', 'json')).toEqual({ clientId: DCR_CLAUDE, createdAt: NOW_S - 45 * DAY })
+		expect(await env.DASH_KV.get('gi:grantB1', 'json')).toEqual({ label: 'Claude', createdAt: NOW_S - 45 * DAY })
 		expect(await env.DASH_KV.get('gi:grantB2')).toBeNull()
 
 		const { keys } = await env.DASH_KV.list({ prefix: 'gi:' })
 		const expirations = new Map(keys.map(({ name, expiration }) => [name, expiration]))
 		expect(expirations.get('gi:grantA1')).toBe(NOW_S + 29 * DAY)
 		expect(expirations.get('gi:grantB1')).toBeUndefined()
+	})
+
+	it('should keep the sign-in of a grant that a later sign-in replaced', async () => {
+		oauthKv.clear()
+		grant(ALICE, 'yesterday', { clientId: CIMD_CHATGPT, createdAt: NOW_S - DAY, expiresAt: NOW_S + 29 * DAY, refreshTokenId: 'r1' })
+		await refreshGrantSummary(env, NOW)
+
+		// Alice signs in again: the provider replaces yesterday's grant with today's
+		oauthKv.delete(`grant:${ALICE}:yesterday`)
+		grant(ALICE, 'today', { clientId: CIMD_CHATGPT, createdAt: NOW_S + 60, expiresAt: NOW_S + 30 * DAY, refreshTokenId: 'r2' })
+		const summary = await refreshGrantSummary(env, HOUR_LATER)
+
+		expect(summary.liveGrants).toBe(1)
+		expect(summary.liveUsers).toBe(1)
+		expect(summary.signInsLast7d).toBe(2)
+		const byDate = new Map(summary.signInsByDay.map(({ date, count }) => [date, count]))
+		expect(byDate.get(utcDate(NOW_S - DAY))).toBe(1)
+		expect(byDate.get(utcDate(NOW_S))).toBe(1)
+	})
+
+	it('should never store a client ID that is a URL, or a registered name, in DASH_KV', async () => {
+		const leakyCimd = `https://dc2.example/${ALICE}/client.json`
+		const leakyDcr = 'dcr0client0leaky'
+		oauthKv.set(`client:${leakyDcr}`, { clientId: leakyDcr, clientName: BOB, redirectUris: [] })
+		grant(ALICE, 'grantLeakyCimd', { clientId: leakyCimd, createdAt: NOW_S - DAY, expiresAt: NOW_S + DAY, refreshTokenId: 'r7' })
+		grant(CAROL, 'grantLeakyDcr', { clientId: leakyDcr, createdAt: NOW_S - DAY, expiresAt: NOW_S + DAY, refreshTokenId: 'r8' })
+
+		const summary = await refreshGrantSummary(env, NOW)
+		await refreshGrantSummary(env, HOUR_LATER)
+
+		expect(summary.clients).toContainEqual({ label: 'other', grants: 2, users: 2 })
+		expect(await env.DASH_KV.get('gi:grantLeakyCimd', 'json')).toEqual({ label: 'other', createdAt: NOW_S - DAY, expiresAt: NOW_S + DAY })
+		expect(await env.DASH_KV.get(`cl:${leakyDcr}`)).toBe('other')
+		const { keys } = await env.DASH_KV.list()
+		for (const { name, metadata } of keys) {
+			const stored = `${name}\n${(await env.DASH_KV.get(name)) ?? ''}\n${JSON.stringify(metadata ?? null)}`
+			expect(stored).not.toContain('https://')
+			for (const username of USERNAMES) expect(stored).not.toContain(username)
+		}
 	})
 
 	it('should never store a username in DASH_KV keys, values or metadata', async () => {
