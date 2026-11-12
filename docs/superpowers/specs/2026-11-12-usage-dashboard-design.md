@@ -58,6 +58,7 @@ These would make the project a failure even if the page works:
   - The Analytics Engine SQL API for the Part 1 dataset.
   - One account API token stored as a Worker secret, with exactly Account Analytics Read and Workers KV Storage Read. It covers GraphQL, Analytics Engine SQL and the KV reads.
 - Cache computed results for about 5 minutes, so reloading the page doesn't hammer KV or the analytics APIs.
+- Grant counts come from an hourly cron that reads each grant's **value** once and keeps a username-free index plus a summary in the dashboard's own KV namespace. KV-list metadata isn't enough: on 2026-11-12, 584 of 924 grants were 0.x records with no metadata, and 533 had no KV expiration. _(Planning call.)_
 - The page renders on the server. Make it look decent and work on a phone.
 
 ### Part 3: Access
