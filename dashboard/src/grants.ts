@@ -2,6 +2,7 @@
 // ABOUTME: Reads each grant once into an index in DASH_KV that holds no username, client URL or client name, and caps reads per run.
 import { CLIENT_LABELS, isCimdClientId, labelForClient } from '../../src/analytics/clientLabel'
 import { getKvJson, listKvKeys } from './cfApi'
+import { listDashKeys } from './dashKv'
 import type { DashEnv } from './env'
 
 export interface GrantSummary {
@@ -381,18 +382,6 @@ function signInsByDay(signIns: number[], now: Date): GrantSummary['signInsByDay'
 		const day = today - (SIGN_IN_DAYS - 1) + i
 		return { date: new Date(day * DAY_SECONDS * 1000).toISOString().slice(0, 10), count: counts.get(day) ?? 0 }
 	})
-}
-
-/** Lists every DASH_KV key under `prefix`, one list call per 1,000 keys */
-async function listDashKeys(kv: KVNamespace, prefix: string): Promise<string[]> {
-	const names: string[] = []
-	let cursor: string | undefined
-	do {
-		const page = await kv.list({ prefix, cursor })
-		names.push(...page.keys.map(({ name }) => name))
-		cursor = page.list_complete ? undefined : page.cursor
-	} while (cursor)
-	return names
 }
 
 /** Reads many DASH_KV keys as text, in pages the bulk get accepts, and returns the ones that exist */

@@ -18,6 +18,21 @@ const API_BASE = 'https://api.cloudflare.com/client/v4/'
 
 /** wrangler.toml's env with the AUD tag the test tokens are signed for */
 const accessEnv: DashEnv = { ...env, ACCESS_AUD: AUD }
+/** The same, with an HMAC key, so active users are counted */
+const configuredEnv: DashEnv = { ...accessEnv, ACTIVE_USER_HMAC_KEY: 'a'.repeat(32) }
+
+const GRANT_SUMMARY = {
+	computedAt: '2026-11-12T15:17:00.000Z',
+	liveGrants: 3,
+	liveUsers: 2,
+	noExpiryGrants: 0,
+	pendingGrants: 0,
+	unresolvedGrants: 0,
+	registeredClients: 5,
+	signInsLast7d: 1,
+	signInsByDay: [],
+	clients: [],
+}
 
 let signingKey: CryptoKey
 let publicJwk: JWK
@@ -130,9 +145,9 @@ async function clearDashKv(): Promise<void> {
 }
 
 /** Calls the Worker's fetch handler and waits for anything it handed to waitUntil */
-async function serve(request: Request<unknown, IncomingRequestCfProperties>): Promise<Response> {
+async function serve(request: Request<unknown, IncomingRequestCfProperties>, workerEnv: DashEnv = accessEnv): Promise<Response> {
 	const ctx = createExecutionContext()
-	const response = await worker.fetch(request, accessEnv, ctx)
+	const response = await worker.fetch(request, workerEnv, ctx)
 	await waitOnExecutionContext(ctx)
 	return response
 }
@@ -183,24 +198,34 @@ describe('dashboard Worker fetch', () => {
 		expect(kvListCalls()).toBe(listsAfterFirst)
 	})
 
-	it('should not start a refresh when the grant summary exists', async () => {
-		await env.DASH_KV.put(
-			'summary:grants',
-			JSON.stringify({
-				computedAt: '2026-11-12T15:17:00.000Z',
-				liveGrants: 3,
-				liveUsers: 2,
-				noExpiryGrants: 0,
-				pendingGrants: 0,
-				unresolvedGrants: 0,
-				registeredClients: 5,
-				signInsLast7d: 1,
-				signInsByDay: [],
-				clients: [],
-			}),
-		)
+	it('should not start a refresh when the grant summary exists and active users are not configured', async () => {
+		await env.DASH_KV.put('summary:grants', JSON.stringify(GRANT_SUMMARY))
 
 		const html = await (await serve(requestWith(await signToken()))).text()
+
+		expect(html).not.toContain('warming up')
+		expect(html).toContain('not configured')
+		expect(kvListCalls()).toBe(0)
+	})
+
+	it('should start a refresh when active users are configured but have no summary yet', async () => {
+		await env.DASH_KV.put('summary:grants', JSON.stringify(GRANT_SUMMARY))
+
+		const html = await (await serve(requestWith(await signToken()), configuredEnv)).text()
+
+		expect(html).toContain('warming up: the first active-user count is being computed')
+		expect(errorSpy).toHaveBeenCalledWith('[STATS] active user refresh failed (status 403)')
+		expect(kvListCalls()).toBeGreaterThan(0)
+	})
+
+	it('should not start a refresh when both summaries exist', async () => {
+		await env.DASH_KV.put('summary:grants', JSON.stringify(GRANT_SUMMARY))
+		await env.DASH_KV.put(
+			'summary:active-users',
+			JSON.stringify({ computedAt: '2026-11-12T15:17:00.000Z', dau: 1, wau: 1, mau: 1, activeByDay: [], activeSince: '2026-11-12' }),
+		)
+
+		const html = await (await serve(requestWith(await signToken()), configuredEnv)).text()
 
 		expect(html).not.toContain('warming up')
 		expect(kvListCalls()).toBe(0)

@@ -1,7 +1,8 @@
 // ABOUTME: Renders the dashboard page model to one self-contained HTML document: tiles, inline SVG charts and tables.
 // ABOUTME: No client-side JS or external assets; every interpolated string is escaped, and failed panels say why.
+import type { ActiveUsersSummary } from './activeUsers'
 import type { GrantSummary } from './grants'
-import { isLoadError } from './model'
+import { isLoadError, isNotConfigured } from './model'
 import type { DashboardModel, LoadError } from './model'
 import type { ToolRow, ToolStats } from './tools'
 import type { TrafficSummary } from './traffic'
@@ -63,6 +64,16 @@ function formatTime(iso: unknown): string {
 function formatDay(date: string): string {
 	const [, month, day] = date.split('-').map(Number)
 	return isNumber(month) && isNumber(day) && month >= 1 && month <= 12 ? `${MONTHS[month - 1]} ${day}` : date
+}
+
+/** True for a `YYYY-MM-DD` string */
+function isIsoDate(value: unknown): value is string {
+	return typeof value === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(value) && Number.isFinite(Date.parse(value))
+}
+
+/** The `YYYY-MM-DD` date `days` days after `date` (before, for a negative count) */
+function addDays(date: string, days: number): string {
+	return new Date(Date.parse(date) + days * 86_400_000).toISOString().slice(0, 10)
 }
 
 /** Axis ticks: in full under 10,000, compact (20K, 1.5M) on an axis that reaches it */
@@ -133,14 +144,63 @@ function sourcedTile<T>(label: string, source: T | LoadError | null, value: (dat
 	return { label, value: value(source), note: note?.(source) }
 }
 
+/** An active-user tile, which also says when counting isn't configured */
+function activeTile(
+	label: string,
+	state: DashboardModel['activeUsers'],
+	value: (data: ActiveUsersSummary) => string,
+	note: (data: ActiveUsersSummary) => string,
+): Tile {
+	if (isNotConfigured(state)) return { label, value: DASH, note: 'not configured' }
+	return sourcedTile(label, state, value, note)
+}
+
+/** The UTC day an active-user summary counts as today, or null if its computedAt isn't a timestamp */
+function summaryDay(summary: ActiveUsersSummary): string | null {
+	const ms = typeof summary.computedAt === 'string' ? Date.parse(summary.computedAt) : Number.NaN
+	return Number.isFinite(ms) ? new Date(ms).toISOString().slice(0, 10) : null
+}
+
+/** A window count's note, which says the count is partial until counting covers the whole window */
+function windowNote(summary: ActiveUsersSummary, days: number): string {
+	const full = `Distinct users, last ${days} UTC days`
+	if (summary.activeSince === null) return 'No active users seen yet'
+	const today = summaryDay(summary)
+	if (!isIsoDate(summary.activeSince) || today === null) return full
+	if (summary.activeSince === today) return 'Counting started today'
+	if (summary.activeSince > addDays(today, -(days - 1))) return `Partial: since ${formatDay(summary.activeSince)}`
+	return full
+}
+
+function connectedUsersNote(grants: GrantSummary): string {
+	const expiring = isNumber(grants.liveGrants) && isNumber(grants.noExpiryGrants) ? grants.liveGrants - grants.noExpiryGrants : null
+	return `${formatCount(expiring)} grants with a 30-day expiry, ${formatCount(grants.noExpiryGrants)} legacy grants with no expiry`
+}
+
 function renderTiles(model: DashboardModel): string {
 	const tiles: Tile[] = [
-		sourcedTile(
-			'Users with live grants',
-			model.grants,
-			(g) => formatCount(g.liveUsers),
-			() => 'Roughly monthly active: most grants last 30 days',
+		activeTile(
+			'Active users today',
+			model.activeUsers,
+			(a) => formatCount(a.dau),
+			(a) => {
+				const today = summaryDay(a)
+				return today === null ? 'UTC day so far' : `So far on ${formatDay(today)} (UTC)`
+			},
 		),
+		activeTile(
+			'Active users, 7 days',
+			model.activeUsers,
+			(a) => formatCount(a.wau),
+			(a) => windowNote(a, 7),
+		),
+		activeTile(
+			'Active users, 30 days',
+			model.activeUsers,
+			(a) => formatCount(a.mau),
+			(a) => windowNote(a, 30),
+		),
+		sourcedTile('Connected users', model.grants, (g) => formatCount(g.liveUsers), connectedUsersNote),
 		sourcedTile(
 			'Sign-ins, last 7 days',
 			model.grants,
@@ -296,6 +356,42 @@ function tableView(headers: Array<{ label: string; numeric?: boolean }>, rows: s
 // ---------------------------------------------------------------------------------------------------------------------
 // Sections
 // ---------------------------------------------------------------------------------------------------------------------
+
+const ACTIVE_WARMING_UP = 'warming up: the first active-user count is being computed, so check back in a few minutes'
+const ACTIVE_NOT_CONFIGURED = 'Not configured: set the ACTIVE_USER_HMAC_KEY secret to start counting.'
+
+function renderActiveUsersSection(state: DashboardModel['activeUsers']): string {
+	let body: string
+	if (isNotConfigured(state)) body = emptyNote(ACTIVE_NOT_CONFIGURED)
+	else if (state === null) body = emptyNote(ACTIVE_WARMING_UP)
+	else if (isLoadError(state)) body = loadErrorNote(state.error)
+	else if (state.activeByDay.length === 0) body = emptyNote()
+	else {
+		const days = state.activeByDay
+		const since = state.activeSince
+		const partial =
+			isIsoDate(since) && since > days[0].date
+				? `<p class="caption">Counting started ${esc(formatDay(since))}; earlier days have no data.</p>\n`
+				: ''
+		body = `${partial}${columnChart({
+			label: 'Daily active users over the last 30 days',
+			dates: days.map((day) => day.date),
+			values: days.map((day) => [day.count]),
+			series: [{ name: 'Active users', color: '--series-active' }],
+			height: 120,
+			intervals: 3,
+			tooltips: days.map((day) => `${formatDay(day.date)}: ${formatCount(day.count)} active users`),
+		})}
+${tableView(
+	[{ label: 'Date' }, { label: 'Active users', numeric: true }],
+	days.map((day) => [esc(day.date), formatCount(day.count)]),
+)}`
+	}
+	return `<section class="panel"><h2>Active users, last 30 days</h2>
+<p class="caption">Distinct users whose AI client held a live access token at any hourly check that UTC day.</p>
+${body}
+</section>`
+}
 
 const REQUEST_SERIES: ChartSeries[] = [
 	{ name: 'Served', color: '--series-1' },
@@ -482,6 +578,20 @@ ${body}
 </section>`
 }
 
+const ACTIVE_NOTE = 'Active users count anyone whose AI client held a live access token during an hourly check'
+const ACTIVE_STORAGE_NOTE = 'Stored as keyed hashes, deleted after 31 days.'
+
+function activeUsersNote(state: DashboardModel['activeUsers']): string {
+	if (isNotConfigured(state)) return `<p>${esc("Active users aren't counted: the ACTIVE_USER_HMAC_KEY secret isn't set.")}</p>`
+	if (isLoadError(state)) return loadErrorNote(state.error, 'Active-user summary')
+	let counted = '.'
+	if (state !== null && state.activeSince === null) counted = '. None recorded yet.'
+	else if (state !== null && isIsoDate(state.activeSince)) {
+		counted = `, counted from ${state.activeSince === summaryDay(state) ? 'today' : formatDay(state.activeSince)}.`
+	}
+	return `<p>${esc(`${ACTIVE_NOTE}${counted} ${ACTIVE_STORAGE_NOTE}`)}</p>`
+}
+
 function renderNotes(model: DashboardModel): string {
 	const { tools, grants } = model
 	const tracking = isLoadError(tools)
@@ -490,6 +600,7 @@ function renderNotes(model: DashboardModel): string {
 	const computed =
 		grants && !isLoadError(grants) ? ` Grant summary computed ${esc(formatTime(grants.computedAt))}; it refreshes hourly.` : ''
 	return `<footer class="panel notes"><h2>Notes</h2>
+${activeUsersNote(model.activeUsers)}
 ${tracking}
 <p>Error rate counts uncaught exceptions; tool failures are in the Tools table.</p>
 <p>Traffic and tool numbers are cached for up to 5 minutes.</p>
@@ -502,7 +613,8 @@ ${tracking}
 // ---------------------------------------------------------------------------------------------------------------------
 
 // Colours follow the dataviz reference palette: categorical slots 1 and 2 for the stacked requests chart (validated as an
-// adjacent pair in both modes), red for errors and violet for sign-ins as single-series charts.
+// adjacent pair in both modes), red for errors, violet for sign-ins and aqua for active users as single-series charts.
+// Light aqua sits under 3:1 on the light surface, so its chart keeps a table view.
 const LIGHT_TOKENS = `
 	color-scheme: light;
 	--page: #f9f9f7;
@@ -518,6 +630,7 @@ const LIGHT_TOKENS = `
 	--series-2: #b4b2a9;
 	--series-errors: #e34948;
 	--series-signins: #6250d6;
+	--series-active: #1baf7a;
 	--critical: #d03b3b;`
 
 const DARK_TOKENS = `
@@ -535,6 +648,7 @@ const DARK_TOKENS = `
 	--series-2: #6b6a64;
 	--series-errors: #e66767;
 	--series-signins: #9085e9;
+	--series-active: #199e70;
 	--critical: #d03b3b;`
 
 const STYLES = `
@@ -557,7 +671,7 @@ h2 { margin: 0 0 8px; font-size: 17px; font-weight: 600; }
 p { margin: 8px 0; }
 .caption { margin-top: 0; color: var(--ink-2); font-size: 14px; }
 .panel { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 20px; min-width: 0; }
-.tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 12px; }
+.tiles { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }
 .tile { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 14px 16px; min-width: 0; }
 .tile p { margin: 0; }
 .tile-label { color: var(--ink-2); font-size: 13px; }
@@ -605,6 +719,9 @@ caption { text-align: left; color: var(--ink-2); }
 .mini-value { font-size: 20px; font-weight: 600; }
 .mini-note { display: block; color: var(--ink-2); font-size: 13px; }
 .notes p { color: var(--ink-2); font-size: 14px; margin: 4px 0; }
+@media (max-width: 720px) {
+	.tiles { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
 @media (max-width: 520px) {
 	main { padding-top: 16px; }
 	table { font-size: 13px; }
@@ -633,6 +750,7 @@ export function renderDashboard(model: DashboardModel): string {
 <p>Production, as of ${esc(formatTime(model.generatedAt))}</p>
 </header>
 ${renderTiles(model)}
+${renderActiveUsersSection(model.activeUsers)}
 ${renderTrafficSection(model.traffic)}
 ${renderSignInsSection(model.grants)}
 ${renderClientsSection(model)}

@@ -4,6 +4,8 @@ import { env } from 'cloudflare:test'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { MockInstance } from 'vitest'
 
+import { readActiveUsersSummary } from '../src/activeUsers'
+import type { ActiveUsersSummary } from '../src/activeUsers'
 import { CfApiError } from '../src/cfApi'
 import { readGrantSummary } from '../src/grants'
 import type { GrantSummary } from '../src/grants'
@@ -16,6 +18,10 @@ import type { TrafficSummary } from '../src/traffic'
 vi.mock('../src/grants', async (importOriginal) => ({
 	...(await importOriginal<typeof import('../src/grants')>()),
 	readGrantSummary: vi.fn(),
+}))
+vi.mock('../src/activeUsers', async (importOriginal) => ({
+	...(await importOriginal<typeof import('../src/activeUsers')>()),
+	readActiveUsersSummary: vi.fn(),
 }))
 vi.mock('../src/traffic', () => ({ fetchTraffic: vi.fn() }))
 vi.mock('../src/tools', () => ({ fetchToolStats: vi.fn() }))
@@ -34,6 +40,15 @@ const SUMMARY: GrantSummary = {
 	signInsByDay: [],
 	clients: [],
 }
+const ACTIVE: ActiveUsersSummary = {
+	computedAt: '2026-11-12T15:17:00.000Z',
+	dau: 3,
+	wau: 5,
+	mau: 8,
+	activeByDay: [],
+	activeSince: '2026-11-01',
+}
+const HMAC_KEY = 'h'.repeat(32)
 const TRAFFIC: TrafficSummary = { days: [], last24h: { requests: 10, errors: 1 } }
 const TOOLS: ToolStats = { firstEventAt: null, last24h: [], last7d: [], clients7d: [] }
 
@@ -48,6 +63,7 @@ async function clearDashKv(): Promise<void> {
 beforeEach(async () => {
 	await clearDashKv()
 	vi.mocked(readGrantSummary).mockResolvedValue(SUMMARY)
+	vi.mocked(readActiveUsersSummary).mockResolvedValue(ACTIVE)
 	vi.mocked(fetchTraffic).mockResolvedValue(TRAFFIC)
 	vi.mocked(fetchToolStats).mockResolvedValue(TOOLS)
 	errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
@@ -59,13 +75,40 @@ afterEach(() => {
 })
 
 describe('buildDashboardModel', () => {
-	it('should combine the three loads', async () => {
-		expect(await buildDashboardModel(env, NOW)).toEqual({
+	it('should combine the four loads', async () => {
+		expect(await buildDashboardModel({ ...env, ACTIVE_USER_HMAC_KEY: HMAC_KEY }, NOW)).toEqual({
 			generatedAt: NOW.toISOString(),
+			activeUsers: ACTIVE,
 			grants: SUMMARY,
 			traffic: TRAFFIC,
 			tools: TOOLS,
 		})
+	})
+
+	it.each([
+		['missing', undefined],
+		['shorter than 32 characters', 'h'.repeat(31)],
+	])('should mark active users not configured, without reading them, when the HMAC key is %s', async (_case, key) => {
+		const model = await buildDashboardModel({ ...env, ACTIVE_USER_HMAC_KEY: key }, NOW)
+
+		expect(model.activeUsers).toEqual({ notConfigured: true })
+		expect(readActiveUsersSummary).not.toHaveBeenCalled()
+		expect(model.grants).toEqual(SUMMARY)
+	})
+
+	it('should keep a missing active-user summary as null', async () => {
+		vi.mocked(readActiveUsersSummary).mockResolvedValue(null)
+
+		expect((await buildDashboardModel({ ...env, ACTIVE_USER_HMAC_KEY: HMAC_KEY }, NOW)).activeUsers).toBeNull()
+	})
+
+	it('should turn a failed active-user read into an error for its panel', async () => {
+		vi.mocked(readActiveUsersSummary).mockRejectedValue(new Error('KV down'))
+
+		const model = await buildDashboardModel({ ...env, ACTIVE_USER_HMAC_KEY: HMAC_KEY }, NOW)
+
+		expect(model.activeUsers).toEqual({ error: 'unexpected error' })
+		expect(errorSpy).toHaveBeenCalledWith('[STATS] active users load failed: unexpected error')
 	})
 
 	it('should keep a missing grant summary as null', async () => {

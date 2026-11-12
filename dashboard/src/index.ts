@@ -1,6 +1,7 @@
 // ABOUTME: Entry point for the lastfm-mcp-stats Worker, the private usage dashboard at stats.lastfm-mcp.com.
 // ABOUTME: Every request passes the Access gate before routing; the hourly cron refreshes the dashboard's cached summaries.
 import { requireAccess } from './access'
+import { refreshActiveUsers } from './activeUsers'
 import { CfApiError } from './cfApi'
 import type { DashEnv } from './env'
 import { refreshGrantSummary } from './grants'
@@ -35,7 +36,27 @@ async function refreshGrantsSafely(env: DashEnv, now: Date): Promise<void> {
 	}
 }
 
-/** Starts a grant summary refresh after the response, unless one was started within the warm-up window */
+/** Refreshes the active-user summary and contains any failure, logging only the status, as for the grant summary */
+async function refreshActiveUsersSafely(env: DashEnv, now: Date): Promise<void> {
+	try {
+		await refreshActiveUsers(env, now)
+	} catch (error) {
+		// The previous summary stays in DASH_KV, and markers written before the failure count on the next run
+		const status = error instanceof CfApiError ? ` (status ${error.status})` : ''
+		console.error(`[STATS] active user refresh failed${status}`)
+	}
+}
+
+/**
+ * Runs both hourly refreshes, each failure contained to its own summary. Active users go first: they're the headline
+ * numbers, and their few DASH_KV operations are bounded on their own (see MAX_ACTIVE_USER_WRITES_PER_RUN).
+ */
+async function refreshAll(env: DashEnv, now: Date): Promise<void> {
+	await refreshActiveUsersSafely(env, now)
+	await refreshGrantsSafely(env, now)
+}
+
+/** Starts the summary refreshes after the response, unless one was started within the warm-up window */
 async function startWarmup(env: DashEnv, ctx: ExecutionContext): Promise<void> {
 	try {
 		if (await env.DASH_KV.get(WARMUP_KEY)) return
@@ -43,7 +64,7 @@ async function startWarmup(env: DashEnv, ctx: ExecutionContext): Promise<void> {
 	} catch {
 		// Without the marker, a warm-up still beats an empty page until the hourly cron
 	}
-	ctx.waitUntil(refreshGrantsSafely(env, new Date()))
+	ctx.waitUntil(refreshAll(env, new Date()))
 }
 
 export default {
@@ -54,13 +75,13 @@ export default {
 		const url = new URL(request.url)
 		if (request.method === 'GET' && url.pathname === '/') {
 			const model = await buildDashboardModel(env)
-			if (model.grants === null) await startWarmup(env, ctx)
+			if (model.grants === null || model.activeUsers === null) await startWarmup(env, ctx)
 			return new Response(renderDashboard(model), { headers: PAGE_HEADERS })
 		}
 		return new Response('Not found', { status: 404, headers: { 'Content-Type': 'text/plain; charset=utf-8' } })
 	},
 
 	async scheduled(controller, env) {
-		await refreshGrantsSafely(env, new Date(controller.scheduledTime))
+		await refreshAll(env, new Date(controller.scheduledTime))
 	},
 } satisfies ExportedHandler<DashEnv>

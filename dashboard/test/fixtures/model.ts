@@ -1,5 +1,6 @@
 // ABOUTME: A realistic dashboard page model for rendering tests and for previewing the page as a screenshot.
 // ABOUTME: Numbers are shaped like production (about 45k requests a day, 900 grants, 4,700 registered clients), with no real data.
+import type { ActiveUsersSummary } from '../../src/activeUsers'
 import type { GrantSummary } from '../../src/grants'
 import type { DashboardModel } from '../../src/model'
 import type { ToolRow, ToolStats } from '../../src/tools'
@@ -32,6 +33,18 @@ export function fixtureGrants(): GrantSummary {
 			{ label: 'cursor.com', grants: 61, users: 18 },
 			{ label: 'unknown', grants: 57, users: 9 },
 		],
+	}
+}
+
+/** Counting started well before the 30-day window, so every window is complete */
+export function fixtureActiveUsers(): ActiveUsersSummary {
+	return {
+		computedAt: '2026-11-12T15:17:02.000Z',
+		dau: 138,
+		wau: 291,
+		mau: 447,
+		activeByDay: fixtureDates().map((date, i) => ({ date, count: 104 + ((i * 11) % 37) + (i % 7 === 3 ? -24 : 0) })),
+		activeSince: '2026-10-08',
 	}
 }
 
@@ -77,5 +90,11 @@ export function fixtureTools(): ToolStats {
 }
 
 export function fixtureModel(): DashboardModel {
-	return { generatedAt: FIXTURE_NOW.toISOString(), grants: fixtureGrants(), traffic: fixtureTraffic(), tools: fixtureTools() }
+	return {
+		generatedAt: FIXTURE_NOW.toISOString(),
+		activeUsers: fixtureActiveUsers(),
+		grants: fixtureGrants(),
+		traffic: fixtureTraffic(),
+		tools: fixtureTools(),
+	}
 }

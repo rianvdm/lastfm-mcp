@@ -6,6 +6,11 @@ export interface DashEnv {
 	DASH_KV: KVNamespace
 	/** Secret: Cloudflare API token for reading the production Worker's OAUTH_KV and Analytics Engine data */
 	CF_API_TOKEN: string
+	/**
+	 * Secret: the HMAC key that turns user IDs into the hashes active-user markers are keyed by. At least 32 characters;
+	 * while it's missing or shorter, active users aren't recorded and the page says they're not configured.
+	 */
+	ACTIVE_USER_HMAC_KEY?: string
 	ACCOUNT_ID: string
 	/** The production MCP Worker's OAUTH_KV namespace, read through the Cloudflare API */
 	OAUTH_KV_NAMESPACE_ID: string
