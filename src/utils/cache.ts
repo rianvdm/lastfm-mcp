@@ -1,10 +1,12 @@
 // ABOUTME: Smart caching utility with TTL-based expiration, request deduplication, and KV storage.
 // ABOUTME: Provides optimized cache TTLs per Last.fm endpoint type to reduce API calls.
+import { countCacheHit, countCacheMiss } from './cacheTally'
 
 // KVNamespace is available globally in Cloudflare Workers runtime
 declare global {
 	interface KVNamespace {
 		get(key: string): Promise<string | null>
+		get<ExpectedValue = unknown>(key: string, type: 'json'): Promise<ExpectedValue | null>
 		put(key: string, value: string, options?: { expirationTtl?: number }): Promise<void>
 		list(options?: { prefix?: string; limit?: number }): Promise<{ keys: Array<{ name: string }> }>
 		delete(key: string): Promise<void>
@@ -178,6 +180,7 @@ export class SmartCache {
 		const pending = this.pendingRequests.get(dedupeKey)
 		if (pending) {
 			console.log(`Deduplicating request for ${type}:${identifier}`)
+			countCacheHit()
 			return pending.promise as Promise<T>
 		}
 
@@ -195,16 +198,19 @@ export class SmartCache {
 						if (age > options.maxAge) {
 							// Cache is too old, fetch fresh data
 						} else {
+							countCacheHit()
 							return cached
 						}
 					}
 				} else {
+					countCacheHit()
 					return cached
 				}
 			}
 		}
 
 		// Create new request and add to pending requests
+		countCacheMiss()
 		const promise = this.fetchAndCache(type, identifier, fetcher)
 		this.pendingRequests.set(dedupeKey, {
 			promise,
@@ -374,6 +380,8 @@ export function createLastfmCache(kv?: KVNamespace): SmartCache {
 				return
 			},
 			async getOrFetch<T>(_type: keyof CacheConfig, _key: string, fetcher: () => Promise<T>): Promise<T> {
+				// Without KV every lookup goes to Last.fm
+				countCacheMiss()
 				return fetcher()
 			},
 			async invalidate(): Promise<void> {

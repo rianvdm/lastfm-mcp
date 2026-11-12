@@ -2,10 +2,12 @@
 // ABOUTME: Registers tools, prompts, and resources, and manages per-request auth context.
 import { McpServer } from '@modelcontextprotocol/server'
 
+import type { ToolCallEvent } from '../analytics/toolEvents'
 import { CachedLastfmClient } from '../clients/cachedLastfm'
 import { LastfmClient } from '../clients/lastfm'
 import type { Env } from '../types/env'
 
+import { instrumentTools } from './instrumentation'
 import { SERVER_VERSION } from './protocol'
 import { registerPrompts } from './prompts/analysis'
 import { registerResources } from './resources/lastfm'
@@ -30,6 +32,11 @@ export interface McpServerWithContext {
 	setContext: (ctx: Partial<McpRequestContext>) => void
 }
 
+export interface CreateMcpServerOptions {
+	/** Called once per tool call with its anonymous ToolCallEvent. Exceptions are logged and never reach the caller. */
+	onToolCall?: (event: ToolCallEvent) => void
+}
+
 /**
  * Creates a configured MCP server instance with access to environment bindings.
  *
@@ -37,8 +44,9 @@ export interface McpServerWithContext {
  * Returns both the server and a context setter for per-request session management.
  *
  * @param env - Cloudflare Worker environment bindings
+ * @param options - `onToolCall` turns on tool-call instrumentation for this server
  */
-export function createMcpServer(env: Env): McpServerWithContext {
+export function createMcpServer(env: Env, options: CreateMcpServerOptions = {}): McpServerWithContext {
 	const server = new McpServer(
 		{
 			name: SERVER_NAME,
@@ -58,6 +66,9 @@ export function createMcpServer(env: Env): McpServerWithContext {
 			].join('\n'),
 		},
 	)
+
+	// Instrumentation must run before any tool is registered: registering the first tool installs the tools/call handler it wraps.
+	if (options.onToolCall) instrumentTools(server, options.onToolCall)
 
 	// Create Last.fm client with caching
 	const lastfmClient = new LastfmClient(env.LASTFM_API_KEY)

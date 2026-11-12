@@ -1,5 +1,5 @@
-// ABOUTME: Checks the REGISTRATION_RATE_LIMITER binding that wrangler.toml declares for staging and production.
-// ABOUTME: Bindings aren't inherited by [env.production], and a missing binding would fail open, so drift fails here.
+// ABOUTME: Checks the REGISTRATION_RATE_LIMITER and TOOL_EVENTS bindings that wrangler.toml declares for staging and production.
+// ABOUTME: Bindings aren't inherited by [env.production], and a missing binding fails open silently, so drift fails here.
 import { env } from 'cloudflare:test'
 import { describe, it, expect } from 'vitest'
 
@@ -11,6 +11,7 @@ interface LimiterConfig {
 }
 
 const limiters = JSON.parse(env.TEST_REGISTRATION_RATE_LIMITERS) as { staging: LimiterConfig | null; production: LimiterConfig | null }
+const toolEventsDatasets = JSON.parse(env.TEST_TOOL_EVENTS_DATASETS) as { staging: string | null; production: string | null }
 
 describe('REGISTRATION_RATE_LIMITER in wrangler.toml', () => {
 	it.each(['staging', 'production'] as const)('should be declared for %s', (environment) => {
@@ -27,5 +28,15 @@ describe('REGISTRATION_RATE_LIMITER in wrangler.toml', () => {
 
 	it('should use the period the 429 sends as Retry-After', () => {
 		expect(limiters.production?.simple.period).toBe(REGISTRATION_RATE_LIMIT_PERIOD_SECONDS)
+	})
+})
+
+describe('TOOL_EVENTS in wrangler.toml', () => {
+	it('should write staging tool calls to the staging dataset', () => {
+		expect(toolEventsDatasets.staging).toBe('lastfm_mcp_tool_events_staging')
+	})
+
+	it('should write production tool calls to the production dataset', () => {
+		expect(toolEventsDatasets.production).toBe('lastfm_mcp_tool_events')
 	})
 })

@@ -31,6 +31,12 @@ namespace_id = "2001"
   limit = 5
   period = 60
 
+# Anonymous tool-call events (src/analytics/toolEvents.ts): no user identifier, no tool arguments.
+# Bindings aren't inherited, so [env.production] declares its own dataset (test/wrangler-config.test.ts checks both).
+[[analytics_engine_datasets]]
+binding = "TOOL_EVENTS"
+dataset = "lastfm_mcp_tool_events_staging"
+
 # Production environment
 [env.production]
 name = "lastfm-mcp-prod"
@@ -54,6 +60,10 @@ namespace_id = "2002"
   [env.production.ratelimits.simple]
   limit = 5
   period = 60
+
+[[env.production.analytics_engine_datasets]]
+binding = "TOOL_EVENTS"
+dataset = "lastfm_mcp_tool_events"
 
 # Secrets (set via wrangler secret put):
 # - LASTFM_API_KEY
