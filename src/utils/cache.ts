@@ -5,6 +5,7 @@
 declare global {
 	interface KVNamespace {
 		get(key: string): Promise<string | null>
+		get<ExpectedValue = unknown>(key: string, type: 'json'): Promise<ExpectedValue | null>
 		put(key: string, value: string, options?: { expirationTtl?: number }): Promise<void>
 		list(options?: { prefix?: string; limit?: number }): Promise<{ keys: Array<{ name: string }> }>
 		delete(key: string): Promise<void>

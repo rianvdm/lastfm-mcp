@@ -36,6 +36,11 @@ export function labelForClient(clientId: string | undefined, clientName?: string
 	return capped || UNKNOWN_LABEL
 }
 
+/** Whether a client ID is a CIMD metadata URL, whose label needs no registered name. */
+export function isCimdClientId(clientId: string): boolean {
+	return parseHttpUrl(clientId) !== null
+}
+
 function parseHttpUrl(value: string): URL | null {
 	try {
 		const url = new URL(value)

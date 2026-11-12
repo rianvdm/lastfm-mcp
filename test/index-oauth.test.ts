@@ -290,6 +290,39 @@ describe('Last.fm MCP Server (OAuth Entry Point)', () => {
 		})
 	})
 
+	describe('/mcp endpoint - tool-call events', () => {
+		it('should write one anonymous data point for a tools/call of ping', async () => {
+			const origin = 'https://lastfm-mcp.com'
+			const accessToken = await signInForAccessToken(worker, env, origin)
+			const writeDataPoint = vi.fn()
+			const envWithEvents = { ...env, TOOL_EVENTS: { writeDataPoint } }
+
+			const transport = new StreamableHTTPClientTransport(new URL(`${origin}/mcp`), {
+				requestInit: { headers: { Authorization: `Bearer ${accessToken}` } },
+				fetch: async (input, init) => {
+					const ctx = createExecutionContext()
+					const response = await worker.fetch(new Request(input, init), envWithEvents, ctx)
+					// The event is written inside ctx.waitUntil, so wait for it as the runtime would
+					await waitOnExecutionContext(ctx)
+					return response
+				},
+			})
+			const client = new Client({ name: 'events-test', version: '0.0.0' }, { versionNegotiation: { mode: 'legacy' } })
+			await client.connect(transport)
+			await client.callTool({ name: 'ping', arguments: { message: 'events check' } })
+			await client.close()
+
+			expect(writeDataPoint).toHaveBeenCalledTimes(1)
+			const point = writeDataPoint.mock.calls[0][0] as { blobs: string[] }
+			expect(point.blobs[0]).toBe('ping')
+			// signInForAccessToken registers its DCR client under this name
+			expect(point.blobs[1]).toBe('Resource Compat Test Client')
+			expect(point.blobs[2]).toBe('ok')
+			// The mocked Last.fm sign-in is for 'testuser'; no part of the event may identify the user
+			expect(point.blobs.some((blob) => blob.includes('testuser'))).toBe(false)
+		})
+	})
+
 	describe('/mcp endpoint - OAuth auth', () => {
 		it('should route to OAuth provider when Bearer token present', async () => {
 			const initRequest = {

@@ -4,6 +4,7 @@ import { OAuthProvider } from '@cloudflare/workers-oauth-provider'
 import type { ExecutionContext } from '@cloudflare/workers-types'
 import { createMcpHandler, type CreateMcpHandlerOptions } from 'agents/mcp/server'
 
+import { recordToolEvent } from './analytics/recordToolEvent'
 import { LastfmOAuthHandler, type LastfmUserProps } from './auth/oauth-handler'
 import { normalizeAuthorizeResource, normalizeTokenResource } from './auth/resource-indicator'
 import { MARKETING_PAGE_HTML } from './marketing-page'
@@ -35,7 +36,13 @@ const MCP_HANDLER_OPTIONS: CreateMcpHandlerOptions = {
  */
 const mcpApiHandler = {
 	async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
-		const { server, setContext } = createMcpServer(env)
+		// workers-oauth-provider sets ctx.auth next to ctx.props. Only the client ID is read: it labels tool-call events,
+		// which carry no user identifier. The write runs in waitUntil and recordToolEvent never rejects, so recording
+		// can't fail or delay a tool call.
+		const clientId = (ctx as unknown as { auth?: { clientId?: string } }).auth?.clientId
+		const { server, setContext } = createMcpServer(env, {
+			onToolCall: (event) => ctx.waitUntil(recordToolEvent(env, clientId, event)),
+		})
 
 		// Set session from OAuth context.
 		// workers-oauth-provider injects the user props from completeAuthorization() into ctx.props.

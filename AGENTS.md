@@ -2,7 +2,7 @@
 
 Guidance for coding agents (Claude Code, Codex) working in this repository.
 
-Cloudflare Worker implementing a Model Context Protocol (MCP) server that connects AI assistants to Last.fm listening data. Runs on workerd with a Rate Limiting binding (`REGISTRATION_RATE_LIMITER`) and three KV namespaces: `OAUTH_KV` (OAuth clients, grants and tokens), `MCP_SESSIONS` (the Last.fm response cache; the name predates OAuth) and `MCP_RL` (per-IP rate limits).
+Cloudflare Worker implementing a Model Context Protocol (MCP) server that connects AI assistants to Last.fm listening data. Runs on workerd with a Rate Limiting binding (`REGISTRATION_RATE_LIMITER`) and three KV namespaces: `OAUTH_KV` (OAuth clients, grants and tokens), `MCP_SESSIONS` (the Last.fm response cache; the name predates OAuth) and `MCP_RL` (per-IP rate limits). The `TOOL_EVENTS` Analytics Engine binding receives one anonymous data point per tool call, in the `lastfm_mcp_tool_events_staging` dataset on staging and `lastfm_mcp_tool_events` in production.
 
 ## Build / Test / Lint Commands
 
@@ -157,6 +157,7 @@ describe('Feature', () => {
 src/
   index-oauth.ts        # Sole Worker entry point: static routes, per-IP rate limits, per-origin OAuth provider
   marketing-page.ts     # Landing page HTML (served at /)
+  analytics/            # Anonymous tool-call events for TOOL_EVENTS: data point layout, client labels, the waitUntil writer
   auth/                 # OAuth handler (consent, Last.fm sign-in, callback), consent page, /mcp resource rewrite
   clients/              # Last.fm API client + caching decorator
   mcp/                  # MCP SDK server, tools (public + authenticated), prompts, resources
