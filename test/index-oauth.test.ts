@@ -581,17 +581,19 @@ describe('Last.fm MCP Server (OAuth Entry Point)', () => {
 	})
 
 	describe('static endpoints', () => {
-		it('should return marketing page for GET /', async () => {
+		it('should return the landing page for GET /', async () => {
 			const request = new Request('https://example.com/')
 			const ctx = createExecutionContext()
 			const response = await worker.fetch(request, env, ctx)
 			await waitOnExecutionContext(ctx)
 
 			expect(response.status).toBe(200)
-			expect(response.headers.get('content-type')).toBe('text/html')
+			expect(response.headers.get('content-type')).toBe('text/html; charset=utf-8')
+			expect(response.headers.get('cache-control')).toBe('public, max-age=3600')
 
 			const html = await response.text()
-			expect(html).toContain('Last.fm MCP Server')
+			expect(html).toContain("Ask your AI about everything you've ever listened to.")
+			expect(html).toContain('https://example.com/mcp')
 		})
 
 		it('should return setup instructions for agents at GET /llms.txt', async () => {

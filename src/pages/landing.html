@@ -1,0 +1,937 @@
+<!doctype html>
+<!--
+	ABOUTME: Landing page served at / by src/pages/landing.ts, which fills in the request origin for every address a visitor copies.
+	ABOUTME: Explains the server in plain language, lists example questions, and walks through setup per app with keyboard-friendly tabs.
+-->
+<html lang="en">
+	<head>
+		<meta charset="utf-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1" />
+		<title>Last.fm MCP: connect your Last.fm history to Claude, ChatGPT and other AI assistants</title>
+		<meta
+			name="description"
+			content="Ask your AI when you first heard an album, what you had on repeat last summer, or what to play next. Free and open source, and it only reads."
+		/>
+		<meta name="robots" content="index, follow" />
+		<meta name="theme-color" content="#ece6dc" />
+		<link rel="canonical" href="https://lastfm-mcp.com" />
+		<link rel="alternate" type="text/plain" href="/llms.txt" title="Setup instructions for AI agents" />
+		<link
+			rel="icon"
+			type="image/svg+xml"
+			href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23d51007' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M3 18v-6a9 9 0 0 1 18 0v6'/%3E%3Cpath d='M21 19a2 2 0 0 1-2 2h-1a2 2 0 0 1-2-2v-3a2 2 0 0 1 2-2h3zM3 19a2 2 0 0 0 2 2h1a2 2 0 0 0 2-2v-3a2 2 0 0 0-2-2H3z'/%3E%3C/svg%3E"
+		/>
+		<link rel="preconnect" href="https://fonts.googleapis.com" />
+		<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+		<link
+			href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,700&display=swap"
+			rel="stylesheet"
+		/>
+		<style>
+			:root {
+				--bg: #ece6dc;
+				--raised: #f7f3ec;
+				--border: #d9d0c3;
+				--heading: #22201d;
+				--body: #504a43;
+				--body-soft: #5a534b;
+				--muted: #6d665e;
+				--accent: #b8432f;
+				--code-bg: #22201d;
+				--code-text: #efe7da;
+				--tab-off: #ddd3c5;
+				--fill-warm: #efe2d6;
+				--fill-sage: #e4e6da;
+				--gutter: 48px;
+				--mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+			}
+
+			/* The hidden attribute must win over any class that sets display (tab panels, the tab list) */
+			[hidden] {
+				display: none !important;
+			}
+
+			* {
+				box-sizing: border-box;
+			}
+
+			html {
+				overflow-x: clip;
+				scroll-behavior: smooth;
+			}
+
+			@media (prefers-reduced-motion: reduce) {
+				html {
+					scroll-behavior: auto;
+				}
+			}
+
+			body {
+				margin: 0;
+				background: var(--bg);
+				color: var(--body);
+				font-family: 'Bricolage Grotesque', system-ui, sans-serif;
+				font-size: 16px;
+				line-height: 1.55;
+				-webkit-font-smoothing: antialiased;
+			}
+
+			a {
+				color: inherit;
+				text-underline-offset: 3px;
+			}
+
+			a:hover {
+				color: var(--accent);
+			}
+
+			:focus-visible {
+				outline: 2px solid var(--accent);
+				outline-offset: 2px;
+			}
+
+			code,
+			pre {
+				font-family: var(--mono);
+			}
+
+			p code,
+			li code {
+				font-size: 0.875em;
+				background: rgba(34, 32, 29, 0.07);
+				padding: 1px 5px;
+				border-radius: 4px;
+				overflow-wrap: anywhere;
+			}
+
+			b {
+				color: var(--heading);
+			}
+
+			.wrap {
+				max-width: 1040px;
+				margin: 0 auto;
+				padding: 0 var(--gutter);
+			}
+
+			.visually-hidden {
+				position: absolute;
+				width: 1px;
+				height: 1px;
+				margin: -1px;
+				overflow: hidden;
+				clip: rect(0 0 0 0);
+				white-space: nowrap;
+			}
+
+			/* Header */
+			.site-header {
+				display: flex;
+				flex-wrap: wrap;
+				justify-content: space-between;
+				align-items: baseline;
+				gap: 8px 24px;
+				padding-top: 20px;
+				padding-bottom: 4px;
+				font-size: 14px;
+				color: var(--muted);
+			}
+
+			.wordmark {
+				color: var(--heading);
+				font-weight: 700;
+				font-size: 16px;
+				text-decoration: none;
+			}
+
+			.site-header nav {
+				display: flex;
+				flex-wrap: wrap;
+				gap: 4px 18px;
+			}
+
+			.site-header nav a {
+				text-decoration: none;
+			}
+
+			/* Hero */
+			.hero {
+				position: relative;
+				overflow: hidden;
+				padding-bottom: 230px;
+			}
+
+			#wave {
+				position: absolute;
+				inset: 0;
+				width: 100%;
+				height: 100%;
+			}
+
+			.wave-label {
+				position: absolute;
+				z-index: 1;
+				font-size: 12px;
+				color: #3d3833;
+				background: rgba(236, 230, 220, 0.8);
+				padding: 2px 8px;
+				border-radius: 4px;
+				white-space: nowrap;
+			}
+
+			.wave-label-early {
+				left: 38%;
+				bottom: 176px;
+			}
+
+			.wave-label-late {
+				right: 8%;
+				bottom: 182px;
+			}
+
+			.hero-copy {
+				position: relative;
+				z-index: 1;
+				max-width: 640px;
+				padding-top: 40px;
+			}
+
+			h1 {
+				margin: 0 0 16px;
+				color: var(--heading);
+				font-size: clamp(32px, 1.2rem + 3.2vw, 46px);
+				font-weight: 700;
+				line-height: 1.05;
+				letter-spacing: -0.02em;
+			}
+
+			.subline {
+				margin: 0 0 26px;
+				font-size: 17px;
+			}
+
+			.cta-row {
+				display: flex;
+				flex-wrap: wrap;
+				align-items: center;
+				gap: 10px 16px;
+			}
+
+			.button {
+				display: inline-block;
+				padding: 12px 22px;
+				border-radius: 999px;
+				background: var(--accent);
+				color: #fff;
+				font-weight: 700;
+				font-size: 15px;
+				text-decoration: none;
+			}
+
+			.button:hover {
+				color: #fff;
+				background: #a23a28;
+			}
+
+			.cta-aside {
+				font-size: 14px;
+				color: var(--muted);
+			}
+
+			/* Sections */
+			.section {
+				padding: 56px 0;
+				border-top: 1px solid var(--border);
+				scroll-margin-top: 8px;
+			}
+
+			h2 {
+				margin: 0 0 8px;
+				color: var(--heading);
+				font-size: 30px;
+				line-height: 1.15;
+				letter-spacing: -0.02em;
+			}
+
+			h3 {
+				margin: 0 0 6px;
+				color: var(--heading);
+				font-size: 17px;
+			}
+
+			.lede {
+				margin: 0 0 28px;
+				max-width: 640px;
+				color: var(--body-soft);
+			}
+
+			/* Things you can ask */
+			.asks {
+				display: flex;
+				flex-wrap: wrap;
+				gap: 12px;
+				margin: 0;
+				padding: 0;
+				list-style: none;
+			}
+
+			.ask {
+				padding: 12px 16px;
+				border: 1px solid var(--border);
+				border-radius: 18px 18px 18px 4px;
+				background: var(--raised);
+				color: #2c2824;
+			}
+
+			.ask:nth-child(3n + 2) {
+				border-radius: 18px 18px 4px 18px;
+				background: var(--fill-warm);
+			}
+
+			.ask:nth-child(3n) {
+				background: var(--fill-sage);
+			}
+
+			/* Set it up */
+			.tablist {
+				display: flex;
+				flex-wrap: wrap;
+				gap: 6px;
+			}
+
+			.tab {
+				padding: 10px 16px;
+				border: 0;
+				border-radius: 10px 10px 0 0;
+				background: var(--tab-off);
+				color: var(--body-soft);
+				font: inherit;
+				font-size: 15px;
+				cursor: pointer;
+			}
+
+			.tab[aria-selected='true'] {
+				background: var(--raised);
+				color: var(--heading);
+				font-weight: 700;
+			}
+
+			.panel {
+				padding: 26px 28px;
+				border-radius: 10px;
+				background: var(--raised);
+			}
+
+			.panel + .panel {
+				margin-top: 16px;
+			}
+
+			.tabs-ready .panel {
+				margin-top: 0;
+				border-top-left-radius: 0;
+			}
+
+			.panel-heading {
+				margin-bottom: 14px;
+				font-size: 20px;
+			}
+
+			.tabs-ready .panel-heading {
+				display: none;
+			}
+
+			.panel-heading + p {
+				margin-top: 0;
+			}
+
+			.steps {
+				margin: 0;
+				padding-left: 22px;
+			}
+
+			.steps li + li {
+				margin-top: 10px;
+			}
+
+			.steps .code {
+				margin: 10px 0 4px;
+			}
+
+			.code {
+				display: flex;
+				align-items: flex-start;
+				gap: 12px;
+				padding: 14px 16px;
+				border-radius: 8px;
+				background: var(--code-bg);
+				color: var(--code-text);
+			}
+
+			.code pre {
+				flex: 1;
+				min-width: 0;
+				margin: 0;
+				font-size: 13.5px;
+				line-height: 1.5;
+				white-space: pre-wrap;
+				overflow-wrap: anywhere;
+			}
+
+			.copy {
+				flex-shrink: 0;
+				padding: 3px 12px;
+				border: 0;
+				border-radius: 999px;
+				background: var(--accent);
+				color: #fff;
+				font: inherit;
+				font-size: 13px;
+				font-weight: 700;
+				cursor: pointer;
+			}
+
+			/* Copy buttons only work with the script, which adds the js class */
+			html:not(.js) .copy {
+				display: none;
+			}
+
+			.copy:hover {
+				background: #a23a28;
+			}
+
+			.or {
+				margin: 26px 0 6px;
+				color: var(--muted);
+				font-size: 13px;
+				letter-spacing: 0.08em;
+				text-transform: uppercase;
+			}
+
+			.small {
+				margin: 14px 0 0;
+				color: var(--muted);
+				font-size: 14px;
+			}
+
+			.apps {
+				display: grid;
+				grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));
+				grid-auto-flow: dense;
+				gap: 10px;
+			}
+
+			.app {
+				border-radius: 8px;
+				background: var(--bg);
+			}
+
+			.app[open] {
+				grid-column: 1 / -1;
+			}
+
+			.app summary {
+				position: relative;
+				padding: 12px 36px 12px 14px;
+				color: var(--heading);
+				cursor: pointer;
+				list-style: none;
+			}
+
+			.app summary::-webkit-details-marker {
+				display: none;
+			}
+
+			.app summary::after {
+				content: '';
+				position: absolute;
+				top: 19px;
+				right: 16px;
+				width: 7px;
+				height: 7px;
+				border-right: 2px solid var(--muted);
+				border-bottom: 2px solid var(--muted);
+				transform: rotate(45deg);
+			}
+
+			.app[open] summary::after {
+				top: 22px;
+				transform: rotate(-135deg);
+			}
+
+			.app-hint {
+				display: block;
+				color: var(--muted);
+				font-size: 13px;
+				overflow-wrap: anywhere;
+			}
+
+			.app-body {
+				padding: 0 14px 16px;
+			}
+
+			.app-body > p {
+				margin: 0 0 10px;
+			}
+
+			.app-body .small {
+				margin-top: 10px;
+			}
+
+			.app-body h4 {
+				margin: 18px 0 8px;
+				color: var(--heading);
+				font-size: 15px;
+			}
+
+			/* What you're agreeing to */
+			.trust {
+				display: grid;
+				grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+				gap: 24px;
+			}
+
+			.trust p {
+				margin: 0;
+				color: var(--body-soft);
+				font-size: 15px;
+			}
+
+			/* Footer */
+			.site-footer {
+				display: flex;
+				flex-wrap: wrap;
+				justify-content: space-between;
+				gap: 12px 24px;
+				padding-top: 28px;
+				padding-bottom: 36px;
+				border-top: 1px solid var(--border);
+				color: var(--muted);
+				font-size: 14px;
+			}
+
+			.site-footer p {
+				margin: 0;
+			}
+
+			.footer-links {
+				display: flex;
+				flex-wrap: wrap;
+				gap: 4px 16px;
+			}
+
+			@media (max-width: 640px) {
+				:root {
+					--gutter: 16px;
+				}
+
+				.hero {
+					padding-bottom: 236px;
+				}
+
+				.hero-copy {
+					padding-top: 28px;
+				}
+
+				.wave-label-early {
+					left: var(--gutter);
+					bottom: 184px;
+				}
+
+				.wave-label-late {
+					right: var(--gutter);
+					bottom: 156px;
+				}
+
+				.section {
+					padding: 44px 0;
+				}
+
+				h2 {
+					font-size: 26px;
+				}
+
+				.tablist {
+					margin-bottom: 8px;
+				}
+
+				.tab {
+					padding: 9px 12px;
+					border-radius: 10px;
+					font-size: 14px;
+				}
+
+				.tabs-ready .panel {
+					border-top-left-radius: 10px;
+				}
+
+				.panel {
+					padding: 20px 16px;
+				}
+
+				.code {
+					padding: 12px;
+				}
+			}
+		</style>
+	</head>
+	<body>
+		<header class="site-header wrap">
+			<a class="wordmark" href="/">Last.fm MCP</a>
+			<nav aria-label="Main">
+				<a href="#setup">Set up</a>
+				<a href="#ask">What you can ask</a>
+				<a href="https://github.com/rianvdm/lastfm-mcp">GitHub</a>
+			</nav>
+		</header>
+
+		<main>
+			<section class="hero">
+				<canvas id="wave" aria-hidden="true"></canvas>
+				<span class="wave-label wave-label-early" aria-hidden="true">2009 · post-rock phase</span>
+				<span class="wave-label wave-label-late" aria-hidden="true">2024 · jazz, apparently</span>
+				<div class="wrap">
+					<div class="hero-copy">
+						<h1>Ask your AI about everything you've ever listened to.</h1>
+						<p class="subline">
+							Connect your Last.fm history to Claude, ChatGPT or any assistant that takes connectors. Ask when you first heard an album,
+							what you had on repeat last summer, or what to play next.
+						</p>
+						<div class="cta-row">
+							<a class="button" href="#setup">Set it up in two minutes</a>
+							<span class="cta-aside">Free, open source, read-only</span>
+						</div>
+					</div>
+				</div>
+			</section>
+
+			<section class="section" id="ask" aria-labelledby="ask-heading">
+				<div class="wrap">
+					<h2 id="ask-heading">Things you can ask</h2>
+					<p class="lede">
+						Ask in your own words. It reads your scrobbles, charts and loved tracks, and works out days like "yesterday" in your own
+						timezone.
+					</p>
+					<ul class="asks">
+						<li class="ask">When did I start listening to Radiohead?</li>
+						<li class="ask">What was I obsessed with last summer?</li>
+						<li class="ask">How has my taste changed since 2015?</li>
+						<li class="ask">What did I listen to yesterday?</li>
+						<li class="ask">Find me artists like my top five, but ones I've never played</li>
+						<li class="ask">Where should I start with Talk Talk, given what I already like?</li>
+						<li class="ask">Which albums did I play to death and then forget about?</li>
+					</ul>
+				</div>
+			</section>
+
+			<section class="section" id="setup" aria-labelledby="setup-heading">
+				<div class="wrap">
+					<h2 id="setup-heading">Set it up</h2>
+					<p class="lede">Pick the app you use. Either way, you'll sign in to Last.fm once at the end.</p>
+
+					<!-- Shown by the script; without JavaScript the three panels below read as stacked sections -->
+					<div class="tablist" role="tablist" aria-label="Your app" hidden>
+						<button class="tab" type="button" role="tab" id="tab-claude" aria-controls="panel-claude" aria-selected="true">
+							Claude app
+						</button>
+						<button class="tab" type="button" role="tab" id="tab-agent" aria-controls="panel-agent" aria-selected="false" tabindex="-1">
+							Claude Code or another agent
+						</button>
+						<button class="tab" type="button" role="tab" id="tab-other" aria-controls="panel-other" aria-selected="false" tabindex="-1">
+							Other apps
+						</button>
+					</div>
+
+					<div class="panel" role="tabpanel" id="panel-claude" aria-labelledby="tab-claude" tabindex="0">
+						<h3 class="panel-heading">Claude app</h3>
+						<ol class="steps">
+							<li>Open Claude (desktop app or claude.ai) and go to <b>Customize → Connectors</b></li>
+							<li>
+								Click <b>Add</b>, then <b>Add custom connector</b>. Name it Last.fm, paste this address, and click <b>Continue</b>:
+								<div class="code">
+									<pre><code>{{ORIGIN}}/mcp</code></pre>
+									<button class="copy" type="button">Copy</button>
+								</div>
+							</li>
+							<li>Leave the sign-in settings as they are and click <b>Add</b>, then <b>Connect</b>, and sign in to Last.fm</li>
+							<li>Start a new chat and ask something</li>
+						</ol>
+						<p class="small">
+							On the Free plan you can add one custom connector. On Team and Enterprise plans, an Owner adds it under Organization settings
+							→ Connectors, then you click Connect.
+						</p>
+					</div>
+
+					<div class="panel" role="tabpanel" id="panel-agent" aria-labelledby="tab-agent" tabindex="0">
+						<h3 class="panel-heading">Claude Code or another agent</h3>
+						<p>Paste this to your agent and let it do the rest:</p>
+						<div class="code">
+							<pre><code>Set up the Last.fm MCP server for me. Instructions are at {{ORIGIN}}/llms.txt</code></pre>
+							<button class="copy" type="button">Copy</button>
+						</div>
+						<p class="or">Or do it yourself</p>
+						<p>Run this in your terminal:</p>
+						<div class="code">
+							<pre><code>claude mcp add --scope user --transport http lastfm {{ORIGIN}}/mcp</code></pre>
+							<button class="copy" type="button">Copy</button>
+						</div>
+						<p class="small">
+							Start Claude Code, run <code>/mcp</code>, choose <b>lastfm</b>, then <b>Authenticate</b>, and sign in to Last.fm in your
+							browser.
+						</p>
+					</div>
+
+					<div class="panel" role="tabpanel" id="panel-other" aria-labelledby="tab-other" tabindex="0">
+						<h3 class="panel-heading">Other apps</h3>
+						<p>Anything that supports remote MCP connectors works.</p>
+						<div class="apps">
+							<details class="app">
+								<summary>ChatGPT<span class="app-hint">Business, Enterprise and Edu</span></summary>
+								<div class="app-body">
+									<p>
+										Works on ChatGPT Business, Enterprise and Edu, on the web. A workspace admin or owner adds it once; after your admin
+										gives you access, you install it and sign in.
+										<a href="https://help.openai.com/en/articles/12584461-connecting-custom-mcp-servers-in-chatgpt">OpenAI's guide</a>
+										has the details.
+									</p>
+									<h4>For a workspace admin or owner</h4>
+									<ol class="steps">
+										<li>Open ChatGPT on the web and go to <b>Plugins</b> (chatgpt.com/plugins)</li>
+										<li>Click <b>+</b>, then <b>Add custom MCP server</b></li>
+										<li>
+											Name it Last.fm and paste this as the <b>Server URL</b>:
+											<div class="code">
+												<pre><code>{{ORIGIN}}/mcp</code></pre>
+												<button class="copy" type="button">Copy</button>
+											</div>
+										</li>
+										<li>
+											Choose <b>OAuth</b> for authentication, read the warning, then click <b>I understand and want to continue</b> and
+											<b>Create as a plugin</b>
+										</li>
+										<li>Publish it to your workspace</li>
+									</ol>
+									<h4>Once your admin gives you access</h4>
+									<ol class="steps">
+										<li>In ChatGPT on the web, open <b>Plugins</b>, find Last.fm and install it</li>
+										<li>Sign in to Last.fm when ChatGPT asks</li>
+										<li>In a chat, type <b>@</b> and pick Last.fm</li>
+									</ol>
+								</div>
+							</details>
+
+							<details class="app">
+								<summary>Cursor<span class="app-hint">~/.cursor/mcp.json</span></summary>
+								<div class="app-body">
+									<p>Add this to <code>~/.cursor/mcp.json</code>:</p>
+									<div class="code">
+										<pre><code>{
+  "mcpServers": {
+    "lastfm": {
+      "url": "{{ORIGIN}}/mcp"
+    }
+  }
+}</code></pre>
+										<button class="copy" type="button">Copy</button>
+									</div>
+									<p class="small">Cursor then asks you to sign in to Last.fm.</p>
+								</div>
+							</details>
+
+							<details class="app">
+								<summary>Devin Desktop (formerly Windsurf)<span class="app-hint">mcp_config.json</span></summary>
+								<div class="app-body">
+									<p>Add this to <code>~/.config/devin/mcp_config.json</code>:</p>
+									<div class="code">
+										<pre><code>{
+  "mcpServers": {
+    "lastfm": {
+      "url": "{{ORIGIN}}/mcp"
+    }
+  }
+}</code></pre>
+										<button class="copy" type="button">Copy</button>
+									</div>
+									<p class="small">Then run <code>devin mcp login lastfm</code> and sign in to Last.fm.</p>
+								</div>
+							</details>
+
+							<details class="app">
+								<summary>OpenCode<span class="app-hint">opencode.json</span></summary>
+								<div class="app-body">
+									<p>Add this to <code>opencode.json</code>:</p>
+									<div class="code">
+										<pre><code>{
+  "mcp": {
+    "lastfm": {
+      "type": "remote",
+      "url": "{{ORIGIN}}/mcp"
+    }
+  }
+}</code></pre>
+										<button class="copy" type="button">Copy</button>
+									</div>
+									<p class="small">Then run <code>opencode mcp auth lastfm</code> and sign in to Last.fm.</p>
+								</div>
+							</details>
+
+							<details class="app">
+								<summary>Codex<span class="app-hint">~/.codex/config.toml</span></summary>
+								<div class="app-body">
+									<p>Add this to <code>~/.codex/config.toml</code>:</p>
+									<div class="code">
+										<pre><code>[mcp_servers.lastfm]
+url = "{{ORIGIN}}/mcp"</code></pre>
+										<button class="copy" type="button">Copy</button>
+									</div>
+									<p class="small">Then run <code>codex mcp login lastfm</code> and sign in to Last.fm in your browser.</p>
+								</div>
+							</details>
+
+							<details class="app">
+								<summary>Anything else<span class="app-hint">via mcp-remote</span></summary>
+								<div class="app-body">
+									<p>For apps that only run local servers. Your browser opens to sign in to Last.fm the first time it connects.</p>
+									<div class="code">
+										<pre><code>{
+  "mcpServers": {
+    "lastfm": {
+      "command": "npx",
+      "args": ["-y", "mcp-remote", "{{ORIGIN}}/mcp"]
+    }
+  }
+}</code></pre>
+										<button class="copy" type="button">Copy</button>
+									</div>
+								</div>
+							</details>
+						</div>
+					</div>
+				</div>
+			</section>
+
+			<!-- FAQ -->
+
+			<section class="section" aria-labelledby="trust-heading">
+				<div class="wrap">
+					<h2 id="trust-heading">What you're agreeing to</h2>
+					<div class="trust">
+						<div>
+							<h3>It only reads</h3>
+							<p>It can look at your listening history. It can't scrobble, love tracks or change anything on your account.</p>
+						</div>
+						<div>
+							<h3>You sign in on Last.fm</h3>
+							<p>Your password never touches this site. You sign in on Last.fm's own page, and each sign-in expires after 30 days.</p>
+						</div>
+						<div>
+							<h3>Open source</h3>
+							<p>
+								Every line is on <a href="https://github.com/rianvdm/lastfm-mcp">GitHub</a>. The
+								<a href="https://elezea.com/privacy/#lastfm-mcp-server">privacy page</a> spells out exactly what's stored and for how long.
+							</p>
+						</div>
+					</div>
+				</div>
+			</section>
+		</main>
+
+		<footer class="site-footer wrap">
+			<p>
+				Made by <a href="https://elezea.com">Rian van der Merwe</a> · Built on the <a href="https://www.last.fm/api">Last.fm API</a> · Not
+				affiliated with Last.fm
+			</p>
+			<nav class="footer-links" aria-label="Project">
+				<a href="https://github.com/rianvdm/lastfm-mcp">GitHub</a>
+				<a href="https://github.com/rianvdm/lastfm-mcp/releases">Release notes</a>
+				<a href="https://elezea.com/privacy/#lastfm-mcp-server">Privacy</a>
+				<a href="https://github.com/rianvdm/lastfm-mcp/issues">Report a bug</a>
+				<a href="/llms.txt">For agents: llms.txt</a>
+			</nav>
+		</footer>
+
+		<p class="visually-hidden" id="copy-status" role="status"></p>
+
+		<script>
+			// Setup tabs (ARIA tab pattern). Without this script every panel stays visible and the tab list stays hidden.
+			;(() => {
+				const setup = document.getElementById('setup')
+				const tablist = setup.querySelector('[role="tablist"]')
+				const tabs = Array.from(tablist.querySelectorAll('[role="tab"]'))
+				const panels = tabs.map((tab) => document.getElementById(tab.getAttribute('aria-controls')))
+
+				const select = (index, moveFocus) => {
+					tabs.forEach((tab, i) => {
+						const selected = i === index
+						tab.setAttribute('aria-selected', String(selected))
+						tab.tabIndex = selected ? 0 : -1
+						panels[i].hidden = !selected
+					})
+					if (moveFocus) tabs[index].focus()
+				}
+
+				tabs.forEach((tab, i) => {
+					tab.addEventListener('click', () => select(i, false))
+					tab.addEventListener('keydown', (event) => {
+						const last = tabs.length - 1
+						let next
+						if (event.key === 'ArrowRight') next = i === last ? 0 : i + 1
+						else if (event.key === 'ArrowLeft') next = i === 0 ? last : i - 1
+						else if (event.key === 'Home') next = 0
+						else if (event.key === 'End') next = last
+						else return
+						event.preventDefault()
+						select(next, true)
+					})
+				})
+
+				select(0, false)
+				setup.classList.add('tabs-ready')
+				tablist.hidden = false
+			})()
+
+			// Copy buttons. When the clipboard is missing or refuses (insecure context, Safari permission), select the text instead.
+			;(() => {
+				document.documentElement.classList.add('js')
+				const status = document.getElementById('copy-status')
+				const timers = new WeakMap()
+
+				const flash = (button, label, ms) => {
+					button.textContent = label
+					status.textContent = label
+					clearTimeout(timers.get(button))
+					timers.set(
+						button,
+						setTimeout(() => {
+							button.textContent = 'Copy'
+							// Cleared so the same message is announced again next time
+							status.textContent = ''
+						}, ms),
+					)
+				}
+
+				const selectText = (code, button) => {
+					const range = document.createRange()
+					range.selectNodeContents(code)
+					const selection = window.getSelection()
+					selection.removeAllRanges()
+					selection.addRange(range)
+					flash(button, 'Press ⌘C / Ctrl+C', 4000)
+				}
+
+				document.querySelectorAll('.copy').forEach((button) => {
+					button.addEventListener('click', () => {
+						const code = button.parentElement.querySelector('code')
+						if (!navigator.clipboard || !navigator.clipboard.writeText) {
+							selectText(code, button)
+							return
+						}
+						navigator.clipboard.writeText(code.textContent).then(
+							() => flash(button, 'Copied', 2000),
+							() => selectText(code, button),
+						)
+					})
+				})
+			})()
+		</script>
+	</body>
+</html>

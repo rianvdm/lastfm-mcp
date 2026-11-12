@@ -7,9 +7,9 @@ import { createMcpHandler, type CreateMcpHandlerOptions } from 'agents/mcp/serve
 import { recordToolEvent } from './analytics/recordToolEvent'
 import { LastfmOAuthHandler, type LastfmUserProps } from './auth/oauth-handler'
 import { normalizeAuthorizeResource, normalizeTokenResource } from './auth/resource-indicator'
-import { MARKETING_PAGE_HTML } from './marketing-page'
 import { PROTOCOL_VERSION, SERVER_VERSION } from './mcp/protocol'
 import { createMcpServer } from './mcp/server'
+import { buildLandingPage } from './pages/landing'
 import { buildLlmsTxt } from './pages/llms-txt'
 import type { Env } from './types/env'
 import { httpsRedirect } from './utils/httpsRedirect'
@@ -146,12 +146,12 @@ export default {
 			})
 		}
 
-		// Serve marketing page at root
+		// Landing page, with setup addresses pointing at the origin it was fetched from
 		if (url.pathname === '/' && request.method === 'GET') {
-			return new Response(MARKETING_PAGE_HTML, {
+			return new Response(buildLandingPage(url.origin), {
 				status: 200,
 				headers: {
-					'Content-Type': 'text/html',
+					'Content-Type': 'text/html; charset=utf-8',
 					'Cache-Control': 'public, max-age=3600',
 					'Access-Control-Allow-Origin': '*',
 				},
