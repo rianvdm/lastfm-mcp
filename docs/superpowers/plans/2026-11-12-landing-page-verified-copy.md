@@ -70,21 +70,33 @@ Why `--scope user`: without it, `claude mcp add` uses `local` scope, which the q
 
 Sign-in wording is the quickstart's: "Select `sentry` from the list, press Enter, and choose `Authenticate`. Your browser opens to Sentry's sign-in page." Shell alternative for `llms.txt`: `claude mcp login lastfm` (listed in `claude mcp --help`).
 
-### ChatGPT — HEDGED (conditional; see the ruling under FAQ)
+### ChatGPT — PASS, conditional (see the ruling under FAQ)
 
 Source for the steps: [Add custom MCP server](https://developers.openai.com/api/docs/guides/custom-mcp-server) (OpenAI developer docs) and [Connect and test your plugin](https://developers.openai.com/plugins/deploy/connect-chatgpt). ChatGPT now calls these **plugins**; the old "Settings → Connectors → Advanced → Developer mode" path is gone from current docs.
 
-Source for plans: the OpenAI Help Center article [Connecting custom MCP servers in ChatGPT](https://help.openai.com/en/articles/12584461-connecting-custom-mcp-servers-in-chatgpt). That site returns 403 to WebFetch and curl, so plan facts come from search-engine extracts of the article, not a direct read. What they say: custom MCP servers are available on ChatGPT Pro (read and fetch only) and on Business, Enterprise and Edu (full support), on the web; on Business, Enterprise and Edu, admins and owners control who can add them. Neither the article extracts nor the [connectors article](https://help.openai.com/en/articles/11487775-connectors-in-chatgpt) list Free or Plus.
+Source for plans and roles: the OpenAI Help Center article [Connecting custom MCP servers in ChatGPT](https://help.openai.com/en/articles/12584461-connecting-custom-mcp-servers-in-chatgpt). It returns 403 to WebFetch and curl from this machine; the Task 2 reviewer read it directly and confirmed: full MCP support is on Business, Enterprise and Edu, on the web; on Business, only admins and owners can create and publish these connections; on Enterprise and Edu, admins can give selected members creation rights through RBAC; Pro gets custom servers with read and fetch permissions only; the current Plugins flow needs no Developer Mode. Neither that article nor the [connectors article](https://help.openai.com/en/articles/11487775-connectors-in-chatgpt) lists Free or Plus.
 
-Steps for the "Other apps → ChatGPT" panel:
+**Pro is left out of all final copy.** Pro allows read and fetch only, and OpenAI's MCP guide says "Tools without this hint [`readOnlyHint`] are treated as write actions." No tool in `src/` sets annotations, so Pro would likely refuse our tools. Adding `readOnlyHint: true` to every tool is a separate follow-up (tool changes are a non-goal for this branch); once it ships and works on a Pro account, Pro can go back in.
 
-1. Open ChatGPT on the web and go to **Plugins** (chatgpt.com/plugins). Custom MCP servers need ChatGPT Pro, or a Business, Enterprise or Edu workspace that allows them.
+Panel for "Other apps → ChatGPT". Intro line: "Works on ChatGPT Business, Enterprise and Edu, on the web. Someone with permission adds it for the workspace once; then everyone signs in with their own Last.fm account."
+
+*Adding it for your workspace* (a Business admin or owner; on Enterprise and Edu, an admin or a member the admin has given permission):
+
+1. Open ChatGPT on the web and go to **Plugins** (chatgpt.com/plugins)
 2. Click **+**, then **Add custom MCP server**
 3. Name it Last.fm and paste this as the **Server URL**: `{{ORIGIN}}/mcp`
 4. Choose **OAuth** for authentication, read the warning, then click **I understand and want to continue** and **Create as a plugin**
-5. Install the plugin and sign in to Last.fm when ChatGPT asks. In a chat, type **@** and pick Last.fm.
+5. Publish it to your workspace
 
-Confirmed in the developer docs: web access; the button labels in steps 2 and 4; "Supported MCP protocols: SSE and streaming HTTP"; authentication options **OAuth**, **No authentication**, **OAuth or no authentication**; OAuth via CIMD or DCR (our server offers both); "Install it before using it in a conversation"; type `@` to pick the plugin. Not documented: exactly when the OAuth sign-in window appears, hence "when ChatGPT asks".
+*Using it* (everyone, once it's published):
+
+1. In ChatGPT on the web, open **Plugins**, find Last.fm and install it
+2. Sign in to Last.fm when ChatGPT asks
+3. In a chat, type **@** and pick Last.fm
+
+For `llms.txt` (agents): ChatGPT setup can't be done by an agent. Tell the human: it works only on ChatGPT Business, Enterprise or Edu, on the web; a Business admin or owner (on Enterprise or Edu, an admin or a member with creation rights) must add `{{ORIGIN}}/mcp` under Plugins → + → Add custom MCP server with OAuth and publish it to the workspace; then each person installs Last.fm from Plugins and signs in to Last.fm. Other ChatGPT plans aren't supported yet.
+
+Confirmed in the developer docs: web access; the button labels in creator steps 2 and 4; "Supported MCP protocols: SSE and streaming HTTP"; authentication options **OAuth**, **No authentication**, **OAuth or no authentication**; OAuth via CIMD or DCR (our server offers both); "Install it before using it in a conversation"; type `@` to pick the plugin. Not documented: exactly when the OAuth sign-in window appears (hence "when ChatGPT asks"), and the label of the publish control, so creator step 5 names no button. Publishing itself is documented: "After you create and add a plugin, you can publish it to your ChatGPT workspace" ([Plugins docs](https://developers.openai.com/plugins/llms-full.txt), workspace publishing section).
 
 ### Codex — PASS (new)
 
@@ -180,10 +192,10 @@ In Claude, go to Customize → Connectors, click Add, then Add custom connector.
 *Sources: Claude app and Claude Code sections above.*
 
 **Does it work with ChatGPT?**
-Yes, on plans that allow custom MCP servers: ChatGPT Pro, and Business, Enterprise and Edu workspaces where an admin allows it. Use ChatGPT on the web: go to Plugins, click +, choose Add custom MCP server, paste `https://lastfm-mcp.com/mcp`, choose OAuth, and sign in to Last.fm. ChatGPT Free and Plus don't offer custom MCP servers. It also works with any other app that supports remote MCP servers.
-*Sources: ChatGPT section above. HEDGED: plan list from Help Center extracts, not a direct read; see Concerns.*
+Yes, on ChatGPT Business, Enterprise and Edu, on the web. A workspace admin or owner adds it once: in Plugins, click +, choose Add custom MCP server, paste `https://lastfm-mcp.com/mcp`, choose OAuth, and publish it to the workspace. On Enterprise and Edu, an admin can also let other members do this. Everyone then installs Last.fm from Plugins and signs in to Last.fm. Other ChatGPT plans aren't supported yet. It also works with any other app that supports remote MCP servers.
+*Sources: ChatGPT section above (Help Center article, read directly by the Task 2 reviewer; OpenAI MCP guide).*
 
-**ChatGPT ruling: conditional.** ChatGPT can connect to a remote MCP server with OAuth, but only on some plans, on the web, and on workspaces only if an admin allows it. Per the spec's rule, ChatGPT **stays** in the `<title>`, the hero subline and the share card, and the conditions live in this answer.
+**ChatGPT ruling: conditional.** ChatGPT can connect to a remote MCP server with OAuth, but only on Business, Enterprise and Edu, on the web, and only after an admin or owner (or, on Enterprise and Edu, a member with creation rights) adds and publishes it. Per the spec's rule, ChatGPT **stays** in the `<title>`, the hero subline and the share card, and the conditions live in this answer.
 
 **Do I need a Last.fm API key?**
 No. You sign in with your normal Last.fm account.
@@ -215,7 +227,8 @@ Related check on the trust section (not in Task 2's scope, recorded so Task 4 ca
 6. **Windsurf cut, Devin Desktop (formerly Windsurf) added.** The old path and `serverUrl` key aren't in current official docs.
 7. **Sign-in lines added** for Codex (`codex mcp login lastfm`), Cursor, OpenCode (`opencode mcp auth lastfm`), Devin Desktop (`devin mcp login lastfm`) and `mcp-remote`. The existing page didn't say how sign-in starts in those apps.
 8. **FAQ "How do I connect Last.fm to Claude?"** updated to items 3–5.
-9. **FAQ "Does it work with ChatGPT?"** names the plans and the menu path, says Free and Plus don't offer it, and keeps the "any other app" fallback.
+9. **FAQ "Does it work with ChatGPT?"** names the plans (Business, Enterprise, Edu; Pro left out until tools carry `readOnlyHint`), who adds it (admin or owner, or an Enterprise/Edu member with creation rights) and what everyone else does (install from Plugins, sign in), says other plans aren't supported yet, and keeps the "any other app" fallback.
+10. **ChatGPT panel split** into "Adding it for your workspace" and "Using it", plus agent wording for `llms.txt`.
 
 No other copy changes. Headline, subline, hero button, agent prompt, "What you're agreeing to", footer, meta description, and the `<title>` stay as the spec has them.
 
@@ -223,6 +236,5 @@ No other copy changes. Headline, subline, hero button, agent prompt, "What you'r
 
 ## Concerns for Rian
 
-1. **ChatGPT Pro may not run these tools.** OpenAI's docs say ChatGPT "respect[s] the `readOnlyHint` tool annotation… Tools without this hint are treated as write actions", and the Help Center extracts say Pro gets custom servers with read and fetch only. None of our tools set `readOnlyHint` (`grep` finds none in `src/`). So on Pro the tools may be blocked, and on Business, Enterprise and Edu each call may ask for confirmation. Before merge, either test on a Pro account or drop "ChatGPT Pro" from the FAQ answer ("on Business, Enterprise and Edu workspaces where an admin allows it"). Adding `annotations: { readOnlyHint: true }` to every tool is the real fix, but tool changes are a non-goal for this branch, so it would be a separate issue.
-2. **ChatGPT plan list wasn't read directly.** help.openai.com returns 403 to every fetch tool here. A 30-second check in a logged-in browser would settle it.
-3. **The "Windsurf" swap is a product call.** If "Devin Desktop" means nothing to visitors, cut the panel instead.
+1. **Follow-up issue: add `readOnlyHint`.** OpenAI's docs say ChatGPT "respect[s] the `readOnlyHint` tool annotation… Tools without this hint are treated as write actions", and Pro gets read and fetch only. None of our tools set `readOnlyHint` (`grep` finds none in `src/`), so Pro is left out of the copy, and on Business, Enterprise and Edu each call may ask for confirmation. Adding `annotations: { readOnlyHint: true }` to every tool is the fix, but tool changes are a non-goal for this branch, so it needs its own issue. After it ships and works on a Pro account, add Pro back to the FAQ and the ChatGPT panel.
+2. **The "Windsurf" swap is a product call.** If "Devin Desktop" means nothing to visitors, cut the panel instead.
