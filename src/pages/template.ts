@@ -7,7 +7,8 @@ const UNFILLED_PLACEHOLDER = /\{\{[A-Z][A-Z0-9_]*\}\}/
 export function fillPlaceholders(template: string, values: Record<string, string>): string {
 	let filled = template
 	for (const [key, value] of Object.entries(values)) {
-		filled = filled.replaceAll(`{{${key}}}`, value)
+		// A callback keeps the value literal: a replacement string would expand $$, $& and friends
+		filled = filled.replaceAll(`{{${key}}}`, () => value)
 	}
 
 	const unfilled = filled.match(UNFILLED_PLACEHOLDER)

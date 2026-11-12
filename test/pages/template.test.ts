@@ -34,6 +34,11 @@ describe('page templates', () => {
 			)
 		})
 
+		// String replacements would read $$ as $ and $& as the matched {{KEY}}; values must land literally
+		it.each(['https://x.dev/$$', 'https://x.dev/$&'])('inserts %s literally, without expanding $ patterns', (value) => {
+			expect(fillPlaceholders('{{ORIGIN}}/mcp', { ORIGIN: value })).toBe(`${value}/mcp`)
+		})
+
 		it('throws when a placeholder is left unfilled', () => {
 			expect(() => fillPlaceholders('{{ORIGIN}} {{TOOLS}}', { ORIGIN: 'a' })).toThrow(/Unfilled placeholder: {{TOOLS}}/)
 		})
