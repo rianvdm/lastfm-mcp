@@ -1,6 +1,6 @@
 // ABOUTME: Tests for recordToolEvent, which labels a tool call's OAuth client and writes the event to Analytics Engine.
 // ABOUTME: Covers the client-name lookup and its memo, and that a missing binding, a failing write or a failing KV read never rejects.
-import { describe, it, expect, vi } from 'vitest'
+import { describe, it, expect, vi, beforeEach, afterEach, type MockInstance } from 'vitest'
 
 import type { ToolCallEvent } from '../../src/analytics/toolEvents'
 import { recordToolEvent } from '../../src/analytics/recordToolEvent'
@@ -22,6 +22,17 @@ function freshClientId(): string {
 }
 
 describe('recordToolEvent', () => {
+	// The failure paths log on purpose; capture those warnings so they can be asserted and stay out of the test output
+	let warn: MockInstance<typeof console.warn>
+
+	beforeEach(() => {
+		warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+	})
+
+	afterEach(() => {
+		warn.mockRestore()
+	})
+
 	it('should label a registered client by its stored clientName and write one data point', async () => {
 		const clientId = freshClientId()
 		const { env, kvGet, writeDataPoint } = fakeEnv(async () => ({ clientId, clientName: 'Claude' }))
@@ -68,9 +79,12 @@ describe('recordToolEvent', () => {
 	})
 
 	it('should resolve without throwing when TOOL_EVENTS is not bound', async () => {
-		const { env } = fakeEnv(async () => ({ clientName: 'Claude' }), undefined)
+		const { env } = fakeEnv(async () => ({ clientName: 'Claude' }))
+		delete env.TOOL_EVENTS
+		expect('TOOL_EVENTS' in env).toBe(false)
 
 		await expect(recordToolEvent(env, freshClientId(), EVENT)).resolves.toBeUndefined()
+		expect(warn).not.toHaveBeenCalled()
 	})
 
 	it('should resolve without throwing when writeDataPoint throws', async () => {
@@ -81,6 +95,8 @@ describe('recordToolEvent', () => {
 
 		await expect(recordToolEvent(env, freshClientId(), EVENT)).resolves.toBeUndefined()
 		expect(writeDataPoint).toHaveBeenCalledTimes(1)
+		expect(warn).toHaveBeenCalledOnce()
+		expect(warn).toHaveBeenCalledWith('[ANALYTICS] tool event not recorded:', 'dataset unavailable')
 	})
 
 	it('should still write the point, labelled unknown, when the KV read rejects', async () => {
@@ -91,6 +107,8 @@ describe('recordToolEvent', () => {
 		await expect(recordToolEvent(env, freshClientId(), EVENT)).resolves.toBeUndefined()
 		expect(writeDataPoint).toHaveBeenCalledTimes(1)
 		expect(writeDataPoint?.mock.calls[0][0].blobs[1]).toBe('unknown')
+		expect(warn).toHaveBeenCalledOnce()
+		expect(warn).toHaveBeenCalledWith('[ANALYTICS] client lookup failed:', 'KV down')
 	})
 
 	it('should read KV again after a failed read instead of remembering unknown', async () => {
@@ -103,6 +121,8 @@ describe('recordToolEvent', () => {
 
 		expect(kvGet).toHaveBeenCalledTimes(2)
 		expect(writeDataPoint?.mock.calls.map((call) => call[0].blobs[1])).toEqual(['unknown', 'Claude'])
+		expect(warn).toHaveBeenCalledOnce()
+		expect(warn).toHaveBeenCalledWith('[ANALYTICS] client lookup failed:', 'KV blip')
 	})
 
 	it('should keep at most 500 labels, forgetting the oldest first', async () => {
