@@ -10,6 +10,7 @@ import { normalizeAuthorizeResource, normalizeTokenResource } from './auth/resou
 import { MARKETING_PAGE_HTML } from './marketing-page'
 import { PROTOCOL_VERSION, SERVER_VERSION } from './mcp/protocol'
 import { createMcpServer } from './mcp/server'
+import { buildLlmsTxt } from './pages/llms-txt'
 import type { Env } from './types/env'
 import { httpsRedirect } from './utils/httpsRedirect'
 import { buildRateLimitResponse, checkRateLimit, rateLimitKeyFromRequest } from './utils/rateLimit'
@@ -262,6 +263,17 @@ Sitemap: https://lastfm-mcp.com/sitemap.xml`,
 					},
 				},
 			)
+		}
+
+		// Setup instructions for agents, pointing at the origin they were fetched from
+		if (url.pathname === '/llms.txt' && request.method === 'GET') {
+			return new Response(buildLlmsTxt(url.origin), {
+				status: 200,
+				headers: {
+					'Content-Type': 'text/plain; charset=utf-8',
+					'Cache-Control': 'public, max-age=86400',
+				},
+			})
 		}
 
 		// Check if this is an MCP request
