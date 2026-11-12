@@ -70,6 +70,15 @@ export interface CacheEntry<T> {
 	version: string // For cache versioning/invalidation
 }
 
+/**
+ * Per-request count of cache lookups made through getOrFetch. A hit is data served from KV or from a
+ * deduplicated in-flight request; a miss is a call to Last.fm. Tool-call instrumentation reads it.
+ */
+export interface CacheTally {
+	hits: number
+	misses: number
+}
+
 export interface PendingRequest {
 	promise: Promise<unknown>
 	timestamp: number
@@ -78,12 +87,14 @@ export interface PendingRequest {
 export class SmartCache {
 	private kv: KVNamespace
 	private config: CacheConfig
+	private tally?: CacheTally
 	private pendingRequests = new Map<string, PendingRequest>()
 	private readonly CACHE_VERSION = '1.0.0'
 
-	constructor(kv: KVNamespace, config: Partial<CacheConfig> = {}) {
+	constructor(kv: KVNamespace, config: Partial<CacheConfig> = {}, tally?: CacheTally) {
 		this.kv = kv
 		this.config = { ...DEFAULT_CACHE_CONFIG, ...config }
+		this.tally = tally
 	}
 
 	/**
@@ -178,6 +189,7 @@ export class SmartCache {
 		const pending = this.pendingRequests.get(dedupeKey)
 		if (pending) {
 			console.log(`Deduplicating request for ${type}:${identifier}`)
+			if (this.tally) this.tally.hits++
 			return pending.promise as Promise<T>
 		}
 
@@ -195,16 +207,19 @@ export class SmartCache {
 						if (age > options.maxAge) {
 							// Cache is too old, fetch fresh data
 						} else {
+							if (this.tally) this.tally.hits++
 							return cached
 						}
 					}
 				} else {
+					if (this.tally) this.tally.hits++
 					return cached
 				}
 			}
 		}
 
 		// Create new request and add to pending requests
+		if (this.tally) this.tally.misses++
 		const promise = this.fetchAndCache(type, identifier, fetcher)
 		this.pendingRequests.set(dedupeKey, {
 			promise,
@@ -362,7 +377,7 @@ export const CacheKeys = {
 /**
  * Helper for creating Last.fm-specific cache instances
  */
-export function createLastfmCache(kv?: KVNamespace): SmartCache {
+export function createLastfmCache(kv?: KVNamespace, tally?: CacheTally): SmartCache {
 	if (!kv) {
 		console.log('No KV storage available, falling back to direct client')
 		// Return a mock cache that doesn't actually cache anything
@@ -374,6 +389,8 @@ export function createLastfmCache(kv?: KVNamespace): SmartCache {
 				return
 			},
 			async getOrFetch<T>(_type: keyof CacheConfig, _key: string, fetcher: () => Promise<T>): Promise<T> {
+				// Without KV every lookup goes to Last.fm
+				if (tally) tally.misses++
 				return fetcher()
 			},
 			async invalidate(): Promise<void> {
@@ -391,29 +408,33 @@ export function createLastfmCache(kv?: KVNamespace): SmartCache {
 		} as unknown as SmartCache
 	}
 
-	return new SmartCache(kv, {
-		// Tune cache TTLs based on data freshness requirements
-		userRecentTracks: 5 * 60, // Recent tracks change frequently
-		userTopArtists: 60 * 60, // Top artists change slower
-		userTopAlbums: 60 * 60, // Top albums change slower
-		userTopTracks: 60 * 60, // Top tracks change slower
-		userLovedTracks: 30 * 60, // Loved tracks change occasionally
-		userInfo: 6 * 60 * 60, // User profiles rarely change
-		userListeningStats: 60 * 60, // Stats can be cached for an hour
-		userRecommendations: 24 * 60 * 60, // Recommendations can be cached longer
+	return new SmartCache(
+		kv,
+		{
+			// Tune cache TTLs based on data freshness requirements
+			userRecentTracks: 5 * 60, // Recent tracks change frequently
+			userTopArtists: 60 * 60, // Top artists change slower
+			userTopAlbums: 60 * 60, // Top albums change slower
+			userTopTracks: 60 * 60, // Top tracks change slower
+			userLovedTracks: 30 * 60, // Loved tracks change occasionally
+			userInfo: 6 * 60 * 60, // User profiles rarely change
+			userListeningStats: 60 * 60, // Stats can be cached for an hour
+			userRecommendations: 24 * 60 * 60, // Recommendations can be cached longer
 
-		// Temporal data is historical and changes very rarely
-		userWeeklyChartList: 24 * 60 * 60, // Chart list rarely changes
-		userWeeklyArtistChart: 24 * 60 * 60, // Historical data is stable
-		userWeeklyTrackChart: 24 * 60 * 60, // Historical data is stable
+			// Temporal data is historical and changes very rarely
+			userWeeklyChartList: 24 * 60 * 60, // Chart list rarely changes
+			userWeeklyArtistChart: 24 * 60 * 60, // Historical data is stable
+			userWeeklyTrackChart: 24 * 60 * 60, // Historical data is stable
 
-		// Static music data can be cached for a long time
-		trackInfo: 24 * 60 * 60, // Track data is mostly static
-		artistInfo: 24 * 60 * 60, // Artist data is mostly static
-		albumInfo: 24 * 60 * 60, // Album data is mostly static
-		artistTopTracks: 24 * 60 * 60, // Artist top tracks change slowly
-		artistTopAlbums: 24 * 60 * 60, // Artist top albums change slowly
-		similarArtists: 7 * 24 * 60 * 60, // Similar artists rarely change
-		similarTracks: 7 * 24 * 60 * 60, // Similar tracks rarely change
-	})
+			// Static music data can be cached for a long time
+			trackInfo: 24 * 60 * 60, // Track data is mostly static
+			artistInfo: 24 * 60 * 60, // Artist data is mostly static
+			albumInfo: 24 * 60 * 60, // Album data is mostly static
+			artistTopTracks: 24 * 60 * 60, // Artist top tracks change slowly
+			artistTopAlbums: 24 * 60 * 60, // Artist top albums change slowly
+			similarArtists: 7 * 24 * 60 * 60, // Similar artists rarely change
+			similarTracks: 7 * 24 * 60 * 60, // Similar tracks rarely change
+		},
+		tally,
+	)
 }

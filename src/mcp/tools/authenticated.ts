@@ -45,8 +45,11 @@ Your MCP client should automatically prompt you to authenticate. If not, try dis
 **Available without authentication:**
 ${renderToolList(PUBLIC_TOOL_CATALOG)}`
 
+/** First line of AUTH_REQUIRED; tool-call instrumentation matches on it to classify a call as auth_required. */
+export const AUTH_REQUIRED_HEADING = '🔐 **Authentication Required**'
+
 /** Shown by every tool that needs the user's Last.fm session when there is none. */
-const AUTH_REQUIRED = `🔐 **Authentication Required**
+const AUTH_REQUIRED = `${AUTH_REQUIRED_HEADING}
 
 This tool requires authentication with Last.fm.
 

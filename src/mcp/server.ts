@@ -2,10 +2,13 @@
 // ABOUTME: Registers tools, prompts, and resources, and manages per-request auth context.
 import { McpServer } from '@modelcontextprotocol/server'
 
+import type { ToolCallEvent } from '../analytics/toolEvents'
 import { CachedLastfmClient } from '../clients/cachedLastfm'
 import { LastfmClient } from '../clients/lastfm'
 import type { Env } from '../types/env'
+import type { CacheTally } from '../utils/cache'
 
+import { instrumentTools } from './instrumentation'
 import { SERVER_VERSION } from './protocol'
 import { registerPrompts } from './prompts/analysis'
 import { registerResources } from './resources/lastfm'
@@ -30,6 +33,11 @@ export interface McpServerWithContext {
 	setContext: (ctx: Partial<McpRequestContext>) => void
 }
 
+export interface CreateMcpServerOptions {
+	/** Called once per tool call with its anonymous ToolCallEvent. Exceptions are logged and never reach the caller. */
+	onToolCall?: (event: ToolCallEvent) => void
+}
+
 /**
  * Creates a configured MCP server instance with access to environment bindings.
  *
@@ -37,8 +45,9 @@ export interface McpServerWithContext {
  * Returns both the server and a context setter for per-request session management.
  *
  * @param env - Cloudflare Worker environment bindings
+ * @param options - `onToolCall` turns on tool-call instrumentation for this server
  */
-export function createMcpServer(env: Env): McpServerWithContext {
+export function createMcpServer(env: Env, options: CreateMcpServerOptions = {}): McpServerWithContext {
 	const server = new McpServer(
 		{
 			name: SERVER_NAME,
@@ -59,9 +68,13 @@ export function createMcpServer(env: Env): McpServerWithContext {
 		},
 	)
 
+	// Counts this request's cache hits and misses. Instrumentation must wrap registerTool before any tool is registered.
+	const tally: CacheTally = { hits: 0, misses: 0 }
+	if (options.onToolCall) instrumentTools(server, tally, options.onToolCall)
+
 	// Create Last.fm client with caching
 	const lastfmClient = new LastfmClient(env.LASTFM_API_KEY)
-	const cachedClient = new CachedLastfmClient(lastfmClient, env.MCP_SESSIONS)
+	const cachedClient = new CachedLastfmClient(lastfmClient, env.MCP_SESSIONS, options.onToolCall ? tally : undefined)
 
 	// Mutable request context - updated per-request before handling
 	const context: McpRequestContext = {
