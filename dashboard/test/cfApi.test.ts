@@ -4,7 +4,7 @@ import { env } from 'cloudflare:test'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { MockInstance } from 'vitest'
 
-import { analyticsSql, CfApiError, getKvJson, graphql, listKvKeys } from '../src/cfApi'
+import { analyticsSql, analyticsSqlApi, CfApiError, getKvJson, graphql, listKvKeys } from '../src/cfApi'
 import type { DashEnv } from '../src/env'
 
 const TOKEN = 'test-api-token'
@@ -246,5 +246,83 @@ describe('analyticsSql', () => {
 		expect(error).toBeInstanceOf(CfApiError)
 		expect(error.status).toBe(422)
 		expect(error.message).toContain('unknown function quantileWeighted')
+	})
+})
+
+describe('analyticsSqlApi', () => {
+	const SQL = "SELECT count() AS requests FROM events.workersInvocations WHERE timestamp >= '2026-11-11T00:00:00Z'"
+
+	it('should POST the query with the account scope as JSON and return the top-level data rows', async () => {
+		const rows = [{ date: '2026-11-05', status: 'success', requests: '38837' }]
+		respondWith(() => Response.json({ data: rows, rows: 1, statistics: { elapsed_ms: 42, rows_read: 250000, bytes_read: 18000000 } }))
+
+		const result = await analyticsSqlApi<{ date: string; status: string; requests: string }>(apiEnv, SQL)
+
+		expect(result).toEqual(rows)
+		expect(String(fetchMock.mock.calls[0][0])).toBe(`${API}/analytics/sql`)
+		const init = callInit(0)
+		expect(init.method).toBe('POST')
+		const headers = new Headers(init.headers)
+		expect(headers.get('Authorization')).toBe(`Bearer ${TOKEN}`)
+		expect(headers.get('Content-Type')).toBe('application/json')
+		expect(JSON.parse(String(init.body))).toEqual({ query: SQL, scope: { accountTag: env.ACCOUNT_ID } })
+	})
+
+	it('should also read data rows wrapped in a v4 result envelope', async () => {
+		const rows = [{ requests: 7 }]
+		respondWith(() => Response.json({ success: true, errors: [], messages: [], result: { data: rows, rows: 1 } }))
+
+		expect(await analyticsSqlApi(apiEnv, SQL)).toEqual(rows)
+	})
+
+	it('should return an empty list for a query that matched nothing', async () => {
+		respondWith(() => Response.json({ data: [], rows: 0, statistics: { elapsed_ms: 3, rows_read: 0, bytes_read: 0 } }))
+
+		expect(await analyticsSqlApi(apiEnv, SQL)).toEqual([])
+	})
+
+	it('should throw a CfApiError carrying the plain-text error the SQL service returns', async () => {
+		respondWith(() => new Response('MIN is not supported for adaptively sampled datasets; use APPROX_MIN', { status: 422 }))
+
+		const error = (await analyticsSqlApi(apiEnv, SQL).catch((e: unknown) => e)) as CfApiError
+
+		expect(error).toBeInstanceOf(CfApiError)
+		expect(error.status).toBe(422)
+		expect(error.message).toMatch(/^Analytics SQL API failed \(422\)/)
+		expect(error.message).toContain('use APPROX_MIN')
+	})
+
+	it('should throw on a 200 whose v4 envelope reports failure', async () => {
+		respondWith(() => Response.json({ success: false, errors: [{ code: 1000, message: 'dataset not found' }], result: null }))
+
+		const error = (await analyticsSqlApi(apiEnv, SQL).catch((e: unknown) => e)) as CfApiError
+
+		expect(error).toBeInstanceOf(CfApiError)
+		expect(error.status).toBe(200)
+		expect(error.message).toContain('dataset not found')
+	})
+
+	it('should throw on a 200 with no data rows in either place', async () => {
+		respondWith(() => Response.json({ rows: 0 }))
+
+		const error = (await analyticsSqlApi(apiEnv, SQL).catch((e: unknown) => e)) as CfApiError
+
+		expect(error).toBeInstanceOf(CfApiError)
+		expect(error.status).toBe(200)
+		expect(error.message).toBe('Analytics SQL API returned no data')
+	})
+
+	it('should retry a 503 and resolve on the next attempt', async () => {
+		vi.useFakeTimers()
+		respondWith(
+			() => new Response('service unavailable', { status: 503 }),
+			() => Response.json({ data: [{ requests: 1 }], rows: 1 }),
+		)
+
+		const pending = analyticsSqlApi(apiEnv, SQL)
+		await vi.advanceTimersByTimeAsync(1000)
+
+		await expect(pending).resolves.toEqual([{ requests: 1 }])
+		expect(fetchMock).toHaveBeenCalledTimes(2)
 	})
 })

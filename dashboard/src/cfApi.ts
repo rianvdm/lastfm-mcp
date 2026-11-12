@@ -46,6 +46,17 @@ interface AnalyticsSqlResponse<T> {
 	data?: T[]
 }
 
+/**
+ * The Analytics SQL API's default JSON output has `data`, `rows` and `statistics` at the top level. A v4 envelope with the
+ * rows under `result` is read too, in case the beta API changes shape, along with its `success` and `errors` fields.
+ */
+interface AnalyticsSqlApiResponse<T> {
+	data?: T[]
+	result?: { data?: T[] } | null
+	success?: boolean
+	errors?: Array<{ message?: string }> | null
+}
+
 function isRetryable(status: number): boolean {
 	return status === 429 || status >= 500
 }
@@ -154,6 +165,29 @@ export async function graphql<T>(env: DashEnv, query: string, variables: Record<
 	}
 	if (body.data == null) throw new CfApiError(response.status, 'GraphQL returned no data')
 	return body.data
+}
+
+/**
+ * Runs one statement against the Analytics SQL API (beta), scoped to the dashboard's account, and returns its `data` rows.
+ * The query has no FORMAT clause, so the API answers with its default JSON output. Not the Analytics Engine SQL API: see
+ * `analyticsSql` for that.
+ */
+export async function analyticsSqlApi<T>(env: DashEnv, sql: string): Promise<T[]> {
+	const response = await send(env, `${API_BASE}/analytics/sql`, {
+		method: 'POST',
+		headers: { 'Content-Type': 'application/json' },
+		body: JSON.stringify({ query: sql, scope: { accountTag: env.ACCOUNT_ID } }),
+	})
+	if (!response.ok) throw await failure(response, 'Analytics SQL API')
+
+	const body = await readJson<AnalyticsSqlApiResponse<T>>(response, 'Analytics SQL API')
+	if (body.success === false || (body.errors && body.errors.length > 0)) {
+		const detail = body.errors?.find((error) => error.message)?.message
+		throw new CfApiError(response.status, detail ? `Analytics SQL API failed: ${truncate(detail)}` : 'Analytics SQL API failed')
+	}
+	const data = body.data ?? body.result?.data
+	if (!Array.isArray(data)) throw new CfApiError(response.status, 'Analytics SQL API returned no data')
+	return data
 }
 
 /** Ends the statement with exactly one FORMAT JSON, dropping a trailing semicolon the SQL API would reject */
