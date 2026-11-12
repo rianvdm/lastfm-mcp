@@ -142,8 +142,8 @@ describe('refreshGrantSummary', () => {
 			{ label: 'Claude', grants: 2, users: 2 },
 			{ label: 'ChatGPT', grants: 1, users: 1 },
 		])
-		// Every registered client is read once, before the grants; the CIMD client has no client: record and needs no read
-		expect(clientReads()).toEqual([`client:${DCR_CLAUDE}`, `client:${DCR_UNUSED}`])
+		// Only the registered client a grant uses is read, once, after the grants; the unused one and the CIMD client aren't
+		expect(clientReads()).toEqual([`client:${DCR_CLAUDE}`])
 	})
 
 	it('should store the summary for readGrantSummary', async () => {
@@ -246,17 +246,23 @@ describe('refreshGrantSummary', () => {
 		expect(summary.unresolvedGrants).toBe(1)
 	})
 
-	it('should leave grants past the read cap unresolved and resolve them on the next run', async () => {
+	it('should leave grants past the read cap unresolved and resolve them, then their labels, on later runs', async () => {
 		const capped = await refreshGrantSummary(env, NOW, { maxFetches: 4 })
 
-		// Both registered clients first, then the first two grants
-		expect(valueReads).toEqual([`client:${DCR_CLAUDE}`, `client:${DCR_UNUSED}`, `grant:${ALICE}:grantA1`, `grant:${ALICE}:grantA2`])
-		expect(capped.unresolvedGrants).toBe(3)
+		// The first four grants take the whole cap, so no client is read and the Claude grants are indexed as unknown
+		expect(valueReads).toEqual([`grant:${ALICE}:grantA1`, `grant:${ALICE}:grantA2`, `grant:${BOB}:grantB1`, `grant:${BOB}:grantB2`])
+		expect(capped.unresolvedGrants).toBe(1)
+		expect(capped.liveGrants).toBe(3)
+		expect(capped.clients).toEqual([
+			{ label: 'unknown', grants: 2, users: 2 },
+			{ label: 'ChatGPT', grants: 1, users: 1 },
+		])
 
 		valueReads = []
 		const next = await refreshGrantSummary(env, NOW, { maxFetches: 4 })
 
-		expect(valueReads.length).toBeLessThanOrEqual(4)
+		// Carol's grant, the pending one, then the Claude client; one relabel write takes the last of the cap
+		expect(valueReads).toEqual([`grant:${CAROL}:grantC1`, `grant:${BOB}:grantB2`, `client:${DCR_CLAUDE}`])
 		expect(next.unresolvedGrants).toBe(0)
 		expect(next.liveGrants).toBe(3)
 		expect(next.liveUsers).toBe(2)
@@ -265,6 +271,15 @@ describe('refreshGrantSummary', () => {
 			{ label: 'Claude', grants: 2, users: 2 },
 			{ label: 'ChatGPT', grants: 1, users: 1 },
 		])
+
+		await refreshGrantSummary(env, NOW, { maxFetches: 4 })
+
+		expect(await env.DASH_KV.get('gi:grantA1', 'json')).toEqual({
+			label: 'Claude',
+			createdAt: NOW_S - 2 * DAY,
+			expiresAt: NOW_S + 28 * DAY,
+		})
+		expect(await env.DASH_KV.get('gi:grantB1', 'json')).toEqual({ label: 'Claude', createdAt: NOW_S - 45 * DAY })
 	})
 
 	it('should label a grant whose registered client was deleted unknown, and index it', async () => {
@@ -278,12 +293,19 @@ describe('refreshGrantSummary', () => {
 		expect(clientReads()).not.toContain('client:dcr0client0deleted')
 	})
 
-	it('should leave a grant unresolved when the budget runs out before its client is read', async () => {
+	it('should index a grant whose client the cap leaves unread as unknown, keeping only the random client ID', async () => {
 		const first = await refreshGrantSummary(env, NOW, { maxFetches: 1 })
 
-		expect(valueReads).toEqual([`client:${DCR_CLAUDE}`])
-		expect(first.unresolvedGrants).toBe(5)
-		expect(first.liveGrants).toBe(0)
+		expect(valueReads).toEqual([`grant:${ALICE}:grantA1`])
+		expect(first.unresolvedGrants).toBe(4)
+		expect(first.liveGrants).toBe(1)
+		expect(first.clients).toEqual([{ label: 'unknown', grants: 1, users: 1 }])
+		expect(await env.DASH_KV.get('gi:grantA1', 'json')).toEqual({
+			label: 'unknown',
+			clientId: DCR_CLAUDE,
+			createdAt: NOW_S - 2 * DAY,
+			expiresAt: NOW_S + 28 * DAY,
+		})
 	})
 
 	it('should drop a grant that is deleted between the list and the read', async () => {
@@ -351,8 +373,10 @@ describe('refreshGrantSummary', () => {
 		grant(ALICE, 'grantLeakyCimd', { clientId: leakyCimd, createdAt: NOW_S - DAY, expiresAt: NOW_S + DAY, refreshTokenId: 'r7' })
 		grant(CAROL, 'grantLeakyDcr', { clientId: leakyDcr, createdAt: NOW_S - DAY, expiresAt: NOW_S + DAY, refreshTokenId: 'r8' })
 
-		const summary = await refreshGrantSummary(env, NOW)
-		await refreshGrantSummary(env, HOUR_LATER)
+		// The first run's cap covers the seven grants but no client, so the registered client's grant waits a run for its label
+		await refreshGrantSummary(env, NOW, { maxFetches: 7 })
+		expect(await env.DASH_KV.get('gi:grantLeakyDcr', 'json')).toMatchObject({ label: 'unknown', clientId: leakyDcr })
+		const summary = await refreshGrantSummary(env, HOUR_LATER)
 
 		expect(summary.clients).toContainEqual({ label: 'other', grants: 2, users: 2 })
 		expect(await env.DASH_KV.get('gi:grantLeakyCimd', 'json')).toEqual({ label: 'other', createdAt: NOW_S - DAY, expiresAt: NOW_S + DAY })
@@ -377,6 +401,85 @@ describe('refreshGrantSummary', () => {
 			const stored = `${name}\n${value}\n${JSON.stringify(metadata ?? null)}`
 			for (const username of USERNAMES) expect(stored).not.toContain(username)
 		}
+	})
+})
+
+describe('refreshGrantSummary read budget', () => {
+	/** Registers `count` clients that no grant uses, as open registration does in production */
+	function seedUnusedClients(count: number): void {
+		for (let i = 0; i < count; i++) {
+			const clientId = `dcr0unused${String(i).padStart(4, '0')}`
+			oauthKv.set(`client:${clientId}`, { clientId, clientName: 'Claude', redirectUris: [] })
+		}
+	}
+
+	/** One completed grant from a CIMD client and one from a registered client, among 400+ unused registered clients */
+	function seedReviewerScenario(): void {
+		oauthKv.clear()
+		oauthKv.set(`client:${DCR_CLAUDE}`, { clientId: DCR_CLAUDE, clientName: 'Claude', redirectUris: [] })
+		seedUnusedClients(MAX_FETCHES_PER_RUN + 1)
+		grant(ALICE, 'grantCimd', { clientId: CIMD_CHATGPT, createdAt: NOW_S - DAY, expiresAt: NOW_S + 29 * DAY, refreshTokenId: 'r1' })
+		grant(BOB, 'grantDcr', { clientId: DCR_CLAUDE, createdAt: NOW_S - DAY, expiresAt: NOW_S + 29 * DAY, refreshTokenId: 'r2' })
+	}
+
+	it('should read grants before client labels, and read only the clients those grants use', async () => {
+		seedReviewerScenario()
+
+		const summary = await refreshGrantSummary(env, NOW)
+
+		expect(summary).toMatchObject({ liveGrants: 2, liveUsers: 2, unresolvedGrants: 0, signInsLast7d: 2 })
+		expect(summary.registeredClients).toBe(MAX_FETCHES_PER_RUN + 2)
+		expect(summary.clients).toEqual([
+			{ label: 'ChatGPT', grants: 1, users: 1 },
+			{ label: 'Claude', grants: 1, users: 1 },
+		])
+		expect(valueReads).toEqual([`grant:${ALICE}:grantCimd`, `grant:${BOB}:grantDcr`, `client:${DCR_CLAUDE}`])
+	})
+
+	it('should index a grant as unknown when no budget is left for its client, and relabel it on the next run', async () => {
+		seedReviewerScenario()
+
+		const first = await refreshGrantSummary(env, NOW, { maxFetches: 2 })
+
+		expect(clientReads()).toEqual([])
+		expect(first).toMatchObject({ liveGrants: 2, liveUsers: 2, unresolvedGrants: 0, signInsLast7d: 2 })
+		expect(first.clients).toEqual([
+			{ label: 'ChatGPT', grants: 1, users: 1 },
+			{ label: 'unknown', grants: 1, users: 1 },
+		])
+
+		valueReads = []
+		const second = await refreshGrantSummary(env, HOUR_LATER, { maxFetches: 2 })
+
+		expect(valueReads).toEqual([`client:${DCR_CLAUDE}`])
+		expect(second.clients).toEqual([
+			{ label: 'ChatGPT', grants: 1, users: 1 },
+			{ label: 'Claude', grants: 1, users: 1 },
+		])
+		expect(await env.DASH_KV.get('gi:grantDcr', 'json')).toEqual({ label: 'Claude', createdAt: NOW_S - DAY, expiresAt: NOW_S + 29 * DAY })
+	})
+
+	it('should keep client reads within the budget the grant reads leave', async () => {
+		oauthKv.clear()
+		seedUnusedClients(10)
+		const used = ['dcr0client0one', 'dcr0client0two', 'dcr0client0three']
+		used.forEach((clientId, i) => {
+			oauthKv.set(`client:${clientId}`, { clientId, clientName: 'Cursor', redirectUris: [] })
+			grant(ALICE, `grant${i}`, { clientId, createdAt: NOW_S - DAY, expiresAt: NOW_S + DAY, refreshTokenId: `r${i}` })
+		})
+
+		const first = await refreshGrantSummary(env, NOW, { maxFetches: 4 })
+
+		expect(valueReads.slice(0, 3)).toEqual([`grant:${ALICE}:grant0`, `grant:${ALICE}:grant1`, `grant:${ALICE}:grant2`])
+		expect(clientReads()).toHaveLength(1)
+		expect(first.liveGrants).toBe(3)
+
+		valueReads = []
+		const second = await refreshGrantSummary(env, HOUR_LATER, { maxFetches: 4 })
+
+		expect(grantReads()).toEqual([])
+		expect(clientReads()).toHaveLength(2)
+		expect(second.clients).toEqual([{ label: 'Cursor', grants: 3, users: 1 }])
 	})
 })
 
