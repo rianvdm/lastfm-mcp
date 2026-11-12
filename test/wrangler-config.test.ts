@@ -1,5 +1,5 @@
-// ABOUTME: Checks the REGISTRATION_RATE_LIMITER and TOOL_EVENTS bindings that wrangler.toml declares for staging and production.
-// ABOUTME: Bindings aren't inherited by [env.production], and a missing binding fails open silently, so drift fails here.
+// ABOUTME: Checks the bindings and module rules that wrangler.toml declares for staging and production.
+// ABOUTME: Bindings aren't inherited by [env.production] and a missing one fails open silently, so drift between them fails here.
 import { env } from 'cloudflare:test'
 import { describe, it, expect } from 'vitest'
 
@@ -12,6 +12,7 @@ interface LimiterConfig {
 
 const limiters = JSON.parse(env.TEST_REGISTRATION_RATE_LIMITERS) as { staging: LimiterConfig | null; production: LimiterConfig | null }
 const toolEventsDatasets = JSON.parse(env.TEST_TOOL_EVENTS_DATASETS) as { staging: string | null; production: string | null }
+const moduleRules = JSON.parse(env.TEST_MODULE_RULES) as Record<'staging' | 'production', { type: string; globs: string[] }[]>
 
 describe('REGISTRATION_RATE_LIMITER in wrangler.toml', () => {
 	it.each(['staging', 'production'] as const)('should be declared for %s', (environment) => {
@@ -38,5 +39,16 @@ describe('TOOL_EVENTS in wrangler.toml', () => {
 
 	it('should write production tool calls to the production dataset', () => {
 		expect(toolEventsDatasets.production).toBe('lastfm_mcp_tool_events')
+	})
+})
+
+describe('module rules in wrangler.toml', () => {
+	it.each(['staging', 'production'] as const)('should import .html and .md files as text and .png files as data for %s', (environment) => {
+		expect(moduleRules[environment]).toEqual(
+			expect.arrayContaining([
+				{ type: 'Text', globs: ['**/*.html', '**/*.md'] },
+				{ type: 'Data', globs: ['**/*.png'] },
+			]),
+		)
 	})
 })

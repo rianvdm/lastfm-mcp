@@ -7,9 +7,10 @@ import type { Env } from '../src/types/env'
 declare module 'cloudflare:test' {
 	interface ProvidedEnv extends Env {
 		// Test-only bindings defined in vitest.config.mts: the registration budget wrangler.toml declares, and, as JSON,
-		// both environments' REGISTRATION_RATE_LIMITER config and TOOL_EVENTS dataset name
+		// both environments' REGISTRATION_RATE_LIMITER config, TOOL_EVENTS dataset name and module rules
 		STRICT_REGISTRATION_RATE_LIMITER: RateLimit
 		TEST_REGISTRATION_RATE_LIMITERS: string
 		TEST_TOOL_EVENTS_DATASETS: string
+		TEST_MODULE_RULES: string
 	}
 }

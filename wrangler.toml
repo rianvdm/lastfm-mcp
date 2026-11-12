@@ -3,6 +3,18 @@ main = "src/index-oauth.ts"
 compatibility_date = "2026-04-01"
 compatibility_flags = ["global_fetch_strictly_public", "nodejs_compat"]
 
+# Landing page and llms.txt sources are imported as strings (src/pages/).
+[[rules]]
+type = "Text"
+globs = ["**/*.html", "**/*.md"]
+fallthrough = true
+
+# Share-card images (src/pages/share/) are imported as ArrayBuffers.
+[[rules]]
+type = "Data"
+globs = ["**/*.png"]
+fallthrough = true
+
 [observability]
 enabled = true
 
