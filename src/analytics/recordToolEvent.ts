@@ -8,15 +8,15 @@ import { toDataPoint, type ToolCallEvent } from './toolEvents'
 /** Most client labels kept in memory per isolate. Registration is open, so the memo must not grow without bound. */
 const MAX_MEMOISED_LABELS = 500
 
-/** Labels for registered (DCR) clients by client ID, oldest first, so a client's name is read from KV once per isolate. */
+/** Allowlisted labels for registered (DCR) clients by client ID, oldest first, so a client's name is read from KV once per isolate. */
 const labelsByClientId = new Map<string, string>()
 
 /**
  * Records one tool call. Call it inside `ctx.waitUntil` so the write stays off the response path.
  *
  * The client label comes from the client ID alone for a CIMD (URL) client, and from the registered `clientName` in
- * OAUTH_KV for a DCR client. The event carries no user identifier: only the tool, the client label, the outcome,
- * the cache result, the server version and the duration.
+ * OAUTH_KV for a DCR client; either way it is one of the fixed CLIENT_LABELS, never the raw ID or name. The event carries
+ * no user identifier: only the tool, the client label, the outcome, the cache result, the server version and the duration.
  */
 export async function recordToolEvent(env: Env, clientId: string | undefined, event: ToolCallEvent): Promise<void> {
 	try {

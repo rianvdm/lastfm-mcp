@@ -315,8 +315,8 @@ describe('Last.fm MCP Server (OAuth Entry Point)', () => {
 			expect(writeDataPoint).toHaveBeenCalledTimes(1)
 			const point = writeDataPoint.mock.calls[0][0] as { blobs: string[] }
 			expect(point.blobs[0]).toBe('ping')
-			// signInForAccessToken registers its DCR client under this name
-			expect(point.blobs[1]).toBe('Resource Compat Test Client')
+			// signInForAccessToken registers its DCR client as 'Resource Compat Test Client', which isn't a known app
+			expect(point.blobs[1]).toBe('other')
 			expect(point.blobs[2]).toBe('ok')
 			// The mocked Last.fm sign-in is for 'testuser'; no part of the event may identify the user
 			expect(point.blobs.some((blob) => blob.includes('testuser'))).toBe(false)

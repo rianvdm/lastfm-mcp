@@ -69,6 +69,17 @@ describe('recordToolEvent', () => {
 		expect(writeDataPoint?.mock.calls[0][0].blobs[1]).toBe('Claude Code')
 	})
 
+	it('should never write a username carried by a client name or a CIMD URL', async () => {
+		const { env, writeDataPoint } = fakeEnv(async () => ({ clientName: 'rianvdm' }))
+
+		await recordToolEvent(env, freshClientId(), EVENT)
+		await recordToolEvent(env, 'https://dc2.example/rianvdm/client.json', EVENT)
+
+		const labels = writeDataPoint?.mock.calls.map((call) => call[0].blobs[1])
+		expect(labels).toEqual(['other', 'other'])
+		expect(JSON.stringify(writeDataPoint?.mock.calls)).not.toContain('rianvdm')
+	})
+
 	it('should label the event unknown when there is no client ID, without reading KV', async () => {
 		const { env, kvGet, writeDataPoint } = fakeEnv(async () => null)
 
