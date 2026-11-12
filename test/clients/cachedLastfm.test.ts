@@ -1,10 +1,10 @@
 // ABOUTME: Tests for CachedLastfmClient, the caching decorator around LastfmClient.
-// ABOUTME: Checks that the per-request cache tally handed to the constructor counts the client's lookups.
+// ABOUTME: Checks that the client's lookups count into the cache tally of the tool call that made them.
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 
 import { CachedLastfmClient } from '../../src/clients/cachedLastfm'
 import type { LastfmClient } from '../../src/clients/lastfm'
-import type { CacheTally } from '../../src/utils/cache'
+import { runWithCacheTally, type CacheTally } from '../../src/utils/cacheTally'
 
 /** A Map-backed KV with just the methods SmartCache calls. */
 function memoryKV(): KVNamespace {
@@ -31,13 +31,15 @@ describe('CachedLastfmClient', () => {
 	})
 
 	describe('cache tally', () => {
-		it('should count lookups on the tally it was given', async () => {
+		it('should count lookups into the current tally', async () => {
 			const getArtistInfo = vi.fn().mockResolvedValue({ artist: { name: 'Radiohead' } })
 			const tally: CacheTally = { hits: 0, misses: 0 }
-			const client = new CachedLastfmClient({ getArtistInfo } as unknown as LastfmClient, memoryKV(), tally)
+			const client = new CachedLastfmClient({ getArtistInfo } as unknown as LastfmClient, memoryKV())
 
-			await client.getArtistInfo('Radiohead')
-			await client.getArtistInfo('Radiohead')
+			await runWithCacheTally(tally, async () => {
+				await client.getArtistInfo('Radiohead')
+				await client.getArtistInfo('Radiohead')
+			})
 
 			expect(getArtistInfo).toHaveBeenCalledTimes(1)
 			expect(tally).toEqual({ hits: 1, misses: 1 })

@@ -3,7 +3,7 @@
 import type { McpServer } from '@modelcontextprotocol/server'
 
 import type { CacheOutcome, ToolCallEvent, ToolOutcome } from '../analytics/toolEvents'
-import type { CacheTally } from '../utils/cache'
+import { runWithCacheTally, type CacheTally } from '../utils/cacheTally'
 import { AUTH_REQUIRED_HEADING } from './tools/authenticated'
 import { isToolErrorText } from './tools/error-handler'
 
@@ -12,26 +12,24 @@ type RegisterTool = (name: string, config: object, cb: ToolCallback) => ReturnTy
 
 /**
  * Wraps `server.registerTool` so every tool registered afterwards reports a ToolCallEvent through `onToolCall`.
- * `tally` must be the one the tools' CachedLastfmClient counts on; the event's cache outcome is read from how it
- * changed during the call. The event carries only the tool name, never its arguments or the user.
+ * Each call runs inside its own CacheTally, so its cache outcome counts only the lookups it made, even when a batch
+ * runs calls concurrently. The event carries only the tool name, never its arguments or the user.
  */
-export function instrumentTools(server: McpServer, tally: CacheTally, onToolCall: (event: ToolCallEvent) => void): void {
+export function instrumentTools(server: McpServer, onToolCall: (event: ToolCallEvent) => void): void {
 	const register = server.registerTool.bind(server) as unknown as RegisterTool
 
 	const registerInstrumented: RegisterTool = (name, config, cb) =>
 		register(name, config, async (...args: unknown[]) => {
-			const hitsBefore = tally.hits
-			const missesBefore = tally.misses
+			const tally: CacheTally = { hits: 0, misses: 0 }
 			const start = performance.now()
 			// Stays 'error' if the callback throws; the throw propagates unchanged to the SDK.
 			let outcome: ToolOutcome = 'error'
 			try {
-				const result = await cb(...args)
+				const result = await runWithCacheTally(tally, () => cb(...args))
 				outcome = classifyResult(name, result)
 				return result
 			} finally {
-				const cache = cacheOutcome(tally, hitsBefore, missesBefore)
-				report(onToolCall, { tool: name, outcome, cache, durationMs: performance.now() - start })
+				report(onToolCall, { tool: name, outcome, cache: cacheOutcome(tally), durationMs: performance.now() - start })
 			}
 		})
 
@@ -61,9 +59,9 @@ function firstText(content: unknown): string | undefined {
 }
 
 /** Any Last.fm fetch makes the call a miss; otherwise any cached read makes it a hit. */
-function cacheOutcome(tally: CacheTally, hitsBefore: number, missesBefore: number): CacheOutcome {
-	if (tally.misses > missesBefore) return 'miss'
-	if (tally.hits > hitsBefore) return 'hit'
+function cacheOutcome(tally: CacheTally): CacheOutcome {
+	if (tally.misses > 0) return 'miss'
+	if (tally.hits > 0) return 'hit'
 	return 'none'
 }
 

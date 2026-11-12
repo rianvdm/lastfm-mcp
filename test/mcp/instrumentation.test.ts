@@ -11,7 +11,7 @@ import { instrumentTools } from '../../src/mcp/instrumentation'
 import { createMcpServer } from '../../src/mcp/server'
 import { AUTH_REQUIRED_HEADING } from '../../src/mcp/tools/authenticated'
 import { toolError } from '../../src/mcp/tools/error-handler'
-import { SmartCache, type CacheTally } from '../../src/utils/cache'
+import { SmartCache } from '../../src/utils/cache'
 
 type ToolHandler = () => unknown
 
@@ -30,9 +30,9 @@ async function connect(server: McpServer): Promise<Client> {
 }
 
 /** Builds a server with `tools` registered, instrumented when `onToolCall` is given. */
-async function serverWith(tools: Record<string, ToolHandler>, onToolCall?: (event: ToolCallEvent) => void, tally?: CacheTally) {
+async function serverWith(tools: Record<string, ToolHandler>, onToolCall?: (event: ToolCallEvent) => void) {
 	const server = new McpServer({ name: 'instrumentation-test', version: '0.0.0' })
-	if (onToolCall) instrumentTools(server, tally ?? { hits: 0, misses: 0 }, onToolCall)
+	if (onToolCall) instrumentTools(server, onToolCall)
 	registerTools(server, tools)
 	return connect(server)
 }
@@ -158,9 +158,8 @@ describe('instrumentTools', () => {
 	})
 
 	describe('cache outcome', () => {
-		it('should report miss then hit for the same lookup on one tally', async () => {
-			const tally: CacheTally = { hits: 0, misses: 0 }
-			const cache = new SmartCache(memoryKV(), {}, tally)
+		it('should report miss then hit for the same lookup', async () => {
+			const cache = new SmartCache(memoryKV())
 			const fetcher = vi.fn(async () => ({ name: 'Radiohead' }))
 			const client = await serverWith(
 				{
@@ -170,15 +169,40 @@ describe('instrumentTools', () => {
 					},
 				},
 				onToolCall,
-				tally,
 			)
 
 			await client.callTool({ name: 'lookup', arguments: {} })
 			await client.callTool({ name: 'lookup', arguments: {} })
 
 			expect(fetcher).toHaveBeenCalledTimes(1)
-			expect(tally).toEqual({ hits: 1, misses: 1 })
 			expect(events.map((e) => e.cache)).toEqual(['miss', 'hit'])
+		})
+
+		it('should keep concurrent calls from sharing a cache outcome', async () => {
+			// A JSON-RPC batch dispatches its calls concurrently on one server. `idle` starts first and is still running
+			// when `lookup` misses the cache, so a server-wide count would wrongly charge the miss to `idle` as well.
+			const cache = new SmartCache(memoryKV())
+			let releaseIdle: () => void = () => {}
+			const idleGate = new Promise<void>((resolve) => (releaseIdle = resolve))
+			const client = await serverWith(
+				{
+					idle: async () => {
+						await idleGate
+						return okResult
+					},
+					lookup: async () => {
+						const data = await cache.getOrFetch('artistInfo', 'radiohead', async () => ({ name: 'Radiohead' }))
+						releaseIdle()
+						return { content: [{ type: 'text', text: data.name }] }
+					},
+				},
+				onToolCall,
+			)
+
+			await Promise.all([client.callTool({ name: 'idle', arguments: {} }), client.callTool({ name: 'lookup', arguments: {} })])
+
+			const cacheByTool = Object.fromEntries(events.map((e) => [e.tool, e.cache]))
+			expect(cacheByTool).toEqual({ idle: 'none', lookup: 'miss' })
 		})
 	})
 })
@@ -196,5 +220,30 @@ describe('createMcpServer with onToolCall', () => {
 			{ tool: 'ping', outcome: 'ok', cache: 'none' },
 			{ tool: 'get_recent_tracks', outcome: 'auth_required', cache: 'none' },
 		])
+	})
+})
+
+describe('createMcpServer cache attribution', () => {
+	afterEach(() => {
+		vi.restoreAllMocks()
+	})
+
+	it('should charge a Last.fm lookup to the tool that made it, not to a concurrent ping', async () => {
+		vi.spyOn(console, 'log').mockImplementation(() => {})
+		const artist = `Artist ${crypto.randomUUID()}`
+		vi.spyOn(globalThis, 'fetch').mockImplementation(async () =>
+			Response.json({ artist: { name: artist, url: 'https://www.last.fm/music/x', stats: { listeners: '1', playcount: '1' } } }),
+		)
+		const events: ToolCallEvent[] = []
+		const { server } = createMcpServer(env, { onToolCall: (event) => events.push(event) })
+		const client = await connect(server)
+
+		await Promise.all([
+			client.callTool({ name: 'get_artist_info', arguments: { artist } }),
+			client.callTool({ name: 'ping', arguments: {} }),
+		])
+
+		const cacheByTool = Object.fromEntries(events.map((e) => [e.tool, e.cache]))
+		expect(cacheByTool).toEqual({ get_artist_info: 'miss', ping: 'none' })
 	})
 })

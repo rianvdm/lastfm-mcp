@@ -6,7 +6,6 @@ import type { ToolCallEvent } from '../analytics/toolEvents'
 import { CachedLastfmClient } from '../clients/cachedLastfm'
 import { LastfmClient } from '../clients/lastfm'
 import type { Env } from '../types/env'
-import type { CacheTally } from '../utils/cache'
 
 import { instrumentTools } from './instrumentation'
 import { SERVER_VERSION } from './protocol'
@@ -68,13 +67,12 @@ export function createMcpServer(env: Env, options: CreateMcpServerOptions = {}):
 		},
 	)
 
-	// Counts this request's cache hits and misses. Instrumentation must wrap registerTool before any tool is registered.
-	const tally: CacheTally = { hits: 0, misses: 0 }
-	if (options.onToolCall) instrumentTools(server, tally, options.onToolCall)
+	// Instrumentation must wrap registerTool before any tool is registered.
+	if (options.onToolCall) instrumentTools(server, options.onToolCall)
 
 	// Create Last.fm client with caching
 	const lastfmClient = new LastfmClient(env.LASTFM_API_KEY)
-	const cachedClient = new CachedLastfmClient(lastfmClient, env.MCP_SESSIONS, options.onToolCall ? tally : undefined)
+	const cachedClient = new CachedLastfmClient(lastfmClient, env.MCP_SESSIONS)
 
 	// Mutable request context - updated per-request before handling
 	const context: McpRequestContext = {

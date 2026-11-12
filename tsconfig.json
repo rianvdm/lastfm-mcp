@@ -36,7 +36,7 @@
 
 		/* Skip type checking all .d.ts files. */
 		"skipLibCheck": true,
-		"types": ["./.build/tools/worker-configuration.d.ts"]
+		"types": ["./.build/tools/worker-configuration.d.ts", "node"]
 	},
 	"exclude": ["test"],
 	"include": [".build/tools/worker-configuration.d.ts", "src/**/*.ts"]

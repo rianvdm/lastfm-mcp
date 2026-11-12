@@ -20,16 +20,15 @@ import {
 	type LastfmWeeklyArtistChartResponse,
 	type LastfmWeeklyTrackChartResponse,
 } from './lastfm'
-import { SmartCache, CacheKeys, createLastfmCache, type CacheTally } from '../utils/cache'
+import { SmartCache, CacheKeys, createLastfmCache } from '../utils/cache'
 
 export class CachedLastfmClient {
 	private client: LastfmClient
 	private cache: SmartCache
 
-	/** `tally`, when given, counts this client's cache hits and misses for tool-call instrumentation. */
-	constructor(client: LastfmClient, kv?: KVNamespace, tally?: CacheTally) {
+	constructor(client: LastfmClient, kv?: KVNamespace) {
 		this.client = client
-		this.cache = createLastfmCache(kv, tally)
+		this.cache = createLastfmCache(kv)
 	}
 
 	/**
