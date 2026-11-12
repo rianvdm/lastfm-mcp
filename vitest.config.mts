@@ -15,6 +15,15 @@ function registrationRateLimiter(env: '' | 'production') {
 const stagingRegistrationLimiter = registrationRateLimiter('')
 const productionRegistrationLimiter = registrationRateLimiter('production')
 
+/** The dataset the TOOL_EVENTS Analytics Engine binding writes to, per environment ('' is the default, staging). */
+function toolEventsDataset(env: '' | 'production') {
+	return (
+		unstable_readConfig({ config: WRANGLER_CONFIG, env: env || undefined }).analytics_engine_datasets.find(
+			(d) => d.binding === 'TOOL_EVENTS',
+		)?.dataset ?? null
+	)
+}
+
 export default defineConfig({
 	plugins: [
 		cloudflareTest({
@@ -28,6 +37,8 @@ export default defineConfig({
 						staging: stagingRegistrationLimiter,
 						production: productionRegistrationLimiter,
 					}),
+					// Both environments' TOOL_EVENTS dataset name, so test/wrangler-config.test.ts can check them
+					TEST_TOOL_EVENTS_DATASETS: JSON.stringify({ staging: toolEventsDataset(''), production: toolEventsDataset('production') }),
 				},
 				// Rate-limit counts last a full period across the whole run and can't be reset between tests, so OAuth tests that
 				// register clients get a budget they can't exhaust. test/oauth-register-rate-limit.test.ts swaps in the strict

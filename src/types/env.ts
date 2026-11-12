@@ -1,6 +1,6 @@
 // ABOUTME: TypeScript interface for Cloudflare Worker environment bindings.
-// ABOUTME: Defines API keys, secrets, KV namespaces and the rate limiting binding used by the worker.
-import type { RateLimit } from '@cloudflare/workers-types'
+// ABOUTME: Defines API keys, secrets, KV namespaces, the rate limiting binding and the Analytics Engine dataset used by the worker.
+import type { AnalyticsEngineDataset, RateLimit } from '@cloudflare/workers-types'
 
 export interface Env {
 	// Last.fm API credentials
@@ -21,4 +21,8 @@ export interface Env {
 
 	// Per-IP budget for POST /oauth/register (Rate Limiting binding, configured in wrangler.toml)
 	REGISTRATION_RATE_LIMITER: RateLimit
+
+	// Anonymous tool-call events (Analytics Engine, configured in wrangler.toml). Optional so a missing binding
+	// skips recording instead of failing the tool call.
+	TOOL_EVENTS?: AnalyticsEngineDataset
 }
