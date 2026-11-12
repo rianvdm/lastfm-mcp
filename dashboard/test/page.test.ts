@@ -349,6 +349,33 @@ describe('renderDashboard active users', () => {
 		expectNoBrokenNumbers(html)
 	})
 
+	it('should not print NaN, Infinity or undefined in the OAuth hygiene bars for a summary missing their counts', () => {
+		// An older stored summary can predate a field; the bars must still render
+		const grants = {
+			...fixtureGrants(),
+			registeredClients: undefined as unknown as number,
+			liveGrants: undefined as unknown as number,
+		}
+
+		const html = renderDashboard({ ...fixtureModel(), grants })
+
+		const hygiene = html.slice(html.indexOf('>OAuth hygiene</h2>'), html.indexOf('</section>', html.indexOf('>OAuth hygiene</h2>')))
+		expect(hygiene).toContain('class="bar-fill" style="width:0%"')
+		expect(hygiene).toContain('No live grants yet.')
+		expectNoBrokenNumbers(html)
+	})
+
+	it('should scale the OAuth hygiene bars to the count that is present when the other is missing', () => {
+		const grants = { ...fixtureGrants(), registeredClients: 300, liveGrants: undefined as unknown as number }
+
+		const html = renderDashboard({ ...fixtureModel(), grants })
+
+		const hygiene = html.slice(html.indexOf('>OAuth hygiene</h2>'), html.indexOf('</section>', html.indexOf('>OAuth hygiene</h2>')))
+		expect(hygiene).toContain('class="bar-fill" style="width:100%"')
+		expect(hygiene).toContain('class="bar-fill" style="width:0%"')
+		expectNoBrokenNumbers(html)
+	})
+
 	it('should not print NaN in the connected-users note for a summary missing its counts', () => {
 		const grants = { ...fixtureGrants(), liveGrants: undefined as unknown as number }
 

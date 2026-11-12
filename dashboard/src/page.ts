@@ -549,10 +549,12 @@ ${body}
 
 function renderHygieneSection(grants: DashboardModel['grants']): string {
 	const body = withGrants(grants, (summary) => {
-		const max = Math.max(summary.registeredClients, summary.liveGrants, 1)
+		// An older stored summary can lack a count; it draws as an empty bar and prints DASH
+		const length = (value: unknown): number => (isNumber(value) ? Math.max(0, value) : 0)
+		const max = Math.max(length(summary.registeredClients), length(summary.liveGrants), 1)
 		const bar = (label: string, value: number): string =>
 			`<div class="compare-row"><span class="compare-label">${esc(label)}</span><span class="bar-track"><span class="bar-fill" style="width:${pct(
-				(Math.max(0, value) / max) * 100,
+				(length(value) / max) * 100,
 			)}"></span></span><span class="compare-value">${formatCount(value)}</span></div>`
 		const perGrant = ratio(summary.registeredClients, summary.liveGrants)
 		const gap =
