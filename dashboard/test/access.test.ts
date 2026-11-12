@@ -1,9 +1,10 @@
 // ABOUTME: Tests the dashboard's Cloudflare Access gate and the routes the Worker serves behind it.
 // ABOUTME: Signs RS256 JWTs with a generated key pair and serves its public key at the team's certs URL through a mocked fetch.
-import { env } from 'cloudflare:test'
+import { createExecutionContext, env, waitOnExecutionContext } from 'cloudflare:test'
 import { exportJWK, generateKeyPair, SignJWT } from 'jose'
 import type { JWK } from 'jose'
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
+import type { MockInstance } from 'vitest'
 
 import { requireAccess } from '../src/access'
 import type { DashEnv } from '../src/env'
@@ -13,6 +14,7 @@ const AUD = 'test-access-aud'
 const KEY_ID = 'test-key'
 const ISSUER = `https://${env.ACCESS_TEAM_DOMAIN}`
 const CERTS_URL = `${ISSUER}/cdn-cgi/access/certs`
+const API_BASE = 'https://api.cloudflare.com/client/v4/'
 
 /** wrangler.toml's env with the AUD tag the test tokens are signed for */
 const accessEnv: DashEnv = { ...env, ACCESS_AUD: AUD }
@@ -58,6 +60,8 @@ beforeEach(() => {
 	vi.spyOn(globalThis, 'fetch').mockImplementation(async (input) => {
 		const url = input instanceof Request ? input.url : String(input)
 		if (url === CERTS_URL) return Response.json({ keys: [publicJwk] })
+		// Every Cloudflare API call is refused, so the page shows each upstream panel failing; a 403 isn't retried
+		if (url.startsWith(API_BASE)) return Response.json({ success: false, errors: [{ message: 'Authentication error' }] }, { status: 403 })
 		return new Response('Unexpected fetch in test', { status: 500 })
 	})
 })
@@ -120,26 +124,95 @@ describe('requireAccess', () => {
 	})
 })
 
+async function clearDashKv(): Promise<void> {
+	const { keys } = await env.DASH_KV.list()
+	await Promise.all(keys.map(({ name }) => env.DASH_KV.delete(name)))
+}
+
+/** Calls the Worker's fetch handler and waits for anything it handed to waitUntil */
+async function serve(request: Request<unknown, IncomingRequestCfProperties>): Promise<Response> {
+	const ctx = createExecutionContext()
+	const response = await worker.fetch(request, accessEnv, ctx)
+	await waitOnExecutionContext(ctx)
+	return response
+}
+
+function kvListCalls(): number {
+	return vi.mocked(fetch).mock.calls.filter(([input]) => String(input instanceof Request ? input.url : input).includes('/keys?')).length
+}
+
 describe('dashboard Worker fetch', () => {
+	// Read the spy through this handle: in workerd, reading console.error again doesn't return the spy
+	let errorSpy: MockInstance<typeof console.error>
+
+	beforeEach(async () => {
+		await clearDashKv()
+		errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+	})
+
 	it('should refuse the page without an Access JWT', async () => {
-		const response = await worker.fetch(requestWith(), accessEnv)
+		const response = await serve(requestWith())
 		expect(response.status).toBe(403)
 	})
 
 	it('should serve the page at GET / with a valid token', async () => {
-		const response = await worker.fetch(requestWith(await signToken()), accessEnv)
+		const response = await serve(requestWith(await signToken()))
 		expect(response.status).toBe(200)
 		expect(response.headers.get('Content-Type')).toContain('text/html')
 		expect(response.headers.get('Cache-Control')).toBe('private, no-store')
+		expect(response.headers.get('Content-Security-Policy')).toContain("default-src 'none'")
+	})
+
+	it('should render each failing upstream panel as couldn\u2019t load, by HTTP status only', async () => {
+		const html = await (await serve(requestWith(await signToken()))).text()
+
+		expect(html).toContain("couldn't load: HTTP 403")
+		expect(html).not.toContain('Authentication error')
+	})
+
+	it('should say the grant summary is warming up and start one refresh while it is missing', async () => {
+		const first = await (await serve(requestWith(await signToken()))).text()
+		expect(first).toContain('warming up')
+		// The refresh ran through waitUntil, hit the refused KV list, and logged only the status
+		expect(errorSpy).toHaveBeenCalledWith('[STATS] grant summary refresh failed (status 403)')
+		const listsAfterFirst = kvListCalls()
+		expect(listsAfterFirst).toBeGreaterThan(0)
+
+		// A reload while the first refresh is still within its window doesn't start another one
+		await serve(requestWith(await signToken()))
+		expect(kvListCalls()).toBe(listsAfterFirst)
+	})
+
+	it('should not start a refresh when the grant summary exists', async () => {
+		await env.DASH_KV.put(
+			'summary:grants',
+			JSON.stringify({
+				computedAt: '2026-11-12T15:17:00.000Z',
+				liveGrants: 3,
+				liveUsers: 2,
+				noExpiryGrants: 0,
+				pendingGrants: 0,
+				unresolvedGrants: 0,
+				registeredClients: 5,
+				signInsLast7d: 1,
+				signInsByDay: [],
+				clients: [],
+			}),
+		)
+
+		const html = await (await serve(requestWith(await signToken()))).text()
+
+		expect(html).not.toContain('warming up')
+		expect(kvListCalls()).toBe(0)
 	})
 
 	it('should return 404 for any other path with a valid token', async () => {
-		const response = await worker.fetch(requestWith(await signToken(), '/nope'), accessEnv)
+		const response = await serve(requestWith(await signToken(), '/nope'))
 		expect(response.status).toBe(404)
 	})
 
 	it('should refuse an unknown path without a token before routing it', async () => {
-		const response = await worker.fetch(requestWith(undefined, '/nope'), accessEnv)
+		const response = await serve(requestWith(undefined, '/nope'))
 		expect(response.status).toBe(403)
 	})
 })
