@@ -154,10 +154,18 @@ describe('renderDashboard', () => {
 		expect(html).toContain('Unresolved grants')
 	})
 
+	it('should say most grants last 30 days and that sign-ins are seen hourly', () => {
+		const html = renderDashboard(fixtureModel())
+
+		expect(html).toContain('Roughly monthly active: most grants last 30 days')
+		expect(html).toContain("Sign-ins are seen hourly; a grant created and replaced within the same hour isn't counted.")
+	})
+
 	it('should carry the footer notes, without the retired session_id note', () => {
 		const html = renderDashboard(fixtureModel())
 
-		expect(html).toContain('Tool tracking started 2026-11-10 08:15 UTC')
+		expect(html).toContain('Oldest retained tool event: 2026-11-10 08:15 UTC')
+		expect(html).not.toContain('Tool tracking started')
 		expect(html).toContain('Error rate counts uncaught exceptions; tool failures are in the Tools table.')
 		expect(html).toContain('Page generated 2026-11-12 15:30 UTC')
 		expect(html).toContain('Grant summary computed 2026-11-12 15:17 UTC')

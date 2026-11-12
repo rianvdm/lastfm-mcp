@@ -139,7 +139,7 @@ function renderTiles(model: DashboardModel): string {
 			'Users with live grants',
 			model.grants,
 			(g) => formatCount(g.liveUsers),
-			() => 'Roughly monthly active: a grant lasts 30 days',
+			() => 'Roughly monthly active: most grants last 30 days',
 		),
 		sourcedTile(
 			'Sign-ins, last 7 days',
@@ -367,7 +367,7 @@ ${tableView(
 )}`
 	})
 	return `<section class="panel"><h2>Sign-ins, last 30 days</h2>
-<p class="caption">Sign-in events from grant creation times. Everyone signs in again when their 30-day grant expires.</p>
+<p class="caption">Sign-in events from grant creation times, including grants a later sign-in replaced. Everyone signs in again when their 30-day grant expires. Sign-ins are seen hourly; a grant created and replaced within the same hour isn't counted.</p>
 ${body}
 </section>`
 }
@@ -484,8 +484,8 @@ ${body}
 function renderNotes(model: DashboardModel): string {
 	const { tools, grants } = model
 	const tracking = isLoadError(tools)
-		? loadErrorNote(tools.error, 'Tool tracking start date')
-		: `<p>${tools.firstEventAt === null ? 'No tool events yet.' : `Tool tracking started ${esc(formatTime(tools.firstEventAt))}.`}</p>`
+		? loadErrorNote(tools.error, 'Oldest retained tool event')
+		: `<p>${tools.firstEventAt === null ? 'No tool events yet.' : `Oldest retained tool event: ${esc(formatTime(tools.firstEventAt))}.`}</p>`
 	const computed =
 		grants && !isLoadError(grants) ? ` Grant summary computed ${esc(formatTime(grants.computedAt))}; it refreshes hourly.` : ''
 	return `<footer class="panel notes"><h2>Notes</h2>
