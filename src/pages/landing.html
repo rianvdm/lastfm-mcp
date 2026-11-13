@@ -177,6 +177,13 @@
 				padding: 2px 8px;
 				border-radius: 4px;
 				white-space: nowrap;
+				pointer-events: none;
+				/* The wave script fades a label out, swaps its text, then fades it back in */
+				transition: opacity 1.2s ease;
+			}
+
+			.wave-label.is-fading {
+				opacity: 0;
 			}
 
 			.wave-label-early {
@@ -931,6 +938,155 @@ url = "{{ORIGIN}}/mcp"</code></pre>
 						)
 					})
 				})
+			})()
+
+			// The hero wave: a streamgraph of five stacked layers drifting right to left, standing for years of listening
+			// moving between phases. Thicknesses come from layered sines, not real data. Two labels above it cross-fade
+			// through hand-written lines. Reduced motion gets one still frame and fixed labels; everything pauses while
+			// the tab is hidden or the hero is off screen.
+			;(() => {
+				const canvas = document.getElementById('wave')
+				const context = canvas.getContext('2d')
+				if (!context) return
+
+				const hero = canvas.closest('.hero')
+				const layerColors = ['#b8432f', '#d39b3f', '#8a9a72', '#6f8aa3', '#8c6278']
+				const layerOpacity = 0.85
+				const maxLayerThickness = 34 // px; the whole stream is at most five of these
+				const centreFromBottom = 78 // px from the bottom of the hero to the stream's centre line
+				const columnWidth = 6 // px between sampled columns
+				const pixelsPerMs = 0.036 // drift speed, about 36px a second
+
+				let offset = 0
+				let lastTime = null
+				let frameId = 0
+
+				// Layer thickness at stream position x: two multiplied sines per layer, phase-shifted so the layers swell at different times
+				const thickness = (x, layer) => {
+					const swell = 0.5 + 0.5 * Math.sin(x * (0.006 + layer * 0.0017) + layer * 1.9) * Math.sin(x * 0.0033 + layer * 2.3)
+					return Math.max(0.03, swell) * maxLayerThickness
+				}
+
+				// Match the backing store to the CSS size and pixel ratio, so the stream stays sharp and never stretches
+				const fitCanvas = () => {
+					const ratio = window.devicePixelRatio || 1
+					const width = Math.round(canvas.clientWidth * ratio)
+					const height = Math.round(canvas.clientHeight * ratio)
+					if (canvas.width !== width || canvas.height !== height) {
+						canvas.width = width
+						canvas.height = height
+					}
+					context.setTransform(ratio, 0, 0, ratio, 0, 0)
+				}
+
+				const draw = () => {
+					fitCanvas()
+					const width = canvas.clientWidth
+					const height = canvas.clientHeight
+					const centre = height - centreFromBottom
+					context.clearRect(0, 0, width, height)
+
+					// For each column, the y of every layer boundary from the top of the stream down, centred on the centre line
+					const columns = []
+					for (let x = 0; x <= width + columnWidth; x += columnWidth) {
+						const boundaries = [0]
+						layerColors.forEach((_, layer) => boundaries.push(boundaries[layer] + thickness(x + offset, layer)))
+						const top = centre - boundaries[boundaries.length - 1] / 2
+						columns.push({ x, ys: boundaries.map((b) => top + b) })
+					}
+
+					context.globalAlpha = layerOpacity
+					layerColors.forEach((color, layer) => {
+						context.beginPath()
+						// Along the layer's top edge left to right, then back along its bottom edge
+						context.moveTo(columns[0].x, columns[0].ys[layer])
+						for (let i = 1; i < columns.length; i++) context.lineTo(columns[i].x, columns[i].ys[layer])
+						for (let i = columns.length - 1; i >= 0; i--) context.lineTo(columns[i].x, columns[i].ys[layer + 1])
+						context.closePath()
+						context.fillStyle = color
+						context.fill()
+					})
+					context.globalAlpha = 1
+				}
+
+				const tick = (now) => {
+					if (lastTime !== null) offset += (now - lastTime) * pixelsPerMs
+					lastTime = now
+					draw()
+					frameId = requestAnimationFrame(tick)
+				}
+
+				// Labels: the early label (left) walks the first three lines and the late label (right) the last three,
+				// taking turns, so the left one always shows the earlier year
+				const lines = [
+					'2009 · post-rock phase',
+					'2011 · that one Bon Iver winter',
+					'2016 · 400 plays of one album',
+					'2019 · back to the 90s',
+					'2024 · jazz, apparently',
+					'2026 · everything at once',
+				]
+				const labels = [
+					{ element: hero.querySelector('.wave-label-early'), lines: lines.slice(0, 3) },
+					{ element: hero.querySelector('.wave-label-late'), lines: lines.slice(3) },
+				]
+				const labelInterval = 3500 // ms between swaps
+				const fadeDuration = 1300 // ms; a little longer than the CSS opacity transition
+				let labelTimer = 0
+				let turn = 0
+
+				const swapNextLabel = () => {
+					const label = labels[turn]
+					turn = (turn + 1) % labels.length
+					const next = (label.lines.indexOf(label.element.textContent) + 1) % label.lines.length
+					label.element.classList.add('is-fading')
+					// Runs even if the wave pauses mid-fade, so a label is never left invisible
+					setTimeout(() => {
+						label.element.textContent = label.lines[next]
+						label.element.classList.remove('is-fading')
+					}, fadeDuration)
+				}
+
+				// Pause and resume
+				const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)')
+				let heroOnScreen = true
+
+				const start = () => {
+					if (frameId) return
+					lastTime = null
+					frameId = requestAnimationFrame(tick)
+					labelTimer = setInterval(swapNextLabel, labelInterval)
+				}
+
+				const stop = () => {
+					cancelAnimationFrame(frameId)
+					frameId = 0
+					clearInterval(labelTimer)
+					labelTimer = 0
+				}
+
+				const update = () => {
+					if (!reducedMotion.matches && !document.hidden && heroOnScreen) start()
+					else stop()
+				}
+
+				reducedMotion.addEventListener('change', update)
+				document.addEventListener('visibilitychange', update)
+				if ('IntersectionObserver' in window) {
+					new IntersectionObserver((entries) => {
+						heroOnScreen = entries[entries.length - 1].isIntersecting
+						update()
+					}).observe(hero)
+				}
+				// While paused, a resize (or the web font changing the hero's height) still needs a fresh still frame
+				if ('ResizeObserver' in window) {
+					new ResizeObserver(() => {
+						if (!frameId) draw()
+					}).observe(canvas)
+				}
+
+				draw()
+				update()
 			})()
 		</script>
 	</body>

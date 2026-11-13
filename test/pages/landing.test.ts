@@ -51,4 +51,32 @@ describe('buildLandingPage', () => {
 		expect(html).toContain('id="setup"')
 		expect(html).toContain('<link rel="alternate" type="text/plain" href="/llms.txt"')
 	})
+
+	describe('the wave', () => {
+		it('cycles through every hand-written label from the spec', () => {
+			const html = buildLandingPage(ORIGIN)
+
+			for (const label of [
+				'2009 · post-rock phase',
+				'2011 · that one Bon Iver winter',
+				'2016 · 400 plays of one album',
+				'2019 · back to the 90s',
+				'2024 · jazz, apparently',
+				'2026 · everything at once',
+			]) {
+				expect(html).toContain(label)
+			}
+		})
+
+		it('checks for reduced motion in the script, not only in CSS', () => {
+			expect(buildLandingPage(ORIGIN)).toContain("matchMedia('(prefers-reduced-motion: reduce)')")
+		})
+
+		it('pauses when the tab is hidden or the hero scrolls off screen', () => {
+			const html = buildLandingPage(ORIGIN)
+
+			expect(html).toContain('visibilitychange')
+			expect(html).toContain('IntersectionObserver')
+		})
+	})
 })
