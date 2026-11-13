@@ -7,6 +7,8 @@ ABOUTME: Covers what it reads and stores, its bindings and secret, and how to pr
 
 A private usage dashboard for the production MCP Worker (`lastfm-mcp-prod`), served at `stats.lastfm-mcp.com` behind Cloudflare Access. It's a separate Worker with its own `wrangler.toml` in this folder. It's deployed by hand with `npm run dashboard:deploy`, never from CI, and has no `workers.dev` or preview URL.
 
+Every daily figure runs midnight to midnight Pacific time (`America/Los_Angeles`), and every time on the page is shown in PST or PDT. `src/pacific.ts` holds the zone and the date helpers.
+
 ## What it reads and stores
 
 Everything it reads from production goes through the Cloudflare REST API with one read-only API token. It has no bindings to the MCP Worker's resources.
@@ -21,7 +23,7 @@ Everything it reads from production goes through the Cloudflare REST API with on
 It never writes production `OAUTH_KV`. It writes only its own `DASH_KV`:
 
 - `summary:grants` and `summary:active-users`: the summaries the hourly cron (`17 * * * *`) computes.
-- `au:<YYYY-MM-DD>:<hash>`: one empty marker per active user per UTC day, deleted after 31 days. The hash is the first 32 hex characters of HMAC-SHA256 of the user ID, keyed with `ACTIVE_USER_HMAC_KEY`; the user ID itself is never stored. Each run lists the `token:` keys in production `OAUTH_KV`, so anyone whose AI client held a live access token (they last an hour and renew while a client is in use) during that hour's check counts as active that day.
+- `au:<YYYY-MM-DD>:<hash>`: one empty marker per active user per Pacific day (`America/Los_Angeles`), deleted after 31 days. The hash is the first 32 hex characters of HMAC-SHA256 of the user ID, keyed with `ACTIVE_USER_HMAC_KEY`; the user ID itself is never stored. Each run lists the `token:` keys in production `OAUTH_KV`, so anyone whose AI client held a live access token (they last an hour and renew while a client is in use) during that hour's check counts as active that day.
 - `gi:<grantId>`, `gp:<grantId>` and `cl:<clientId>`: the grant index, pending-grant markers and memoised client labels that let each run read only grants it hasn't seen. They hold no username, no client URL and no registered client name. Client labels come only from the fixed list in `src/analytics/clientLabel.ts`.
 - `cache:traffic:v1` and `cache:tools:v1`: Analytics SQL API and Analytics Engine results, cached for 5 minutes.
 

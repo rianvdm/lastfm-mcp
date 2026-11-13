@@ -67,9 +67,9 @@ describe('renderDashboard', () => {
 			'Error rate, last 24 hours',
 			'Tool calls, last 24 hours',
 		])
-		expect(tileText(html, 'Active users today')).toBe('138 So far on Nov 12 (UTC)')
-		expect(tileText(html, 'Active users, 7 days')).toBe('291 Distinct users, last 7 UTC days')
-		expect(tileText(html, 'Active users, 30 days')).toBe('447 Distinct users, last 30 UTC days')
+		expect(tileText(html, 'Active users today')).toBe('138 So far on Nov 12 (Pacific)')
+		expect(tileText(html, 'Active users, 7 days')).toBe('291 Distinct users, last 7 Pacific days')
+		expect(tileText(html, 'Active users, 30 days')).toBe('447 Distinct users, last 30 Pacific days')
 		expect(tileText(html, 'Connected users')).toBe('512 893 grants with a 30-day expiry, 31 legacy grants with no expiry')
 		expect(html).toContain('Sign-ins, last 7 days')
 		expect(html).toContain('>141<')
@@ -211,15 +211,15 @@ describe('renderDashboard', () => {
 	it('should carry the footer notes, without the retired session_id note', () => {
 		const html = renderDashboard(fixtureModel())
 
-		expect(html).toContain('Oldest retained tool event: 2026-11-10 08:15 UTC')
+		expect(html).toContain('Oldest retained tool event: 2026-11-10 00:15 PST')
 		expect(html).not.toContain('Tool tracking started')
 		expect(html).toContain(
 			"Errors are requests that threw an uncaught exception or hit a Workers limit such as CPU or memory. Requests closed by the client aren't errors; tool failures are in the Tools table.",
 		)
 		expect(html).toContain('Traffic comes from the Analytics SQL API (beta). Traffic and tool numbers are cached for up to 5 minutes.')
 		expect(html).not.toContain('GraphQL')
-		expect(html).toContain('Page generated 2026-11-12 15:30 UTC')
-		expect(html).toContain('Grant summary computed 2026-11-12 15:17 UTC')
+		expect(html).toContain('Page generated 2026-11-12 07:30 PST')
+		expect(html).toContain('Grant summary computed 2026-11-12 07:17 PST')
 		expect(html).not.toContain('session_id')
 	})
 
@@ -282,20 +282,33 @@ describe('renderDashboard active users', () => {
 		// Nov 6 is the first day of the 7-day window ending Nov 12
 		model.activeUsers = activeUsers({ activeSince: '2026-11-06' })
 		html = renderDashboard(model)
-		expect(tileText(html, 'Active users, 7 days')).toBe('291 Distinct users, last 7 UTC days')
+		expect(tileText(html, 'Active users, 7 days')).toBe('291 Distinct users, last 7 Pacific days')
 		expect(tileText(html, 'Active users, 30 days')).toBe('447 Partial: since Nov 6')
 
 		// Oct 14 is the first day of the 30-day window
 		model.activeUsers = activeUsers({ activeSince: '2026-10-14' })
 		html = renderDashboard(model)
-		expect(tileText(html, 'Active users, 30 days')).toBe('447 Distinct users, last 30 UTC days')
+		expect(tileText(html, 'Active users, 30 days')).toBe('447 Distinct users, last 30 Pacific days')
 		expect(html).not.toContain('Counting started')
+	})
+
+	it('should name the Pacific date as today when the summary was computed after UTC midnight', () => {
+		const html = renderDashboard({ ...fixtureModel(), activeUsers: activeUsers({ computedAt: '2026-11-13T01:00:00.000Z' }) })
+
+		expect(tileText(html, 'Active users today')).toBe('138 So far on Nov 12 (Pacific)')
+	})
+
+	it('should describe the active-user chart in Pacific days', () => {
+		const html = renderDashboard(fixtureModel())
+
+		expect(html).toContain('at any hourly check that Pacific day.')
+		expect(html).not.toMatch(/\bUTC\b/)
 	})
 
 	it('should say counting started today on the first day', () => {
 		const html = renderDashboard({ ...fixtureModel(), activeUsers: activeUsers({ dau: 12, wau: 12, mau: 12, activeSince: '2026-11-12' }) })
 
-		expect(tileText(html, 'Active users today')).toBe('12 So far on Nov 12 (UTC)')
+		expect(tileText(html, 'Active users today')).toBe('12 So far on Nov 12 (Pacific)')
 		expect(tileText(html, 'Active users, 7 days')).toBe('12 Counting started today')
 		expect(tileText(html, 'Active users, 30 days')).toBe('12 Counting started today')
 		expect(html).toContain(`<p>${NOTE_START}, counted from today. Stored as keyed hashes, deleted after 31 days.</p>`)
@@ -313,7 +326,7 @@ describe('renderDashboard active users', () => {
 
 		const html = renderDashboard({ ...fixtureModel(), activeUsers: summary })
 
-		expect(tileText(html, 'Active users today')).toBe('0 So far on Nov 12 (UTC)')
+		expect(tileText(html, 'Active users today')).toBe('0 So far on Nov 12 (Pacific)')
 		expect(tileText(html, 'Active users, 7 days')).toBe('0 No active users seen yet')
 		expect(tileText(html, 'Active users, 30 days')).toBe('0 No active users seen yet')
 		expect(html).toContain(`<p>${NOTE_START}. None recorded yet. Stored as keyed hashes, deleted after 31 days.</p>`)
@@ -356,8 +369,8 @@ describe('renderDashboard active users', () => {
 		const html = renderDashboard({ ...fixtureModel(), activeUsers: summary })
 
 		expect(html).not.toContain('<b>')
-		expect(tileText(html, 'Active users today')).toBe('— So far on Nov 12 (UTC)')
-		expect(tileText(html, 'Active users, 7 days')).toBe('— Distinct users, last 7 UTC days')
+		expect(tileText(html, 'Active users today')).toBe('— So far on Nov 12 (Pacific)')
+		expect(tileText(html, 'Active users, 7 days')).toBe('— Distinct users, last 7 Pacific days')
 		expect(html).toContain('no data yet')
 		expectNoBrokenNumbers(html)
 	})

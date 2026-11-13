@@ -176,7 +176,7 @@ describe('refreshActiveUsers', () => {
 		const summary = await refreshActiveUsers(testEnv(), lateEvening)
 
 		expect(await markerKeys()).toEqual([`au:${pacificToday}:${await hashUserId(key, ALICE)}`])
-		expect(summary?.activeByDay.at(-1)).toEqual({ date: pacificToday, count: 1 })
+		expect(summary?.activeByDay[29]).toEqual({ date: pacificToday, count: 1 })
 		expect(summary).toMatchObject({ dau: 1, activeSince: pacificToday })
 	})
 

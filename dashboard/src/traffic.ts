@@ -77,7 +77,9 @@ interface TotalsSqlRow {
 
 /** The epoch milliseconds of a SQL API hour (`YYYY-MM-DD hh:mm:ss` in UTC), or NaN for anything else */
 function parseHour(hour: unknown): number {
-	return typeof hour === 'string' && /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/.test(hour) ? Date.parse(`${hour.replace(' ', 'T')}Z`) : Number.NaN
+	return typeof hour === 'string' && /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/.test(hour)
+		? Date.parse(`${hour.replace(' ', 'T')}Z`)
+		: Number.NaN
 }
 
 /** A timezone-qualified SQL timestamp literal, to the second */

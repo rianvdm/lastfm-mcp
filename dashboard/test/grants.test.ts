@@ -139,7 +139,12 @@ describe('refreshGrantSummary', () => {
 		const utcMidnight = Math.floor(NOW_S / DAY) * DAY
 		// 01:00 UTC is 17:00 or 18:00 Pacific on the previous date; the grant was created half an hour earlier
 		const lateEvening = new Date((utcMidnight + 3600) * 1000)
-		grant(ALICE, 'grantA3', { clientId: DCR_CLAUDE, createdAt: utcMidnight + 1800, expiresAt: utcMidnight + 30 * DAY, refreshTokenId: 'r4' })
+		grant(ALICE, 'grantA3', {
+			clientId: DCR_CLAUDE,
+			createdAt: utcMidnight + 1800,
+			expiresAt: utcMidnight + 30 * DAY,
+			refreshTokenId: 'r4',
+		})
 
 		const summary = await refreshGrantSummary(env, lateEvening)
 
