@@ -637,6 +637,17 @@ describe('Last.fm MCP Server (OAuth Entry Point)', () => {
 			it('should serve the 180×180 icon at GET /apple-touch-icon.png', async () => {
 				expect(await fetchPng('/apple-touch-icon.png')).toEqual({ width: 180, height: 180 })
 			})
+
+			it.each(['/og.png', '/apple-touch-icon.png'])('should answer HEAD %s with the GET headers and no body', async (path) => {
+				const ctx = createExecutionContext()
+				const response = await worker.fetch(new Request(`https://example.com${path}`, { method: 'HEAD' }), env, ctx)
+				await waitOnExecutionContext(ctx)
+
+				expect(response.status).toBe(200)
+				expect(response.headers.get('content-type')).toBe('image/png')
+				expect(response.headers.get('cache-control')).toBe('public, max-age=86400')
+				expect(response.body).toBeNull()
+			})
 		})
 
 		it('should allow llms.txt and the share card in robots.txt, with no Crawl-delay', async () => {

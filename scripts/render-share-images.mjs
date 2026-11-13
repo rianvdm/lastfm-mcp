@@ -18,9 +18,13 @@ const IMAGES = [
 // Long enough for the Google Fonts stylesheet and font file to arrive before the capture
 const VIRTUAL_TIME_BUDGET_MS = 15000
 
-/** Screenshots `htmlPath` at exactly `width`×`height` CSS pixels, one device pixel each, into `pngPath`. */
+/**
+ * Screenshots `htmlPath` at exactly `width`×`height` CSS pixels, one device pixel each, into `pngPath`, and returns the
+ * page's `data-ready` state ('ok', 'failed', or null if it never got that far). Chrome dumps the DOM from the same load
+ * it captures, so the state describes the pixels in the screenshot.
+ */
 function screenshot(htmlPath, pngPath, [width, height]) {
-	execFileSync(
+	const dom = execFileSync(
 		CHROME,
 		[
 			'--headless=new',
@@ -29,11 +33,13 @@ function screenshot(htmlPath, pngPath, [width, height]) {
 			'--force-device-scale-factor=1',
 			`--window-size=${width},${height}`,
 			`--virtual-time-budget=${VIRTUAL_TIME_BUDGET_MS}`,
+			'--dump-dom',
 			`--screenshot=${pngPath}`,
 			pathToFileURL(htmlPath).href,
 		],
-		{ stdio: ['ignore', 'ignore', 'pipe'] },
+		{ encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] },
 	)
+	return dom.match(/<html\b[^>]*\sdata-ready="([^"]*)"/)?.[1] ?? null
 }
 
 /** Width and height from a PNG's IHDR chunk (bytes 16-23, big-endian). */
@@ -42,30 +48,43 @@ function pngSize(pngPath) {
 	return [bytes.readUInt32BE(16), bytes.readUInt32BE(20)]
 }
 
+/** Renders and checks one image inside `workDir`, returning the finished file's path. Throws on any failure. */
+function render({ source, output, renderSize, size }, workDir) {
+	const captured = join(workDir, `captured-${output}`)
+	const state = screenshot(join(SHARE_DIR, source), captured, renderSize)
+	if (state !== 'ok') {
+		throw new Error(`${source} reported data-ready=${state ?? '(unset)'}; a font or script didn't load in time`)
+	}
+
+	let finished = captured
+	if (renderSize[0] !== size[0] || renderSize[1] !== size[1]) {
+		finished = join(workDir, output)
+		execFileSync('sips', ['-z', String(size[1]), String(size[0]), captured, '--out', finished], { stdio: 'ignore' })
+	}
+
+	const [width, height] = pngSize(finished)
+	if (width !== size[0] || height !== size[1]) {
+		throw new Error(`${output} is ${width}×${height}, expected ${size[0]}×${size[1]}`)
+	}
+	return finished
+}
+
 if (!existsSync(CHROME)) {
 	console.error(`Chrome not found at ${CHROME}. Set CHROME_PATH to its binary.`)
 	process.exit(1)
 }
 
+// Every image is rendered and checked in a temp dir first, so a failure leaves the committed PNGs untouched
 const workDir = mkdtempSync(join(tmpdir(), 'share-images-'))
 try {
-	for (const { source, output, renderSize, size } of IMAGES) {
-		const outputPath = join(SHARE_DIR, output)
-		const rendered = join(workDir, output)
-		screenshot(join(SHARE_DIR, source), rendered, renderSize)
-
-		if (renderSize[0] === size[0] && renderSize[1] === size[1]) {
-			copyFileSync(rendered, outputPath)
-		} else {
-			execFileSync('sips', ['-z', String(size[1]), String(size[0]), rendered, '--out', outputPath], { stdio: 'ignore' })
-		}
-
-		const [width, height] = pngSize(outputPath)
-		if (width !== size[0] || height !== size[1]) {
-			throw new Error(`${output} is ${width}×${height}, expected ${size[0]}×${size[1]}`)
-		}
-		console.log(`${output}: ${width}×${height}`)
-	}
+	const finished = IMAGES.map((image) => render(image, workDir))
+	IMAGES.forEach(({ output, size }, i) => {
+		copyFileSync(finished[i], join(SHARE_DIR, output))
+		console.log(`${output}: ${size[0]}×${size[1]}`)
+	})
+} catch (error) {
+	console.error(`Share images not updated: ${error instanceof Error ? error.message : 'Unknown error'}`)
+	process.exitCode = 1
 } finally {
 	rmSync(workDir, { recursive: true, force: true })
 }

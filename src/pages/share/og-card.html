@@ -1,9 +1,9 @@
 <!doctype html>
 <!--
 	ABOUTME: Source of the 1200×630 share card (og.png) that link previews show for lastfm-mcp.com: the landing page hero as a card.
-	ABOUTME: Rendered to og.png by scripts/render-share-images.mjs with headless Chrome; never served itself.
+	ABOUTME: Rendered to og.png by scripts/render-share-images.mjs with headless Chrome once data-ready is "ok"; never served itself.
 -->
-<html lang="en" class="loading">
+<html lang="en">
 	<head>
 		<meta charset="utf-8" />
 		<title>Last.fm MCP share card</title>
@@ -26,11 +26,6 @@
 				color: #22201d;
 				font-family: 'Bricolage Grotesque', sans-serif;
 				-webkit-font-smoothing: antialiased;
-			}
-
-			/* Nothing shows until the web font is in, so a capture can never use a fallback font by accident */
-			.loading body {
-				visibility: hidden;
 			}
 
 			canvas {
@@ -57,17 +52,6 @@
 				letter-spacing: -0.025em;
 				font-weight: 700;
 			}
-
-			.font-error {
-				position: absolute;
-				inset: 0;
-				display: grid;
-				place-items: center;
-				background: #b8432f;
-				color: #fff;
-				font: 700 48px system-ui;
-				visibility: visible;
-			}
 		</style>
 	</head>
 	<body>
@@ -75,53 +59,18 @@
 		<div class="mark">Last.fm MCP</div>
 		<h1>Ask your AI about everything you've ever listened to.</h1>
 
+		<script src="wave.js"></script>
 		<script>
-			// A still frame of the landing page's wave: the same five layers and layer maths as the hero in landing.html,
-			// sampled from stream position 0 and centred 90px above the bottom edge
-			;(() => {
-				const canvas = document.querySelector('canvas')
-				const context = canvas.getContext('2d')
-				const layerColors = ['#b8432f', '#d39b3f', '#8a9a72', '#6f8aa3', '#8c6278']
-				const layerOpacity = 0.85
-				const maxLayerThickness = 34
-				const centre = 540
-				const columnWidth = 6
+			// A still frame of the hero wave, centred 90px above the bottom edge
+			drawWave(document.querySelector('canvas'), { centre: 540, maxLayerThickness: 34, columnWidth: 6 })
 
-				const thickness = (x, layer) => {
-					const swell = 0.5 + 0.5 * Math.sin(x * (0.006 + layer * 0.0017) + layer * 1.9) * Math.sin(x * 0.0033 + layer * 2.3)
-					return Math.max(0.03, swell) * maxLayerThickness
-				}
-
-				const columns = []
-				for (let x = 0; x <= canvas.width + columnWidth; x += columnWidth) {
-					const boundaries = [0]
-					layerColors.forEach((_, layer) => boundaries.push(boundaries[layer] + thickness(x, layer)))
-					const top = centre - boundaries[boundaries.length - 1] / 2
-					columns.push({ x, ys: boundaries.map((b) => top + b) })
-				}
-
-				context.globalAlpha = layerOpacity
-				layerColors.forEach((color, layer) => {
-					context.beginPath()
-					context.moveTo(columns[0].x, columns[0].ys[layer])
-					for (let i = 1; i < columns.length; i++) context.lineTo(columns[i].x, columns[i].ys[layer])
-					for (let i = columns.length - 1; i >= 0; i--) context.lineTo(columns[i].x, columns[i].ys[layer + 1])
-					context.closePath()
-					context.fillStyle = color
-					context.fill()
-				})
-			})()
-
-			// Show the card only once Bricolage Grotesque has loaded; otherwise show an error the renderer can't miss.
+			// The renderer captures only when data-ready is "ok": Bricolage Grotesque has loaded, so no fallback font gets in.
 			// load() resolves with no faces when the stylesheet never arrived, so an empty list is a failure too.
-			const showFontError = () =>
-				document.body.insertAdjacentHTML('beforeend', '<div class="font-error">Bricolage Grotesque did not load</div>')
-			document.fonts
-				.load('700 76px "Bricolage Grotesque"')
-				.then((faces) => {
-					if (faces.length === 0) showFontError()
-				}, showFontError)
-				.finally(() => document.documentElement.classList.remove('loading'))
+			const setReady = (state) => (document.documentElement.dataset.ready = state)
+			document.fonts.load('700 76px "Bricolage Grotesque"').then(
+				(faces) => setReady(faces.length > 0 ? 'ok' : 'failed'),
+				() => setReady('failed'),
+			)
 		</script>
 	</body>
 </html>

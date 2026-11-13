@@ -166,10 +166,11 @@ export default {
 			})
 		}
 
-		// Share card for link previews (og:image) and the home-screen icon
+		// Share card for link previews (og:image) and the home-screen icon. HEAD is answered too, for preview checkers
+		// that test an image exists before fetching it.
 		const shareImage = SHARE_IMAGES.get(url.pathname)
-		if (shareImage && request.method === 'GET') {
-			return new Response(shareImage, {
+		if (shareImage && (request.method === 'GET' || request.method === 'HEAD')) {
+			return new Response(request.method === 'HEAD' ? null : shareImage, {
 				status: 200,
 				headers: {
 					'Content-Type': 'image/png',
