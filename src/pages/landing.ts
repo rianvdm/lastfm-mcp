@@ -25,7 +25,7 @@ const STRUCTURED_DATA = {
 			'@id': `${SITE_URL}#app`,
 			name: SITE_NAME,
 			description:
-				'A free, open-source MCP server that connects your Last.fm listening history to Claude, ChatGPT and other AI assistants. ' +
+				'A free, open-source MCP server that connects your Last.fm listening history to Claude, ChatGPT, and other AI assistants. ' +
 				'It only reads.',
 			url: SITE_URL,
 			applicationCategory: 'MultimediaApplication',
@@ -35,10 +35,10 @@ const STRUCTURED_DATA = {
 			author: { '@type': 'Person', name: 'Rian van der Merwe', url: 'https://elezea.com' },
 			sameAs: ['https://github.com/rianvdm/lastfm-mcp'],
 			featureList: [
-				'Ask about your Last.fm scrobbles, charts and loved tracks in your own words',
-				'Works with Claude, Claude Code, Codex, Cursor and other apps that support remote MCP servers',
+				'Ask about your Last.fm scrobbles, charts, and loved tracks in your own words',
+				'Works with Claude, Claude Code, Codex, Cursor, and other apps that support remote MCP servers',
 				'Sign in with your Last.fm account; no API key needed',
-				"Read-only: it can't scrobble, love tracks or change your account",
+				"Read-only: it can't scrobble, love tracks, or change your account",
 			],
 			screenshot: `${SITE_URL}og.png`,
 		},

@@ -1,17 +1,17 @@
 # Last.fm MCP
 
-> A remote MCP server that connects AI assistants to a person's Last.fm listening history: scrobbles, charts, loved tracks, and artist, album and track lookups. It only reads; it can't change the Last.fm account.
+> A remote MCP server that connects AI assistants to a person's Last.fm listening history: scrobbles, charts, loved tracks, and artist, album, and track lookups. It only reads; it can't change the Last.fm account.
 
 ## For agents setting this up
 
 - Server URL: `{{ORIGIN}}/mcp`
 - Transport: streamable HTTP. Authentication: OAuth, with Client ID Metadata Documents and Dynamic Client Registration.
-- No Last.fm API key, token or other config is needed. The URL is the only setting.
+- You don't need to create a Last.fm API key or copy any tokens. Add the server URL using the instructions for the human's app. Every tool requires Last.fm sign-in; the app handles the OAuth tokens.
 
 Steps:
 
 1. Ask the human which app they use, if you don't know. Find it under "Setup by client".
-2. Add the server with the command or config shown there. If the config file already exists, add the `lastfm` entry to it; don't remove other servers.
+2. First inspect the app's existing MCP configuration. If `lastfm` already points to `{{ORIGIN}}/mcp`, keep it and continue to the sign-in handoff. If it points somewhere else, ask the human which connection to keep before changing it. Otherwise, use one of the command or config options below. Merge the entry into the existing structure and preserve other servers and settings; do not append a second `lastfm` entry or duplicate TOML section.
 3. You can't complete the Last.fm sign-in: it happens in the human's browser. Your last step is to tell the human exactly how to sign in for their app, using the sign-in line in its section. For Claude Code: start Claude Code, run `/mcp`, choose `lastfm`, then `Authenticate`, and sign in to Last.fm in the browser.
 
 ## Setup by client
@@ -41,7 +41,7 @@ On the Free plan you can add one custom connector. On Team and Enterprise plans,
 
 ### ChatGPT
 
-An agent can't do this setup. Tell the human: it works only on ChatGPT Business, Enterprise or Edu, on the web. A workspace admin or owner adds `{{ORIGIN}}/mcp` under Plugins → + → Add custom MCP server with OAuth and publishes it to the workspace; once the admin gives them access, they install Last.fm from Plugins and sign in to Last.fm. Details: https://help.openai.com/en/articles/12584461-connecting-custom-mcp-servers-in-chatgpt. Other ChatGPT plans aren't supported yet.
+An agent can't do this setup. Tell the human: it works only on ChatGPT Business, Enterprise, or Edu, on the web. A workspace admin or owner adds `{{ORIGIN}}/mcp` under Plugins → + → Add custom MCP server with OAuth and publishes it to the workspace; once the admin gives them access, they install Last.fm from Plugins and sign in to Last.fm. Details: https://help.openai.com/en/articles/12584461-connecting-custom-mcp-servers-in-chatgpt. Other ChatGPT plans aren't supported yet.
 
 For a workspace admin or owner:
 
@@ -121,7 +121,7 @@ Sign-in: run `opencode mcp auth lastfm` and sign in to Last.fm in the browser.
 
 ### Other apps, via mcp-remote
 
-For apps that only run local servers. Add to the app's MCP config:
+Use this fallback only after confirming that the app can launch local MCP servers and that `npx` is available. Find the app's documented MCP settings location and format; don't guess them. The command is `npx` and its arguments are `-y`, `mcp-remote`, and `{{ORIGIN}}/mcp`. Use the JSON example below only for apps with an `mcpServers` config, merging `lastfm` into the existing object. If you can't establish the correct settings location or format, ask the human before editing.
 
 ```json
 {
@@ -138,7 +138,7 @@ Sign-in: the browser opens to sign in to Last.fm the first time it connects.
 
 ## What you can ask
 
-Ask in your own words. It reads your scrobbles, charts and loved tracks, and works out days like "yesterday" in your own timezone.
+Ask in your own words. It reads your scrobbles, charts, and loved tracks, and works out days like "yesterday" in your own timezone.
 
 - When did I start listening to Radiohead?
 - What was I obsessed with last summer?
@@ -154,6 +154,6 @@ Ask in your own words. It reads your scrobbles, charts and loved tracks, and wor
 
 ## Links
 
-- [GitHub](https://github.com/rianvdm/lastfm-mcp): source code, README and issues
+- [GitHub](https://github.com/rianvdm/lastfm-mcp): source code, README, and issues
 - [Privacy](https://elezea.com/privacy/#lastfm-mcp-server): what the server stores
 - [Release notes](https://github.com/rianvdm/lastfm-mcp/releases)

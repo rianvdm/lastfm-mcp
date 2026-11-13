@@ -19,15 +19,15 @@ export const FAQ_ITEMS: FaqItem[] = [
 		answer:
 			`In Claude, go to Customize → Connectors, click Add, then Add custom connector. Name it Last.fm, paste ${MCP_URL}, click Continue, ` +
 			`then Add, then Connect, and sign in to Last.fm. In Claude Code, run ${CLAUDE_CODE_COMMAND} in your terminal, then run /mcp in ` +
-			'Claude Code, choose lastfm and sign in.',
+			'Claude Code, choose lastfm, then Authenticate, and sign in to Last.fm in your browser.',
 		code: [MCP_URL, CLAUDE_CODE_COMMAND, '/mcp'],
 	},
 	{
 		question: 'Does it work with ChatGPT?',
 		answer:
-			`Yes, on ChatGPT Business, Enterprise and Edu: a workspace admin or owner adds ${MCP_URL} as a custom MCP server and publishes it, ` +
-			'and once your admin gives you access, you install Last.fm from Plugins and sign in. Other ChatGPT plans ' +
-			"aren't supported yet, but any other app that supports remote MCP servers works.",
+			`Yes, on ChatGPT Business, Enterprise, and Edu on the web. A workspace admin or owner adds ${MCP_URL} as a custom MCP server ` +
+			'and publishes it to the workspace. Once your admin gives you access, install Last.fm from Plugins and sign in to Last.fm. ' +
+			"Other ChatGPT plans aren't supported yet. You can also use the other apps listed in the setup section.",
 		code: [MCP_URL],
 	},
 	{
@@ -40,7 +40,7 @@ export const FAQ_ITEMS: FaqItem[] = [
 	},
 	{
 		question: 'Can it change my Last.fm account?',
-		answer: "No. It only reads: it can't scrobble, love tracks or edit your profile.",
+		answer: "No. It only reads: it can't scrobble, love tracks, or edit your profile.",
 	},
 	{
 		question: 'What is MCP?',

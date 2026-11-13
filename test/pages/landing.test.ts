@@ -8,9 +8,9 @@ import { runWave, type WaveHarness } from './wave-harness'
 
 const ORIGIN = 'https://staging.example'
 
-const TITLE = 'Last.fm MCP: connect your Last.fm history to Claude, ChatGPT and other AI assistants'
+const TITLE = 'Last.fm MCP: connect your Last.fm history to Claude, ChatGPT, and other AI assistants'
 const DESCRIPTION =
-	'Ask your AI when you first heard an album, what you had on repeat last summer, or what to play next. Free and open source, and it only reads.'
+	'Ask your AI when you first played an album, what you had on repeat last summer, or what to play next. Free and open source, and it only reads.'
 const IMAGE_ALT = "Last.fm MCP: Ask your AI about everything you've ever listened to."
 
 /** Attributes of every tag named `tag`, parsed loosely so Prettier's `/>` and line breaks don't matter. */
@@ -44,11 +44,40 @@ describe('buildLandingPage', () => {
 		expect(buildLandingPage(ORIGIN)).toContain("Ask your AI about everything you've ever listened to.")
 	})
 
+	it('has the hero subline and a setup button that promises no setup time', () => {
+		const html = buildLandingPage(ORIGIN)
+		const subline = html
+			.match(/<p class="subline">([\s\S]*?)<\/p>/)?.[1]
+			.replace(/\s+/g, ' ')
+			.trim()
+
+		expect(subline).toBe(
+			'Connect your Last.fm history to Claude, ChatGPT, or another supported app. Ask when you first played an album, ' +
+				'what you had on repeat last summer, or what to play next.',
+		)
+		expect(html).toContain('<a class="button" href="#setup">Set it up</a>')
+		expect(html).not.toMatch(/first heard|two minutes/)
+	})
+
 	it('points every copyable address at the origin it was served from', () => {
 		const html = buildLandingPage(ORIGIN)
+		const blocks = [...html.matchAll(/<div class="code">\s*<pre><code>([\s\S]*?)<\/code><\/pre>\s*<button class="copy"/g)].map(
+			([, code]) => code,
+		)
 
-		expect(html).toContain(`${ORIGIN}/mcp`)
-		expect(html).toContain(`${ORIGIN}/llms.txt`)
+		// Every Copy button sits under a block this test reads
+		expect(blocks).toHaveLength(html.match(/<button class="copy"/g)?.length ?? 0)
+		expect(blocks.length).toBeGreaterThan(0)
+		for (const block of blocks) {
+			const addresses = block.match(/https?:\/\/[^\s"'<]+/g) ?? []
+			expect(addresses, block).not.toHaveLength(0)
+			for (const address of addresses) {
+				expect([`${ORIGIN}/mcp`, `${ORIGIN}/llms.txt`], block).toContain(address)
+			}
+		}
+		const allAddresses = blocks.flatMap((block) => block.match(/https?:\/\/[^\s"'<]+/g) ?? [])
+		expect(allAddresses).toContain(`${ORIGIN}/mcp`)
+		expect(allAddresses).toContain(`${ORIGIN}/llms.txt`)
 		expect(html).not.toContain('{{')
 	})
 
@@ -178,13 +207,14 @@ describe('buildLandingPage', () => {
 			for (const label of [
 				'2009 · post-rock phase',
 				'2011 · that one Bon Iver winter',
-				'2016 · 400 plays of one album',
+				'2016 · one album on repeat',
 				'2019 · back to the 90s',
 				'2024 · jazz, apparently',
 				'2026 · everything at once',
 			]) {
 				expect(html).toContain(label)
 			}
+			expect(html).not.toContain('400 plays')
 		})
 
 		it('queries the reduced-motion preference from the script, not only in CSS', () => {

@@ -7,10 +7,10 @@
 	<head>
 		<meta charset="utf-8" />
 		<meta name="viewport" content="width=device-width, initial-scale=1" />
-		<title>Last.fm MCP: connect your Last.fm history to Claude, ChatGPT and other AI assistants</title>
+		<title>Last.fm MCP: connect your Last.fm history to Claude, ChatGPT, and other AI assistants</title>
 		<meta
 			name="description"
-			content="Ask your AI when you first heard an album, what you had on repeat last summer, or what to play next. Free and open source, and it only reads."
+			content="Ask your AI when you first played an album, what you had on repeat last summer, or what to play next. Free and open source, and it only reads."
 		/>
 		<meta name="robots" content="index, follow" />
 		<meta name="theme-color" content="#ece6dc" />
@@ -18,10 +18,10 @@
 		<!-- Share card and link previews: URLs stay on production whatever origin serves the page -->
 		<meta property="og:type" content="website" />
 		<meta property="og:site_name" content="Last.fm MCP" />
-		<meta property="og:title" content="Last.fm MCP: connect your Last.fm history to Claude, ChatGPT and other AI assistants" />
+		<meta property="og:title" content="Last.fm MCP: connect your Last.fm history to Claude, ChatGPT, and other AI assistants" />
 		<meta
 			property="og:description"
-			content="Ask your AI when you first heard an album, what you had on repeat last summer, or what to play next. Free and open source, and it only reads."
+			content="Ask your AI when you first played an album, what you had on repeat last summer, or what to play next. Free and open source, and it only reads."
 		/>
 		<meta property="og:url" content="https://lastfm-mcp.com/" />
 		<meta property="og:image" content="https://lastfm-mcp.com/og.png" />
@@ -29,10 +29,10 @@
 		<meta property="og:image:height" content="630" />
 		<meta property="og:image:alt" content="Last.fm MCP: Ask your AI about everything you've ever listened to." />
 		<meta name="twitter:card" content="summary_large_image" />
-		<meta name="twitter:title" content="Last.fm MCP: connect your Last.fm history to Claude, ChatGPT and other AI assistants" />
+		<meta name="twitter:title" content="Last.fm MCP: connect your Last.fm history to Claude, ChatGPT, and other AI assistants" />
 		<meta
 			name="twitter:description"
-			content="Ask your AI when you first heard an album, what you had on repeat last summer, or what to play next. Free and open source, and it only reads."
+			content="Ask your AI when you first played an album, what you had on repeat last summer, or what to play next. Free and open source, and it only reads."
 		/>
 		<meta name="twitter:image" content="https://lastfm-mcp.com/og.png" />
 		<meta name="twitter:image:alt" content="Last.fm MCP: Ask your AI about everything you've ever listened to." />
@@ -642,11 +642,11 @@
 					<div class="hero-copy">
 						<h1>Ask your AI about everything you've ever listened to.</h1>
 						<p class="subline">
-							Connect your Last.fm history to Claude, ChatGPT or any assistant that takes connectors. Ask when you first heard an album,
-							what you had on repeat last summer, or what to play next.
+							Connect your Last.fm history to Claude, ChatGPT, or another supported app. Ask when you first played an album, what you had on
+							repeat last summer, or what to play next.
 						</p>
 						<div class="cta-row">
-							<a class="button" href="#setup">Set it up in two minutes</a>
+							<a class="button" href="#setup">Set it up</a>
 							<span class="cta-aside">Free, open source, read-only</span>
 						</div>
 					</div>
@@ -657,7 +657,7 @@
 				<div class="wrap">
 					<h2 id="ask-heading">Things you can ask</h2>
 					<p class="lede">
-						Ask in your own words. It reads your scrobbles, charts and loved tracks, and works out days like "yesterday" in your own
+						Ask in your own words. It reads your scrobbles, charts, and loved tracks, and works out days like "yesterday" in your own
 						timezone.
 					</p>
 					<ul class="asks">
@@ -692,6 +692,10 @@
 
 					<div class="panel" role="tabpanel" id="panel-claude" aria-labelledby="tab-claude" tabindex="0">
 						<h3 class="panel-heading">Claude app</h3>
+						<p>
+							Using Claude Team or Enterprise? An Owner needs to add Last.fm under <b>Organization settings → Connectors</b>. You can then
+							click <b>Connect</b> and sign in. For a personal account, follow these steps.
+						</p>
 						<ol class="steps">
 							<li>Open Claude (desktop app or claude.ai) and go to <b>Customize → Connectors</b></li>
 							<li>
@@ -704,21 +708,18 @@
 							<li>Leave the sign-in settings as they are and click <b>Add</b>, then <b>Connect</b>, and sign in to Last.fm</li>
 							<li>Start a new chat and ask something</li>
 						</ol>
-						<p class="small">
-							On the Free plan you can add one custom connector. On Team and Enterprise plans, an Owner adds it under Organization settings
-							→ Connectors, then you click Connect.
-						</p>
+						<p class="small">On the Free plan you can add one custom connector.</p>
 					</div>
 
 					<div class="panel" role="tabpanel" id="panel-agent" aria-labelledby="tab-agent" tabindex="0">
 						<h3 class="panel-heading">Claude Code or another agent</h3>
-						<p>Paste this to your agent and let it do the rest:</p>
+						<p>Paste this into your agent to set up the connection. It will tell you how to sign in.</p>
 						<div class="code">
 							<pre><code>Set up the Last.fm MCP server for me. Instructions are at {{ORIGIN}}/llms.txt</code></pre>
 							<button class="copy" type="button">Copy</button>
 						</div>
 						<p class="or">Or do it yourself</p>
-						<p>Run this in your terminal:</p>
+						<p>Using Claude Code? Run this in your terminal:</p>
 						<div class="code">
 							<pre><code>claude mcp add --scope user --transport http lastfm {{ORIGIN}}/mcp</code></pre>
 							<button class="copy" type="button">Copy</button>
@@ -731,13 +732,13 @@
 
 					<div class="panel" role="tabpanel" id="panel-other" aria-labelledby="tab-other" tabindex="0">
 						<h3 class="panel-heading">Other apps</h3>
-						<p>Anything that supports remote MCP connectors works.</p>
+						<p>Choose your app below for setup and sign-in instructions.</p>
 						<div class="apps">
 							<details class="app">
-								<summary>ChatGPT<span class="app-hint">Business, Enterprise and Edu</span></summary>
+								<summary>ChatGPT<span class="app-hint">Business, Enterprise, and Edu</span></summary>
 								<div class="app-body">
 									<p>
-										Works on ChatGPT Business, Enterprise and Edu, on the web. A workspace admin or owner adds it once; after your admin
+										Works on ChatGPT Business, Enterprise, and Edu, on the web. A workspace admin or owner adds it once; after your admin
 										gives you access, you install it and sign in.
 										<a href="https://help.openai.com/en/articles/12584461-connecting-custom-mcp-servers-in-chatgpt">OpenAI's guide</a>
 										has the details.
@@ -771,7 +772,11 @@
 							<details class="app">
 								<summary>Cursor<span class="app-hint">~/.cursor/mcp.json</span></summary>
 								<div class="app-body">
-									<p>Add this to <code>~/.cursor/mcp.json</code>:</p>
+									<p>
+										Open or create <code>~/.cursor/mcp.json</code> in a text editor. <code>~</code> means your home folder. If the file
+										already has an <code>mcpServers</code> section, add only the <code>lastfm</code> entry inside it and keep your other
+										settings.
+									</p>
 									<div class="code">
 										<pre><code>{
   "mcpServers": {
@@ -789,7 +794,11 @@
 							<details class="app">
 								<summary>Devin Desktop (formerly Windsurf)<span class="app-hint">mcp_config.json</span></summary>
 								<div class="app-body">
-									<p>Add this to <code>~/.config/devin/mcp_config.json</code>:</p>
+									<p>
+										Open or create <code>~/.config/devin/mcp_config.json</code> in a text editor. <code>~</code> means your home folder. If
+										the file already has an <code>mcpServers</code> section, add only the <code>lastfm</code> entry inside it and keep your
+										other settings.
+									</p>
 									<div class="code">
 										<pre><code>{
   "mcpServers": {
@@ -807,7 +816,10 @@
 							<details class="app">
 								<summary>OpenCode<span class="app-hint">opencode.json</span></summary>
 								<div class="app-body">
-									<p>Add this to <code>opencode.json</code>:</p>
+									<p>
+										Open or create <code>opencode.json</code> in a text editor. If the file already has an <code>mcp</code> section, add
+										only the <code>lastfm</code> entry inside it and keep your other settings.
+									</p>
 									<div class="code">
 										<pre><code>{
   "mcp": {
@@ -826,7 +838,10 @@
 							<details class="app">
 								<summary>Codex<span class="app-hint">~/.codex/config.toml</span></summary>
 								<div class="app-body">
-									<p>Add this to <code>~/.codex/config.toml</code>:</p>
+									<p>
+										Open or create <code>~/.codex/config.toml</code> in a text editor (<code>~</code> means your home folder). Add the
+										section below. If <code>mcp_servers.lastfm</code> already exists, edit that section instead of adding it twice.
+									</p>
 									<div class="code">
 										<pre><code>[mcp_servers.lastfm]
 url = "{{ORIGIN}}/mcp"</code></pre>
@@ -837,9 +852,13 @@ url = "{{ORIGIN}}/mcp"</code></pre>
 							</details>
 
 							<details class="app">
-								<summary>Anything else<span class="app-hint">via mcp-remote</span></summary>
+								<summary>Other apps that run MCP tools on your computer<span class="app-hint">via mcp-remote</span></summary>
 								<div class="app-body">
-									<p>For apps that only run local servers. Your browser opens to sign in to Last.fm the first time it connects.</p>
+									<p>
+										This option runs a helper called mcp-remote on your computer. Your app must support starting an MCP server with a
+										command, and <code>npx</code> must be available. If your app uses an <code>mcpServers</code> JSON config, add the entry
+										below to that file and keep your existing entries. Your browser opens for Last.fm sign-in when it first connects.
+									</p>
 									<div class="code">
 										<pre><code>{
   "mcpServers": {
@@ -851,6 +870,10 @@ url = "{{ORIGIN}}/mcp"</code></pre>
 }</code></pre>
 										<button class="copy" type="button">Copy</button>
 									</div>
+									<p class="small">
+										If your app has separate fields instead, enter <code>npx</code> as the command and <code>-y</code>,
+										<code>mcp-remote</code>, and <code>{{ORIGIN}}/mcp</code> as its arguments.
+									</p>
 								</div>
 							</details>
 						</div>
@@ -866,11 +889,13 @@ url = "{{ORIGIN}}/mcp"</code></pre>
 					<div class="trust">
 						<div>
 							<h3>It only reads</h3>
-							<p>It can look at your listening history. It can't scrobble, love tracks or change anything on your account.</p>
+							<p>It can look at your listening history. It can't scrobble, love tracks, or change anything on your account.</p>
 						</div>
 						<div>
 							<h3>You sign in on Last.fm</h3>
-							<p>Your password never touches this site. You sign in on Last.fm's own page, and each sign-in expires after 30 days.</p>
+							<p>
+								You sign in on Last.fm's own page, so this site never receives your password. You'll need to sign in again after 30 days.
+							</p>
 						</div>
 						<div>
 							<h3>Open source</h3>
@@ -1063,7 +1088,7 @@ url = "{{ORIGIN}}/mcp"</code></pre>
 				const lines = [
 					'2009 · post-rock phase',
 					'2011 · that one Bon Iver winter',
-					'2016 · 400 plays of one album',
+					'2016 · one album on repeat',
 					'2019 · back to the 90s',
 					'2024 · jazz, apparently',
 					'2026 · everything at once',

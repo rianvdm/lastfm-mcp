@@ -4,7 +4,8 @@ import { describe, it, expect } from 'vitest'
 
 import { FAQ_ITEMS, faqJsonLd, renderFaqHtml, type FaqItem } from '../../src/pages/faq'
 
-// The final FAQ from docs/superpowers/plans/2026-11-12-landing-page-verified-copy.md, with its code marks dropped
+// The final FAQ from docs/superpowers/plans/2026-11-12-landing-page-verified-copy.md, with its code marks dropped and the
+// 2026-11-12 copy review applied (the Authenticate step, the ChatGPT answer split and narrowed, Oxford commas)
 const VERIFIED_FAQ = [
 	{
 		question: 'How do I connect Last.fm to Claude?',
@@ -12,18 +13,18 @@ const VERIFIED_FAQ = [
 			'In Claude, go to Customize → Connectors, click Add, then Add custom connector. Name it Last.fm, paste https://lastfm-mcp.com/mcp, ' +
 			'click Continue, then Add, then Connect, and sign in to Last.fm. In Claude Code, run ' +
 			'claude mcp add --scope user --transport http lastfm https://lastfm-mcp.com/mcp in your terminal, then run /mcp in Claude Code, ' +
-			'choose lastfm and sign in.',
+			'choose lastfm, then Authenticate, and sign in to Last.fm in your browser.',
 	},
 	{
 		question: 'Does it work with ChatGPT?',
 		answer:
-			'Yes, on ChatGPT Business, Enterprise and Edu: a workspace admin or owner adds https://lastfm-mcp.com/mcp as a custom MCP server ' +
-			'and publishes it, and once your admin gives you access, you install Last.fm from Plugins and sign in. Other ChatGPT plans ' +
-			"aren't supported yet, but any other app that supports remote MCP servers works.",
+			'Yes, on ChatGPT Business, Enterprise, and Edu on the web. A workspace admin or owner adds https://lastfm-mcp.com/mcp as a ' +
+			'custom MCP server and publishes it to the workspace. Once your admin gives you access, install Last.fm from Plugins and sign in ' +
+			"to Last.fm. Other ChatGPT plans aren't supported yet. You can also use the other apps listed in the setup section.",
 	},
 	{ question: 'Do I need a Last.fm API key?', answer: 'No. You sign in with your normal Last.fm account.' },
 	{ question: 'Is it free?', answer: "Yes. It's free and open source under the MIT licence." },
-	{ question: 'Can it change my Last.fm account?', answer: "No. It only reads: it can't scrobble, love tracks or edit your profile." },
+	{ question: 'Can it change my Last.fm account?', answer: "No. It only reads: it can't scrobble, love tracks, or edit your profile." },
 	{
 		question: 'What is MCP?',
 		answer:

@@ -70,10 +70,12 @@ Two small labels sit above the stream and cross-fade every few seconds through h
 
 - 2009 · post-rock phase
 - 2011 · that one Bon Iver winter
-- 2016 · 400 plays of one album
+- 2016 · one album on repeat
 - 2019 · back to the 90s
 - 2024 · jazz, apparently
 - 2026 · everything at once
+
+Post-review change (2026-11-12): the 2016 line was "2016 · 400 plays of one album"; the copy review flagged the exact count as unmeasured on a synthetic graphic.
 
 The labels are decorative and get `aria-hidden="true"`. With `prefers-reduced-motion: reduce`, draw one static frame and don't cycle the labels. Pause the animation when the tab is hidden or the hero is off screen, as the current page does with its `running` flag.
 
@@ -81,18 +83,20 @@ The labels are decorative and get `aria-hidden="true"`. With `prefers-reduced-mo
 
 Copy below is the approved draft. Final wording gets Rian's review before merge (see Review).
 
+Post-review change (2026-11-12): the final copy review changed the subline, the button, the setup-panel instructions, the trust copy, the FAQ and `llms.txt` wording; the quotes below that it touched show the new text, and git history has the earlier wording.
+
 **Head.** See "Sharing and search" below for the title, meta tags, share card and structured data. Add `<link rel="alternate" type="text/plain" href="/llms.txt" title="Setup instructions for AI agents">`. Keep the SVG favicon.
 
 **Nav.** Wordmark "Last.fm MCP" on the left. Links: Set up (`#setup`), What you can ask (`#ask`), GitHub.
 
 **Hero.**
 - Headline: "Ask your AI about everything you've ever listened to."
-- Subline: "Connect your Last.fm history to Claude, ChatGPT or any assistant that takes connectors. Ask when you first heard an album, what you had on repeat last summer, or what to play next."
-- Primary button "Set it up in two minutes" → `#setup`. Beside it, muted: "Free, open source, read-only".
+- Subline: "Connect your Last.fm history to Claude, ChatGPT, or another supported app. Ask when you first played an album, what you had on repeat last summer, or what to play next."
+- Primary button "Set it up" → `#setup`. Beside it, muted: "Free, open source, read-only".
 - The wave across the bottom.
 
 **Things you can ask (`#ask`).** Replaces both "How it works" and the numbered question grid.
-- Lede: "Ask in your own words. It reads your scrobbles, charts and loved tracks, and works out dates in your own timezone."
+- Lede: "Ask in your own words. It reads your scrobbles, charts, and loved tracks, and works out days like "yesterday" in your own timezone."
 - Questions as speech bubbles (alternating corner radius and three soft fills, as in the mockup):
   - When did I start listening to Radiohead?
   - What was I obsessed with last summer?
@@ -111,15 +115,15 @@ Copy below is the approved draft. Final wording gets Rian's review before merge 
    3. Click **Add**, then **Connect**, and sign in to Last.fm
    4. Start a new chat and ask something
 2. *Claude Code or another agent:*
-   - "Paste this to your agent and let it do the rest:" → `Set up the Last.fm MCP server for me. Instructions are at https://lastfm-mcp.com/llms.txt` (copy button)
-   - "Or do it yourself" → `claude mcp add --transport http lastfm https://lastfm-mcp.com/mcp` (copy button), then "Run `/mcp` in Claude Code and pick **lastfm** to sign in."
-3. *Other apps:* "Anything that supports remote MCP connectors works." A grid of apps, each expanding (`<details>`) to its exact config: ChatGPT, Cursor (`~/.cursor/mcp.json`), Windsurf (`~/.codeium/windsurf/mcp_config.json`), OpenCode (`opencode.json`), Codex (`~/.codex/config.toml`), and "Anything else" via `mcp-remote`. Carry the existing Cursor, Windsurf, OpenCode and `mcp-remote` snippets over from `marketing-page.ts`; ChatGPT and Codex are new.
+   - "Paste this into your agent to set up the connection. It will tell you how to sign in." → `Set up the Last.fm MCP server for me. Instructions are at https://lastfm-mcp.com/llms.txt` (copy button)
+   - "Or do it yourself", then "Using Claude Code? Run this in your terminal:" → `claude mcp add --scope user --transport http lastfm https://lastfm-mcp.com/mcp` (copy button), then "Start Claude Code, run `/mcp`, choose **lastfm**, then **Authenticate**, and sign in to Last.fm in your browser."
+3. *Other apps:* "Choose your app below for setup and sign-in instructions." A grid of apps, each expanding (`<details>`) to its exact config: ChatGPT, Cursor (`~/.cursor/mcp.json`), Windsurf (`~/.codeium/windsurf/mcp_config.json`), OpenCode (`opencode.json`), Codex (`~/.codex/config.toml`), and "Other apps that run MCP tools on your computer" via `mcp-remote`. Carry the existing Cursor, Windsurf, OpenCode and `mcp-remote` snippets over from `marketing-page.ts`; ChatGPT and Codex are new.
 
 **Questions (`#faq`).** A short FAQ between Set it up and What you're agreeing to. Each question is an `h3` with its answer in plain paragraphs, always visible (not collapsed), so crawlers and answer engines read the same text people do. See "Sharing and search" for the questions and the matching structured data.
 
 **What you're agreeing to.** Three short columns:
-- *It only reads:* "It can look at your listening history. It can't scrobble, love tracks or change anything on your account."
-- *You sign in on Last.fm:* "Your password never touches this site. You sign in on Last.fm's own page, and each sign-in expires after 30 days."
+- *It only reads:* "It can look at your listening history. It can't scrobble, love tracks, or change anything on your account."
+- *You sign in on Last.fm:* "You sign in on Last.fm's own page, so this site never receives your password. You'll need to sign in again after 30 days."
 - *Open source:* "Every line is on GitHub. The privacy page spells out exactly what's stored and for how long." (links to GitHub and the privacy page)
 
 Do not say the user can revoke access on Last.fm. Reads use the API key plus the username, so revoking the app on Last.fm doesn't stop them ([#56](https://github.com/rianvdm/lastfm-mcp/issues/56)).
@@ -142,7 +146,7 @@ The seven tools in both catalogs (`get_track_info`, `get_artist_info`, `get_albu
 
 Contents, in order:
 1. `# Last.fm MCP` and a one-line blockquote summary (llms.txt convention).
-2. **For agents setting this up:** the server URL; that it uses streamable HTTP with OAuth and needs no API key or config beyond the URL; and that the agent cannot finish sign-in, so its last step is to tell the human how to sign in for their client.
+2. **For agents setting this up:** the server URL; that it uses streamable HTTP with OAuth and needs no Last.fm API key or hand-copied tokens, though every tool still requires sign-in; and that the agent cannot finish sign-in, so its last step is to tell the human how to sign in for their client.
 3. **Setup by client:** Claude Code (the `claude mcp add` command, then `/mcp` to sign in), Claude app (the human steps, since an agent can't do them), ChatGPT, Codex, Cursor, Windsurf, OpenCode, `mcp-remote`. Same facts as the page's setup tabs.
 4. **What you can ask:** the example questions.
 5. **Tools:** generated list.
@@ -153,8 +157,8 @@ Contents, in order:
 Today the share image is a stock photo at 1200×797 that previews crop, the sitemap's `lastmod` changes on every request, and the JSON-LD is a bare `SoftwareApplication`. Live checks on 2026-11-12: `robots.txt` allows everything except `/mcp`, `/authorize` and `/oauth`, and spoofed GPTBot, ClaudeBot, PerplexityBot, OAI-SearchBot and Googlebot user agents all get 200.
 
 **Title and description.**
-- `<title>`: "Last.fm MCP: connect your Last.fm history to Claude, ChatGPT and other AI assistants". The visible headline stays "Ask your AI about everything you've ever listened to."
-- Meta description: "Ask your AI when you first heard an album, what you had on repeat last summer, or what to play next. Free and open source, and it only reads."
+- `<title>`: "Last.fm MCP: connect your Last.fm history to Claude, ChatGPT, and other AI assistants". The visible headline stays "Ask your AI about everything you've ever listened to."
+- Meta description: "Ask your AI when you first played an album, what you had on repeat last summer, or what to play next. Free and open source, and it only reads."
 - Remove the `keywords` meta tag.
 - `<meta name="theme-color" content="#ece6dc">`.
 
@@ -164,6 +168,8 @@ Today the share image is a stock photo at 1200×797 that previews crop, the site
 - Also render `src/pages/share/apple-touch-icon.png` (180×180: sand square with a small wave), served at `/apple-touch-icon.png` and linked with `<link rel="apple-touch-icon">`.
 - Tags: `og:type` website, `og:site_name` "Last.fm MCP", `og:title`, `og:description`, `og:url` `https://lastfm-mcp.com/`, `og:image` `https://lastfm-mcp.com/og.png`, `og:image:width` 1200, `og:image:height` 630, `og:image:alt` "Last.fm MCP: Ask your AI about everything you've ever listened to."; `twitter:card` `summary_large_image` with matching title, description, image and `twitter:image:alt`. Image and canonical URLs stay hardcoded to production.
 
+Post-review change (2026-11-12): the title gained an Oxford comma and the description says "first played" instead of "first heard", since Last.fm only knows what was scrobbled. The headline, alt text and share card are unchanged. The shipped FAQ lives in `src/pages/faq.ts`: the review added the Authenticate step to the Claude answer, and the ChatGPT answer now says "on the web" and points to the setup section instead of promising that any other app works.
+
 **FAQ.** Draft questions and answers below; Task 2's verification may change them, and the ChatGPT answer must match what the docs confirm.
 - *How do I connect Last.fm to Claude?* In Claude, go to Settings → Connectors, click Add custom connector, paste `https://lastfm-mcp.com/mcp`, and sign in to Last.fm. In Claude Code, run `claude mcp add --transport http lastfm https://lastfm-mcp.com/mcp`, then `/mcp` to sign in.
 - *Does it work with ChatGPT?* Yes, in ChatGPT plans that allow custom connectors (the exact plan and menu come from Task 2). Otherwise: any app that supports remote MCP servers.
@@ -171,7 +177,7 @@ Today the share image is a stock photo at 1200×797 that previews crop, the site
 If Task 2 finds ChatGPT can connect only under conditions (a paid plan, developer mode), keep ChatGPT in the title, subline and share card and spell the conditions out in this answer. Drop ChatGPT from all of them only if it can't connect at all. *(Claude's call, from the second builder check.)*
 - *Do I need a Last.fm API key?* No. You sign in with your normal Last.fm account.
 - *Is it free?* Yes. It's free and open source under the MIT licence.
-- *Can it change my Last.fm account?* No. It only reads: it can't scrobble, love tracks or edit your profile.
+- *Can it change my Last.fm account?* No. It only reads: it can't scrobble, love tracks, or edit your profile.
 - *What is MCP?* The Model Context Protocol is an open standard that lets AI assistants connect to outside data and tools. This is an MCP server for Last.fm.
 
 The FAQ items live once, as data, and the Worker renders both the visible section and the `FAQPage` JSON-LD from them, so the two can't drift. FAQ answers use the production URL, not `{{ORIGIN}}`: they're reference text, not something to copy into a client.
