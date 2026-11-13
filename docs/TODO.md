@@ -153,9 +153,9 @@ The MCP specification evolved from HTTP+SSE (2024-11-05) to Streamable HTTP (202
 
 ### 3.6 Update Marketing Page
 
-- [ ] Update src/marketing-page.ts with new connection method - **PENDING**
-- [ ] Update examples to use HTTP transport - **PENDING**
-- [ ] Keep backward compatibility notes - **PENDING**
+- [x] Done in [#59](https://github.com/rianvdm/lastfm-mcp/pull/59): the landing page moved from `src/marketing-page.ts` to `src/pages/landing.html`
+- [x] Setup examples use the HTTP transport (`https://lastfm-mcp.com/mcp`)
+- [x] `mcp-remote` stays as the fallback for apps that only run local servers
 
 ---
 
