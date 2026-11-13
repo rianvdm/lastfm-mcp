@@ -138,9 +138,28 @@ export async function refreshTrafficDays(env: DashEnv, now: Date = new Date()): 
 	return summary
 }
 
-/** The stored 30-day traffic summary, or null before the first refresh */
+function isTrafficDay(value: unknown): value is TrafficDay {
+	if (typeof value !== 'object' || value === null) return false
+	const day = value as Record<string, unknown>
+	return (
+		typeof day.date === 'string' &&
+		[day.requests, day.errors, day.disconnected].every((count) => typeof count === 'number' && Number.isFinite(count))
+	)
+}
+
+function isTrafficDays(value: unknown): value is TrafficDays {
+	if (typeof value !== 'object' || value === null) return false
+	const summary = value as Record<string, unknown>
+	return typeof summary.computedAt === 'string' && Array.isArray(summary.days) && summary.days.every(isTrafficDay)
+}
+
+/**
+ * The stored 30-day traffic summary, or null before the first refresh. A stored value of any other shape also reads as
+ * null, so the page warms up a fresh one instead of failing to render.
+ */
 export async function readTrafficDays(env: DashEnv): Promise<TrafficDays | null> {
-	return env.DASH_KV.get<TrafficDays>(SUMMARY_KEY, 'json')
+	const stored = await env.DASH_KV.get<unknown>(SUMMARY_KEY, 'json')
+	return isTrafficDays(stored) ? stored : null
 }
 
 /** Counts the production MCP Worker's requests and errors over the 24 hours before `now` */

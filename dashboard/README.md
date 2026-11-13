@@ -106,11 +106,14 @@ Every step changes the live account. Run them in order.
    # After the next :17 cron, the summary exists
    npx wrangler kv key get summary:grants --namespace-id 4034b74e455d45d3875248bb761a6d74 --remote
    npx wrangler kv key get summary:active-users --namespace-id 4034b74e455d45d3875248bb761a6d74 --remote
+   npx wrangler kv key get summary:traffic-days --namespace-id 4034b74e455d45d3875248bb761a6d74 --remote
    ```
 
    Check `liveUsers` against the number of people you expect to be signed in, and `dau` against the number of distinct users in the `token:` key listing (about 100 at a time on 2026-11-12). Run the last command after each hourly cron until `unresolvedGrants` reaches 0. Each run reads at most 400 values, so the first backfill of about 900 grants takes a few runs, and client labels fill in from whatever reads are left. Then open the page on a phone and a laptop and check the requests chart against the Worker's metrics in the Cloudflare dashboard.
 
 The first page load before any summary exists starts the refreshes in the background, so the panels say they're warming up rather than staying empty until the cron.
+
+A failed refresh keeps the previous summary and logs only its status, for example `[STATS] traffic refresh failed (status 429)`. If the requests chart's "Daily counts computed" time is more than an hour old, check the Worker's logs for that line and read `summary:traffic-days` to see its `computedAt`.
 
 ## Rotating the API token
 

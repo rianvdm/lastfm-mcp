@@ -412,5 +412,6 @@ describe('scheduled', () => {
 		for (const username of USERNAMES) expect(logged).not.toContain(username)
 		expect(await readActiveUsersSummary(testEnv())).toBeNull()
 		expect(await readGrantSummary(testEnv())).not.toBeNull()
+		expect(await readTrafficDays(testEnv())).not.toBeNull()
 	})
 })

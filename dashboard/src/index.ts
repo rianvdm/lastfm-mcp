@@ -9,8 +9,11 @@ import { buildDashboardModel } from './model'
 import { renderDashboard } from './page'
 import { refreshTrafficDays } from './traffic'
 
-/** Marks a warm-up refresh as started, so reloads before the first summary exists don't each start another one */
-const WARMUP_KEY = 'warmup:grants'
+/**
+ * Marks a warm-up refresh as started, so reloads before the first summary exists don't each start another one. Renamed
+ * from `warmup:grants` when the traffic summary joined the refresh, so a marker left by the old set can't hold it back.
+ */
+const WARMUP_KEY = 'warmup:summaries'
 /** A warm-up refresh can run for a while; after this long without a summary, the next page load may start another */
 const WARMUP_WINDOW_SECONDS = 600
 

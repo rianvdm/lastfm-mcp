@@ -119,6 +119,22 @@ describe('refreshTrafficDays', () => {
 		expect(await readTrafficDays(env)).toBeNull()
 	})
 
+	it.each([
+		['no days', { computedAt: '2026-11-12T15:17:00.000Z' }],
+		['days that are not a list', { computedAt: '2026-11-12T15:17:00.000Z', days: null }],
+		['a day without a date', { computedAt: '2026-11-12T15:17:00.000Z', days: [{ requests: 1, errors: 0, disconnected: 0 }] }],
+		[
+			'a count that is not a number',
+			{ computedAt: '2026-11-12T15:17:00.000Z', days: [{ date: '2026-11-12', requests: '1', errors: 0, disconnected: 0 }] },
+		],
+		['no computedAt', { days: [] }],
+		['a value that is not an object', 'oops'],
+	])('should read a stored summary with %s as null', async (_case, stored) => {
+		await env.DASH_KV.put('summary:traffic-days', JSON.stringify(stored))
+
+		expect(await readTrafficDays(env)).toBeNull()
+	})
+
 	it('should put an evening hour on its Pacific date when UTC has already reached the next day', async () => {
 		respond([{ hour: '2026-11-13 02:00:00', status: 'success', requests: 12 }], [])
 
@@ -230,6 +246,12 @@ describe('fetchTrafficLast24h', () => {
 		)
 
 		expect(await fetchTrafficLast24h(env, NOW)).toEqual({ requests: 15, errors: 1 })
+	})
+
+	it('should report zero when there are no rows at all', async () => {
+		respond([], [])
+
+		expect(await fetchTrafficLast24h(env, NOW)).toEqual({ requests: 0, errors: 0 })
 	})
 
 	it('should reject when the query fails', async () => {

@@ -222,8 +222,9 @@ describe('dashboard Worker fetch', () => {
 		expect(kvListCalls()).toBeGreaterThan(0)
 	})
 
-	it('should start a refresh when the daily traffic summary is missing', async () => {
+	it('should start a refresh when the daily traffic summary is missing, even under a marker from the old warm-up', async () => {
 		await env.DASH_KV.put('summary:grants', JSON.stringify(GRANT_SUMMARY))
+		await env.DASH_KV.put('warmup:grants', '2026-11-13T00:00:00.000Z')
 
 		const html = await (await serve(requestWith(await signToken()))).text()
 

@@ -7,6 +7,7 @@ import { analyticsSqlApi, CfApiError, getKvJson, listKvKeys } from '../src/cfApi
 import { MAX_FETCHES_PER_RUN, readGrantSummary, refreshGrantSummary } from '../src/grants'
 import type { GrantSummary } from '../src/grants'
 import worker from '../src/index'
+import { readTrafficDays } from '../src/traffic'
 
 // Keep the real CfApiError, which the scheduled handler checks for
 vi.mock('../src/cfApi', async (importOriginal) => ({
@@ -531,6 +532,8 @@ describe('scheduled', () => {
 		const logged = JSON.stringify(consoleSpies.flatMap((spy) => spy.mock.calls))
 		for (const username of USERNAMES) expect(logged).not.toContain(username)
 		expect(await readGrantSummary(env)).toBeNull()
+		// The traffic refresh still runs after the grant summary fails
+		expect(await readTrafficDays(env)).not.toBeNull()
 	})
 
 	it('should log a fixed message for an error that is not a CfApiError', async () => {
