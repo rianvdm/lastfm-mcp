@@ -1,5 +1,7 @@
 # Last.fm MCP Server Modernization Plan
 
+> Historical: this plan has been carried out. File paths and code snippets reflect the code when it was written; the landing page has lived in `src/pages/` since [#59](https://github.com/rianvdm/lastfm-mcp/pull/59).
+
 ## Executive Summary
 
 The MCP (Model Context Protocol) landscape has evolved significantly since this project was started. The current implementation uses a **custom hand-rolled MCP server** built directly on Cloudflare Workers, which predates the official Cloudflare Agents SDK and the latest MCP specification changes.

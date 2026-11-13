@@ -39,6 +39,8 @@ An attacker could trick a user into completing authentication for the attacker's
 
 **Files:** `src/auth/oauth-handler.ts` (lines 356-380), `src/marketing-page.ts`
 
+> Update 2026-11-12: the landing page is now `src/pages/landing.html`, served from `src/index-oauth.ts` ([#59](https://github.com/rianvdm/lastfm-mcp/pull/59)). It still has no CSP header, so this finding stays open for it. The `/login` success page was removed in [#53](https://github.com/rianvdm/lastfm-mcp/pull/53).
+
 The login success page and marketing page return raw HTML without CSP headers. The skill reference recommends CSP as defense-in-depth against XSS.
 
 **Fix:** Add a `buildSecurityHeaders` utility that sets `Content-Security-Policy`, `X-Frame-Options: DENY`, and `X-Content-Type-Options: nosniff` on all HTML responses.
