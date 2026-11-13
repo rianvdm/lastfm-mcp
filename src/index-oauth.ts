@@ -7,9 +7,12 @@ import { createMcpHandler, type CreateMcpHandlerOptions } from 'agents/mcp/serve
 import { recordToolEvent } from './analytics/recordToolEvent'
 import { LastfmOAuthHandler, type LastfmUserProps } from './auth/oauth-handler'
 import { normalizeAuthorizeResource, normalizeTokenResource } from './auth/resource-indicator'
-import { MARKETING_PAGE_HTML } from './marketing-page'
 import { PROTOCOL_VERSION, SERVER_VERSION } from './mcp/protocol'
 import { createMcpServer } from './mcp/server'
+import { buildLandingPage, LANDING_PAGE_UPDATED } from './pages/landing'
+import { buildLlmsTxt } from './pages/llms-txt'
+import appleTouchIcon from './pages/share/apple-touch-icon.png'
+import shareCard from './pages/share/og.png'
 import type { Env } from './types/env'
 import { httpsRedirect } from './utils/httpsRedirect'
 import { buildRateLimitResponse, checkRateLimit, rateLimitKeyFromRequest } from './utils/rateLimit'
@@ -57,6 +60,12 @@ const mcpApiHandler = {
 		return createMcpHandler(() => server, MCP_HANDLER_OPTIONS)(request, env, ctx)
 	},
 }
+
+/** Images served as-is, rendered from src/pages/share/*.html by scripts/render-share-images.mjs */
+const SHARE_IMAGES = new Map<string, ArrayBuffer>([
+	['/og.png', shareCard],
+	['/apple-touch-icon.png', appleTouchIcon],
+])
 
 /** Longest client_name kept in the registration log line. The name is self-asserted, so it is capped. */
 const LOGGED_CLIENT_NAME_MAX = 100
@@ -145,14 +154,27 @@ export default {
 			})
 		}
 
-		// Serve marketing page at root
+		// Landing page, with setup addresses pointing at the origin it was fetched from
 		if (url.pathname === '/' && request.method === 'GET') {
-			return new Response(MARKETING_PAGE_HTML, {
+			return new Response(buildLandingPage(url.origin), {
 				status: 200,
 				headers: {
-					'Content-Type': 'text/html',
+					'Content-Type': 'text/html; charset=utf-8',
 					'Cache-Control': 'public, max-age=3600',
 					'Access-Control-Allow-Origin': '*',
+				},
+			})
+		}
+
+		// Share card for link previews (og:image) and the home-screen icon. HEAD is answered too, for preview checkers
+		// that test an image exists before fetching it.
+		const shareImage = SHARE_IMAGES.get(url.pathname)
+		if (shareImage && (request.method === 'GET' || request.method === 'HEAD')) {
+			return new Response(request.method === 'HEAD' ? null : shareImage, {
+				status: 200,
+				headers: {
+					'Content-Type': 'image/png',
+					'Cache-Control': 'public, max-age=86400',
 				},
 			})
 		}
@@ -221,16 +243,14 @@ export default {
 			)
 		}
 
-		// Sitemap for search engines
+		// Sitemap for search engines. lastmod only moves when the page does; Google ignores changefreq and priority.
 		if (url.pathname === '/sitemap.xml' && request.method === 'GET') {
 			return new Response(
 				`<?xml version="1.0" encoding="UTF-8"?>
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
   <url>
     <loc>https://lastfm-mcp.com/</loc>
-    <lastmod>${new Date().toISOString().split('T')[0]}</lastmod>
-    <changefreq>weekly</changefreq>
-    <priority>1.0</priority>
+    <lastmod>${LANDING_PAGE_UPDATED}</lastmod>
   </url>
 </urlset>`,
 				{
@@ -243,12 +263,15 @@ export default {
 			)
 		}
 
-		// Robots.txt for search engines
+		// Robots.txt: one group for every crawler. No Crawl-delay or per-bot groups: Google's parser can merge a
+		// Crawl-delay-only group into the next group's Disallow lines.
 		if (url.pathname === '/robots.txt' && request.method === 'GET') {
 			return new Response(
 				`User-agent: *
 Allow: /
 Allow: /health
+Allow: /llms.txt
+Allow: /og.png
 Disallow: /mcp
 Disallow: /authorize
 Disallow: /oauth
@@ -262,6 +285,17 @@ Sitemap: https://lastfm-mcp.com/sitemap.xml`,
 					},
 				},
 			)
+		}
+
+		// Setup instructions for agents, pointing at the origin they were fetched from
+		if (url.pathname === '/llms.txt' && request.method === 'GET') {
+			return new Response(buildLlmsTxt(url.origin), {
+				status: 200,
+				headers: {
+					'Content-Type': 'text/plain; charset=utf-8',
+					'Cache-Control': 'public, max-age=86400',
+				},
+			})
 		}
 
 		// Check if this is an MCP request

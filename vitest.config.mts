@@ -24,6 +24,11 @@ function toolEventsDataset(env: '' | 'production') {
 	)
 }
 
+/** The module rules (type and globs) wrangler.toml declares, per environment ('' is the default, staging). */
+function moduleRules(env: '' | 'production') {
+	return unstable_readConfig({ config: WRANGLER_CONFIG, env: env || undefined }).rules.map(({ type, globs }) => ({ type, globs }))
+}
+
 export default defineConfig({
 	plugins: [
 		cloudflareTest({
@@ -39,6 +44,8 @@ export default defineConfig({
 					}),
 					// Both environments' TOOL_EVENTS dataset name, so test/wrangler-config.test.ts can check them
 					TEST_TOOL_EVENTS_DATASETS: JSON.stringify({ staging: toolEventsDataset(''), production: toolEventsDataset('production') }),
+					// Both environments' module rules, so test/wrangler-config.test.ts can check them
+					TEST_MODULE_RULES: JSON.stringify({ staging: moduleRules(''), production: moduleRules('production') }),
 				},
 				// Rate-limit counts last a full period across the whole run and can't be reset between tests, so OAuth tests that
 				// register clients get a budget they can't exhaust. test/oauth-register-rate-limit.test.ts swaps in the strict

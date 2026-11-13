@@ -1,10 +1,11 @@
 // ABOUTME: Tests for the OAuth entry point (src/index-oauth.ts).
-// ABOUTME: Covers plain-http redirects, unauthenticated 401 routing, the retired session path, OAuth routing, Origin policy and protocol lanes.
+// ABOUTME: Covers http redirects, 401 routing, the retired session path, OAuth routing, Origin policy, protocol lanes and static routes.
 import { env, createExecutionContext, waitOnExecutionContext } from 'cloudflare:test'
 import { Client, StreamableHTTPClientTransport } from '@modelcontextprotocol/client'
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 
 import worker from '../src/index-oauth'
+import { LANDING_PAGE_UPDATED } from '../src/pages/landing'
 import { signInForAccessToken } from './helpers/oauth-flow'
 
 // Sign-ins in this file never reach Last.fm. The source does `new LastfmAuth(...)`, so the mock must be a class.
@@ -581,17 +582,106 @@ describe('Last.fm MCP Server (OAuth Entry Point)', () => {
 	})
 
 	describe('static endpoints', () => {
-		it('should return marketing page for GET /', async () => {
+		it('should return the landing page for GET /', async () => {
 			const request = new Request('https://example.com/')
 			const ctx = createExecutionContext()
 			const response = await worker.fetch(request, env, ctx)
 			await waitOnExecutionContext(ctx)
 
 			expect(response.status).toBe(200)
-			expect(response.headers.get('content-type')).toBe('text/html')
+			expect(response.headers.get('content-type')).toBe('text/html; charset=utf-8')
+			expect(response.headers.get('cache-control')).toBe('public, max-age=3600')
 
 			const html = await response.text()
-			expect(html).toContain('Last.fm MCP Server')
+			expect(html).toContain("Ask your AI about everything you've ever listened to.")
+			expect(html).toContain('https://example.com/mcp')
+		})
+
+		it('should return setup instructions for agents at GET /llms.txt', async () => {
+			const request = new Request('https://example.com/llms.txt')
+			const ctx = createExecutionContext()
+			const response = await worker.fetch(request, env, ctx)
+			await waitOnExecutionContext(ctx)
+
+			expect(response.status).toBe(200)
+			expect(response.headers.get('content-type')).toBe('text/plain; charset=utf-8')
+			expect(response.headers.get('cache-control')).toBe('public, max-age=86400')
+			expect(await response.text()).toContain('https://example.com/mcp')
+		})
+
+		describe('share images', () => {
+			// The first eight bytes of every PNG file
+			const PNG_SIGNATURE = [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]
+
+			/** Fetches a PNG route and returns its width and height from the IHDR chunk (bytes 16-23, big-endian). */
+			async function fetchPng(path: string): Promise<{ width: number; height: number }> {
+				const ctx = createExecutionContext()
+				const response = await worker.fetch(new Request(`https://example.com${path}`), env, ctx)
+				await waitOnExecutionContext(ctx)
+
+				expect(response.status).toBe(200)
+				expect(response.headers.get('content-type')).toBe('image/png')
+				expect(response.headers.get('cache-control')).toBe('public, max-age=86400')
+				const bytes = new Uint8Array(await response.arrayBuffer())
+				expect([...bytes.slice(0, 8)]).toEqual(PNG_SIGNATURE)
+				const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength)
+				return { width: view.getUint32(16), height: view.getUint32(20) }
+			}
+
+			it('should serve the 1200×630 share card at GET /og.png, on every request', async () => {
+				expect(await fetchPng('/og.png')).toEqual({ width: 1200, height: 630 })
+				// The module's bytes are shared across requests, so a second response must still have them all
+				expect(await fetchPng('/og.png')).toEqual({ width: 1200, height: 630 })
+			})
+
+			it('should serve the 180×180 icon at GET /apple-touch-icon.png', async () => {
+				expect(await fetchPng('/apple-touch-icon.png')).toEqual({ width: 180, height: 180 })
+			})
+
+			it.each(['/og.png', '/apple-touch-icon.png'])('should answer HEAD %s with the GET headers and no body', async (path) => {
+				const ctx = createExecutionContext()
+				const response = await worker.fetch(new Request(`https://example.com${path}`, { method: 'HEAD' }), env, ctx)
+				await waitOnExecutionContext(ctx)
+
+				expect(response.status).toBe(200)
+				expect(response.headers.get('content-type')).toBe('image/png')
+				expect(response.headers.get('cache-control')).toBe('public, max-age=86400')
+				expect(response.body).toBeNull()
+			})
+		})
+
+		it('should allow llms.txt and the share card in robots.txt, with no Crawl-delay', async () => {
+			const ctx = createExecutionContext()
+			const response = await worker.fetch(new Request('https://example.com/robots.txt'), env, ctx)
+			await waitOnExecutionContext(ctx)
+			const robots = await response.text()
+
+			expect(response.status).toBe(200)
+			expect(robots).toMatch(/^User-agent: \*$/m)
+			expect(robots).toMatch(/^Allow: \/llms\.txt$/m)
+			expect(robots).toMatch(/^Allow: \/og\.png$/m)
+			expect(robots).toMatch(/^Disallow: \/mcp$/m)
+			expect(robots).not.toMatch(/crawl-delay/i)
+			// One group for every crawler, no per-bot groups
+			expect(robots.match(/^User-agent:/gm)).toHaveLength(1)
+		})
+
+		it('should date the sitemap from LANDING_PAGE_UPDATED, the same on every request', async () => {
+			const fetchSitemap = async () => {
+				const ctx = createExecutionContext()
+				const response = await worker.fetch(new Request('https://example.com/sitemap.xml'), env, ctx)
+				await waitOnExecutionContext(ctx)
+				expect(response.status).toBe(200)
+				return response.text()
+			}
+			const first = await fetchSitemap()
+
+			expect(await fetchSitemap()).toBe(first)
+			expect(LANDING_PAGE_UPDATED).toMatch(/^\d{4}-\d{2}-\d{2}$/)
+			expect(first).toContain(`<lastmod>${LANDING_PAGE_UPDATED}</lastmod>`)
+			expect(first).toContain('<loc>https://lastfm-mcp.com/</loc>')
+			expect(first).not.toContain('changefreq')
+			expect(first).not.toContain('priority')
 		})
 
 		it('should return health check for GET /health', async () => {

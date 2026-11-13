@@ -1,0 +1,76 @@
+<!doctype html>
+<!--
+	ABOUTME: Source of the 1200×630 share card (og.png) that link previews show for lastfm-mcp.com: the landing page hero as a card.
+	ABOUTME: Rendered to og.png by scripts/render-share-images.mjs with headless Chrome once data-ready is "ok"; never served itself.
+-->
+<html lang="en">
+	<head>
+		<meta charset="utf-8" />
+		<title>Last.fm MCP share card</title>
+		<link
+			href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,700&display=block"
+			rel="stylesheet"
+		/>
+		<style>
+			html,
+			body {
+				margin: 0;
+				width: 1200px;
+				height: 630px;
+				overflow: hidden;
+			}
+
+			body {
+				position: relative;
+				background: #ece6dc;
+				color: #22201d;
+				font-family: 'Bricolage Grotesque', sans-serif;
+				-webkit-font-smoothing: antialiased;
+			}
+
+			canvas {
+				position: absolute;
+				inset: 0;
+			}
+
+			.mark {
+				position: absolute;
+				left: 72px;
+				top: 56px;
+				font-size: 30px;
+				font-weight: 700;
+			}
+
+			h1 {
+				position: absolute;
+				left: 72px;
+				top: 120px;
+				width: 900px;
+				margin: 0;
+				font-size: 76px;
+				line-height: 1.02;
+				letter-spacing: -0.025em;
+				font-weight: 700;
+			}
+		</style>
+	</head>
+	<body>
+		<canvas width="1200" height="630" aria-hidden="true"></canvas>
+		<div class="mark">Last.fm MCP</div>
+		<h1>Ask your AI about everything you've ever listened to.</h1>
+
+		<script src="wave.js"></script>
+		<script>
+			// A still frame of the hero wave, centred 90px above the bottom edge
+			drawWave(document.querySelector('canvas'), { centre: 540, maxLayerThickness: 34, columnWidth: 6 })
+
+			// The renderer captures only when data-ready is "ok": Bricolage Grotesque has loaded, so no fallback font gets in.
+			// load() resolves with no faces when the stylesheet never arrived, so an empty list is a failure too.
+			const setReady = (state) => (document.documentElement.dataset.ready = state)
+			document.fonts.load('700 76px "Bricolage Grotesque"').then(
+				(faces) => setReady(faces.length > 0 ? 'ok' : 'failed'),
+				() => setReady('failed'),
+			)
+		</script>
+	</body>
+</html>

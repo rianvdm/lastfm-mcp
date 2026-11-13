@@ -1,0 +1,37 @@
+<!doctype html>
+<!--
+	ABOUTME: Source of apple-touch-icon.png, the home-screen and bookmark icon for lastfm-mcp.com: a sand square with a small wave.
+	ABOUTME: Drawn at 540×540, three times the icon's size, and downscaled to 180×180 by scripts/render-share-images.mjs.
+-->
+<html lang="en">
+	<head>
+		<meta charset="utf-8" />
+		<title>Last.fm MCP icon</title>
+		<style>
+			html,
+			body {
+				margin: 0;
+				width: 540px;
+				height: 540px;
+				overflow: hidden;
+				background: #ece6dc;
+			}
+
+			canvas {
+				display: block;
+			}
+		</style>
+	</head>
+	<body>
+		<canvas width="540" height="540" aria-hidden="true"></canvas>
+
+		<script src="wave.js"></script>
+		<script>
+			// The share card's wave, with the card's 1200px of stream squeezed into the icon's width so the swells still read
+			// at 180px. iOS rounds the corners itself, so the square stays square.
+			drawWave(document.querySelector('canvas'), { centre: 270, maxLayerThickness: 40, columnWidth: 3, streamLength: 1200 })
+			// The renderer captures only when data-ready is "ok"; if wave.js failed to load, the line above threw first
+			document.documentElement.dataset.ready = 'ok'
+		</script>
+	</body>
+</html>

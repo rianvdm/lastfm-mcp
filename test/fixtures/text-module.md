@@ -1,0 +1,1 @@
+<p>{{ORIGIN}}/mcp</p>

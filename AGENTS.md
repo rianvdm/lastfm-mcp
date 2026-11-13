@@ -16,6 +16,7 @@ npm run lint             # ESLint (src and dashboard/src)
 npm run format           # Prettier --write
 npm run format:check     # Prettier --check (CI)
 npm run test:multi-user  # Manual multi-user check against a running server (scripts/test-multi-user.js)
+npm run render:share     # Re-render og.png and apple-touch-icon.png from src/pages/share/*.html (macOS: headless Chrome + sips)
 npm run cf-typegen       # Regenerate Worker type bindings (run after changing wrangler.toml; produces worker-configuration.d.ts — generated, do not edit by hand)
 npm run test:dashboard   # Dashboard Worker tests (dashboard/vitest.config.mts)
 npm run dashboard:dev    # Dashboard Worker local dev server (every page request gets a 403 without an Access JWT)
@@ -75,6 +76,12 @@ npx vitest run test/protocol/               # All tests in a directory
 // ABOUTME: Smart caching utility with TTL-based expiration for Last.fm API responses.
 // ABOUTME: Provides optimized cache TTLs per endpoint type and request deduplication.
 ```
+
+The same two `// ABOUTME:` lines open `.js` and `.mjs` files too (`src/pages/share/wave.js`, `scripts/*.mjs`). Exceptions:
+
+- `src/pages/landing.html` and the `src/pages/share/*.html` sources put both lines in one HTML comment right after `<!doctype html>`.
+- `src/pages/llms.md` has none: its first lines are served as-is at `/llms.txt`, so agents read them.
+- The one-line module fixtures (`test/fixtures/text-module.html`, `text-module.md`) and binary files have none.
 
 ### Imports
 
@@ -159,7 +166,14 @@ describe('Feature', () => {
 ```
 src/
   index-oauth.ts        # Sole Worker entry point: static routes, per-IP rate limits, per-origin OAuth provider
-  marketing-page.ts     # Landing page HTML (served at /)
+  pages/                # Landing page (/) and /llms.txt, built from .html/.md sources imported as text modules
+    landing.html        # Page source with {{ORIGIN}} placeholders and FAQ/STRUCTURED DATA markers
+    landing.ts          # buildLandingPage(origin) fills the markers and origin; LANDING_PAGE_UPDATED drives sitemap lastmod
+    faq.ts              # FAQ items, rendered into the page and into FAQPage JSON-LD from one list
+    llms.md             # /llms.txt source: setup steps for agents, with {{ORIGIN}} and {{TOOLS}}
+    llms-txt.ts         # buildLlmsTxt(origin) fills llms.md, generating the tool list from the tool catalogs
+    template.ts         # fillPlaceholders(): fills {{UPPER_SNAKE}} tokens and throws on any left unfilled
+    share/              # og.png and apple-touch-icon.png (served at /og.png, /apple-touch-icon.png) and their HTML sources
   analytics/            # Anonymous tool-call events for TOOL_EVENTS: data point layout, client labels, the waitUntil writer
   auth/                 # OAuth handler (consent, Last.fm sign-in, callback), consent page, /mcp resource rewrite
   clients/              # Last.fm API client + caching decorator
@@ -169,6 +183,10 @@ src/
 ```
 
 Single Worker entry point configured in `wrangler.toml`: `main = "src/index-oauth.ts"`. The `[env.production]` block points to the same entry — it only renames the deployed Worker.
+
+Two `[[rules]]` in `wrangler.toml` bundle non-code files: `Text` imports `**/*.html` and `**/*.md` as strings, and `Data` imports `**/*.png` as `ArrayBuffer`s. Their module types are declared in `src/types/text-modules.d.ts`. Addresses a visitor copies use `{{ORIGIN}}`, so staging and localhost show their own URL; canonical, Open Graph, JSON-LD and FAQ URLs stay hardcoded to `https://lastfm-mcp.com`. When the landing page changes, update `LANDING_PAGE_UPDATED` in `src/pages/landing.ts`.
+
+The share images are committed PNGs. After editing `src/pages/share/og-card.html`, `icon.html` or `wave.js` (the wave drawing both pages load), run `npm run render:share` on macOS and commit the PNGs with the change. The HTML and `wave.js` are never bundled or served.
 
 Every MCP request needs an OAuth bearer token: unauthenticated `POST /mcp` returns 401 with `WWW-Authenticate`, which starts the client's sign-in. OAuth is the only sign-in path: the manual `/login` → `?session_id=` flow was removed in #34, so Last.fm session keys are only stored inside encrypted grant `props`. The "public" tools in `src/mcp/tools/public.ts` are the ones that don't need the user's Last.fm session, not tools reachable without sign-in. `src/auth/jwt.ts` is no longer imported by any source file.
 

@@ -6,31 +6,21 @@ Runs on Cloudflare Workers. Your MCP client signs you in with OAuth the first ti
 
 ## Quick start
 
+[lastfm-mcp.com](https://lastfm-mcp.com) has setup steps for each app, including ChatGPT, Codex, Cursor, Devin Desktop (formerly Windsurf) and OpenCode. If an AI agent is setting it up for you, point it at [lastfm-mcp.com/llms.txt](https://lastfm-mcp.com/llms.txt).
+
 ### Claude.ai / Claude Desktop
 
-1. Open **Settings** -> **Connectors** -> **Add Custom Connector**
-2. Enter `https://lastfm-mcp.com/mcp`
-3. Sign in to Last.fm when prompted
+1. Go to **Customize** -> **Connectors**
+2. Click **Add**, then **Add custom connector**. Name it Last.fm, enter `https://lastfm-mcp.com/mcp` and click **Continue**
+3. Leave the sign-in settings as they are, click **Add**, then **Connect**, and sign in to Last.fm
 
 ### Claude Code
 
 ```bash
-claude mcp add --transport http lastfm "https://lastfm-mcp.com/mcp"
+claude mcp add --scope user --transport http lastfm "https://lastfm-mcp.com/mcp"
 ```
 
-### Windsurf
-
-Add to `~/.codeium/windsurf/mcp_config.json`:
-
-```json
-{
-	"mcpServers": {
-		"lastfm": {
-			"serverUrl": "https://lastfm-mcp.com/mcp"
-		}
-	}
-}
-```
+Then start Claude Code, run `/mcp`, choose **lastfm**, then **Authenticate**, and sign in to Last.fm in your browser.
 
 ### Other MCP clients
 
@@ -209,6 +199,7 @@ npm run build     # wrangler deploy --dry-run: catches type and binding errors
 | `/.well-known/oauth-authorization-server` | OAuth server metadata                       |
 | `/.well-known/oauth-protected-resource`   | OAuth resource metadata                     |
 | `/.well-known/mcp.json`                   | MCP server card (name, version, transport)  |
+| `/llms.txt`                               | Setup instructions for AI agents            |
 | `/health`                                 | Health check                                |
 | `/`                                       | Landing page                                |
 
