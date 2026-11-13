@@ -151,6 +151,14 @@ describe('refreshGrantSummary', () => {
 		expect(summary.signInsByDay[29]).toEqual({ date: utcDate(utcMidnight - DAY), count: 1 })
 	})
 
+	it('should skip a retained index entry without a usable createdAt instead of failing the refresh', async () => {
+		await env.DASH_KV.put('gi:grantBroken', JSON.stringify({ label: 'unknown' }))
+
+		const summary = await refreshGrantSummary(env, NOW)
+
+		expect(summary.signInsByDay.reduce((sum, day) => sum + day.count, 0)).toBe(3)
+	})
+
 	it('should label clients by registered name or CIMD URL and sort them by users', async () => {
 		const summary = await refreshGrantSummary(env, NOW)
 

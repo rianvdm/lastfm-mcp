@@ -128,13 +128,24 @@ export async function refreshActiveUsers(env: DashEnv, now: Date = new Date()): 
 		hashes.add(hash)
 		byDate.set(date, hashes)
 	}
+	/**
+	 * Markers dated after today's Pacific date were written under UTC dates, before days switched to Pacific time. The
+	 * activity they record happened today in Pacific time, so they move onto today rather than counting tomorrow.
+	 */
+	const lateMarkers: string[] = []
+	const lateHashes = new Set<string>()
 	for (const name of markerKeys) {
 		const marker = parseMarkerKey(name)
-		if (marker) add(marker.date, marker.hash)
+		if (!marker) continue
+		if (marker.date > today) {
+			lateMarkers.push(name)
+			lateHashes.add(marker.hash)
+		} else add(marker.date, marker.hash)
 	}
 
+	const activeToday = [...new Set([...hashesNow, ...lateHashes])]
 	const markedToday = byDate.get(today) ?? new Set<string>()
-	const toWrite = hashesNow.filter((hash) => !markedToday.has(hash))
+	const toWrite = activeToday.filter((hash) => !markedToday.has(hash))
 	for (let i = 0; i < toWrite.length; i += WRITE_CONCURRENCY) {
 		await Promise.all(
 			toWrite
@@ -142,7 +153,11 @@ export async function refreshActiveUsers(env: DashEnv, now: Date = new Date()): 
 				.map((hash) => env.DASH_KV.put(`${MARKER_PREFIX}${today}:${hash}`, '', { expirationTtl: ACTIVE_USER_TTL_SECONDS })),
 		)
 	}
-	for (const hash of hashesNow) add(today, hash)
+	// Deleted only after today's markers are written, so a failed run loses nothing
+	for (let i = 0; i < lateMarkers.length; i += WRITE_CONCURRENCY) {
+		await Promise.all(lateMarkers.slice(i, i + WRITE_CONCURRENCY).map((name) => env.DASH_KV.delete(name)))
+	}
+	for (const hash of activeToday) add(today, hash)
 
 	const summary = summarise(byDate, now)
 	await env.DASH_KV.put(SUMMARY_KEY, JSON.stringify(summary))

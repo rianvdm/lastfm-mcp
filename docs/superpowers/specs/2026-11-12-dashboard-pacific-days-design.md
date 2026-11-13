@@ -35,7 +35,7 @@ The usage dashboard at `stats.lastfm-mcp.com` counts days in UTC. At 4pm Pacific
 
 ## Changeover
 
-Markers written before the deploy keep their UTC dates. For up to 31 days, each of those days in the active-user chart is shifted by up to 8 hours. Today's tile is correct from the first run after the deploy.
+Markers written before the deploy keep their UTC dates. For up to 31 days, each of those older days in the active-user chart is shifted by up to 8 hours. A marker dated after today's Pacific date can only be a UTC-dated one written that evening, so each run moves it onto today; otherwise it would count as tomorrow's activity at Pacific midnight. (Added after the final review.)
 
 ## Left to the builder
 

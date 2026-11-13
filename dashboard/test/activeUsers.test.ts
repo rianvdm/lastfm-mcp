@@ -180,16 +180,24 @@ describe('refreshActiveUsers', () => {
 		expect(summary).toMatchObject({ dau: 1, activeSince: pacificToday })
 	})
 
-	it("should not count a marker dated after today's Pacific date in today's users", async () => {
+	it("should move a marker dated after today's Pacific date onto today, so it can't count tomorrow", async () => {
 		const lateEvening = new Date(UTC_MIDNIGHT_MS + 3600 * 1000)
+		const pacificToday = utcDate(new Date(UTC_MIDNIGHT_MS - DAY_MS))
 		const key = await importHmacKey(HMAC_KEY)
-		// A marker from before the switch to Pacific days, written under the UTC date that is still tomorrow in Pacific time
-		await env.DASH_KV.put(`au:${utcDate(lateEvening)}:${await hashUserId(key, BOB)}`, '')
+		const bob = await hashUserId(key, BOB)
+		// Written under UTC dates before the switch: the UTC date that is still tomorrow in Pacific time
+		await env.DASH_KV.put(`au:${utcDate(lateEvening)}:${bob}`, '')
 		activeNow(ALICE)
 
 		const summary = await refreshActiveUsers(testEnv(), lateEvening)
 
-		expect(summary).toMatchObject({ dau: 1, wau: 1, mau: 1 })
+		expect((await markerKeys()).sort()).toEqual([`au:${pacificToday}:${await hashUserId(key, ALICE)}`, `au:${pacificToday}:${bob}`].sort())
+		expect(summary).toMatchObject({ dau: 2, wau: 2, mau: 2 })
+
+		// After Pacific midnight, with nobody active, Bob counts on yesterday only
+		activeNow()
+		const nextMorning = await refreshActiveUsers(testEnv(), new Date(UTC_MIDNIGHT_MS + 9 * 3600 * 1000))
+		expect(nextMorning).toMatchObject({ dau: 0, wau: 2 })
 	})
 
 	it('should list token key names only, never reading a token value', async () => {

@@ -374,6 +374,8 @@ function signInTimes(stored: Map<string, string>, indexedNow: Map<string, Indexe
 function signInsByDay(signIns: number[], now: Date): GrantSummary['signInsByDay'] {
 	const counts = new Map(lastPacificDates(now, SIGN_IN_DAYS).map((date) => [date, 0]))
 	for (const createdAt of signIns) {
+		// A retained entry without a usable time is skipped; pacificDate would throw on it and stop the whole refresh
+		if (!Number.isFinite(createdAt)) continue
 		const date = pacificDate(createdAt * 1000)
 		const count = counts.get(date)
 		if (count !== undefined) counts.set(date, count + 1)
