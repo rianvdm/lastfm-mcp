@@ -19,8 +19,9 @@ const NOW = new Date('2026-11-12T15:30:00.000Z')
 /** The exact error and non-error rules from the SQL API team */
 const ERRORS_EXPR = "countIf(status NOT IN ('success', 'clientDisconnected', 'responseStreamDisconnected'))"
 
-interface DayRow {
-	day: string
+interface HourRow {
+	/** The hour's start in UTC, as the SQL API writes it */
+	hour: string
 	status: string
 	requests: number | string
 }
@@ -35,7 +36,7 @@ function isDailyQuery(sql: string): boolean {
 }
 
 /** Answers the daily query with `days` and the 24-hour query with `totals`, whatever order they're sent in */
-function respond(days: DayRow[], totals: TotalsRow[]): void {
+function respond(days: HourRow[], totals: TotalsRow[]): void {
 	sqlMock.mockImplementation(async (_env, sql) => (isDailyQuery(sql) ? days : totals) as never)
 }
 
@@ -61,16 +62,17 @@ afterEach(() => {
 })
 
 describe('fetchTraffic', () => {
-	it('should map the SQL rows to 30 zero-filled UTC days, oldest first, split into requests, errors and disconnects', async () => {
+	it('should add the hourly SQL rows into 30 zero-filled Pacific days, oldest first, split into requests, errors and disconnects', async () => {
 		respond(
 			[
-				{ day: '2026-11-12', status: 'success', requests: '40000' },
-				{ day: '2026-11-12', status: 'clientDisconnected', requests: '5000' },
-				{ day: '2026-11-12', status: 'responseStreamDisconnected', requests: '300' },
-				{ day: '2026-11-12', status: 'exceededMemory', requests: '2' },
-				{ day: '2026-11-09', status: 'scriptThrewException', requests: 7 },
-				{ day: '2026-11-09', status: 'success', requests: 100 },
-				{ day: '2026-10-14', status: 'success', requests: '3' },
+				{ hour: '2026-11-12 10:00:00', status: 'success', requests: '30000' },
+				{ hour: '2026-11-12 14:00:00', status: 'success', requests: '10000' },
+				{ hour: '2026-11-12 10:00:00', status: 'clientDisconnected', requests: '5000' },
+				{ hour: '2026-11-12 11:00:00', status: 'responseStreamDisconnected', requests: '300' },
+				{ hour: '2026-11-12 12:00:00', status: 'exceededMemory', requests: '2' },
+				{ hour: '2026-11-09 20:00:00', status: 'scriptThrewException', requests: 7 },
+				{ hour: '2026-11-09 20:00:00', status: 'success', requests: 100 },
+				{ hour: '2026-10-14 12:00:00', status: 'success', requests: '3' },
 			],
 			[{ requests: '44000', errors: '5' }],
 		)
@@ -89,8 +91,41 @@ describe('fetchTraffic', () => {
 		expect(traffic.last24h).toEqual({ requests: 44000, errors: 5 })
 	})
 
+	it('should put an evening hour on its Pacific date when UTC has already reached the next day', async () => {
+		respond([{ hour: '2026-11-13 02:00:00', status: 'success', requests: 12 }], [])
+
+		const traffic = await fetchTraffic(env, new Date('2026-11-13T02:30:00.000Z'))
+
+		expect(traffic.days[29]).toEqual({ date: '2026-11-12', requests: 12, errors: 0, disconnected: 0 })
+		expect(traffic.days[0].date).toBe('2026-10-14')
+		expect(sentQueries().daily).toContain("timestamp >= '2026-10-14T00:00:00Z'")
+		expect(sentQueries().daily).toContain("timestamp < '2026-11-13T03:00:00Z'")
+	})
+
+	it('should put both 1am hours of the November DST change, and its late evening, on Nov 1', async () => {
+		respond(
+			[
+				// 23:00 PDT on Oct 31
+				{ hour: '2026-11-01 06:00:00', status: 'success', requests: 1 },
+				// 01:00 PDT, then 01:00 PST again an hour later
+				{ hour: '2026-11-01 08:00:00', status: 'success', requests: 10 },
+				{ hour: '2026-11-01 09:00:00', status: 'success', requests: 20 },
+				// 23:00 PST on Nov 1
+				{ hour: '2026-11-02 07:00:00', status: 'success', requests: 300 },
+			],
+			[],
+		)
+
+		const traffic = await fetchTraffic(env, NOW)
+
+		const byDate = new Map(traffic.days.map((day) => [day.date, day.requests]))
+		expect(byDate.get('2026-10-31')).toBe(1)
+		expect(byDate.get('2026-11-01')).toBe(330)
+		expect(byDate.get('2026-11-02')).toBe(0)
+	})
+
 	it('should count a value that is not a number as zero', async () => {
-		respond([{ day: '2026-11-12', status: 'success', requests: 'lots' }], [{ requests: '', errors: 'n/a' }])
+		respond([{ hour: '2026-11-12 10:00:00', status: 'success', requests: 'lots' }], [{ requests: '', errors: 'n/a' }])
 
 		const traffic = await fetchTraffic(env, NOW)
 
@@ -98,7 +133,7 @@ describe('fetchTraffic', () => {
 		expect(traffic.last24h).toEqual({ requests: 0, errors: 0 })
 	})
 
-	it('should query the production script by UTC day over 30 days, with literal time bounds', async () => {
+	it('should query the production script by hour from the UTC midnight before the first Pacific day, with literal time bounds', async () => {
 		respond([], [])
 
 		await fetchTraffic(env, NOW)
@@ -107,10 +142,12 @@ describe('fetchTraffic', () => {
 		expect(daily).toContain('FROM events.workersInvocations')
 		expect(daily).toContain(`scriptName = '${env.SCRIPT_NAME}'`)
 		expect(daily).toContain("timestamp >= '2026-10-14T00:00:00Z'")
-		expect(daily).toContain("timestamp < '2026-11-13T00:00:00Z'")
-		expect(daily).toContain('toDate(timestamp) AS day')
+		expect(daily).toContain("timestamp < '2026-11-12T16:00:00Z'")
+		expect(daily).toContain('toStartOfHour(timestamp) AS hour')
 		expect(daily).toContain('count() AS requests')
-		expect(daily).toContain('GROUP BY toDate(timestamp), status')
+		expect(daily).toContain('GROUP BY toStartOfHour(timestamp), status')
+		// The API's toDate() takes no time zone, so the query must not group by date
+		expect(daily).not.toContain('toDate(')
 	})
 
 	it('should count the last 24 hours with count() and the agreed countIf error rule', async () => {
@@ -160,11 +197,14 @@ describe('fetchTraffic', () => {
 		await expect(pending).resolves.toMatchObject({ last24h: { requests: 0, errors: 0 } })
 	})
 
-	it('should ignore rows outside the window and sum every 24-hour row', async () => {
+	it('should ignore rows outside the window or without a usable hour, and sum every 24-hour row', async () => {
 		respond(
 			[
-				{ day: '2026-10-13', status: 'success', requests: 999 },
-				{ day: '2026-11-13', status: 'success', requests: 999 },
+				// 20:00 PDT on Oct 13, before the window's first Pacific day
+				{ hour: '2026-10-14 03:00:00', status: 'success', requests: 999 },
+				// 01:00 PST on Nov 13, after today
+				{ hour: '2026-11-13 09:00:00', status: 'success', requests: 999 },
+				{ hour: 'garbage', status: 'success', requests: 999 },
 			],
 			[
 				{ requests: 10, errors: 1 },
