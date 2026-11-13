@@ -4,6 +4,7 @@ import { CLIENT_LABELS, isCimdClientId, labelForClient } from '../../src/analyti
 import { getKvJson, listKvKeys } from './cfApi'
 import { listDashKeys } from './dashKv'
 import type { DashEnv } from './env'
+import { lastPacificDates, pacificDate } from './pacific'
 
 export interface GrantSummary {
 	computedAt: string
@@ -14,7 +15,7 @@ export interface GrantSummary {
 	unresolvedGrants: number
 	registeredClients: number
 	signInsLast7d: number
-	/** The last 30 UTC days, oldest first, with zero-filled days */
+	/** The last 30 Pacific days, oldest first, with zero-filled days */
 	signInsByDay: Array<{ date: string; count: number }>
 	/** Live grants per client label, sorted by users descending */
 	clients: Array<{ label: string; grants: number; users: number }>
@@ -369,19 +370,17 @@ function signInTimes(stored: Map<string, string>, indexedNow: Map<string, Indexe
 	return [...byGrant.values()]
 }
 
-/** Sign-ins per UTC day over the last 30 days, oldest first */
+/** Sign-ins per Pacific day over the last 30 days, oldest first */
 function signInsByDay(signIns: number[], now: Date): GrantSummary['signInsByDay'] {
-	const today = Math.floor(now.getTime() / 1000 / DAY_SECONDS)
-	const counts = new Map<number, number>()
+	const counts = new Map(lastPacificDates(now, SIGN_IN_DAYS).map((date) => [date, 0]))
 	for (const createdAt of signIns) {
-		const day = Math.floor(createdAt / DAY_SECONDS)
-		if (day > today - SIGN_IN_DAYS && day <= today) counts.set(day, (counts.get(day) ?? 0) + 1)
+		// A retained entry without a usable time is skipped; pacificDate would throw on it and stop the whole refresh
+		if (!Number.isFinite(createdAt)) continue
+		const date = pacificDate(createdAt * 1000)
+		const count = counts.get(date)
+		if (count !== undefined) counts.set(date, count + 1)
 	}
-
-	return Array.from({ length: SIGN_IN_DAYS }, (_, i) => {
-		const day = today - (SIGN_IN_DAYS - 1) + i
-		return { date: new Date(day * DAY_SECONDS * 1000).toISOString().slice(0, 10), count: counts.get(day) ?? 0 }
-	})
+	return [...counts].map(([date, count]) => ({ date, count }))
 }
 
 /** Reads many DASH_KV keys as text, in pages the bulk get accepts, and returns the ones that exist */

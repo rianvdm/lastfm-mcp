@@ -1,20 +1,21 @@
 // ABOUTME: Counts daily, 7-day and 30-day active users from the access-token key names in production OAUTH_KV.
-// ABOUTME: Stores only a keyed hash of each active user ID per UTC day in DASH_KV, for 31 days; never a username or a token value.
+// ABOUTME: Stores only a keyed hash of each active user ID per Pacific day in DASH_KV, for 31 days; never a username or a token value.
 import { listKvKeys } from './cfApi'
 import { listDashKeys } from './dashKv'
 import type { DashEnv } from './env'
+import { lastPacificDates, pacificDate } from './pacific'
 
 export interface ActiveUsersSummary {
 	computedAt: string
-	/** Distinct users active on the UTC day of computedAt */
+	/** Distinct users active on the Pacific day of computedAt */
 	dau: number
-	/** Distinct users active over the last 7 UTC days, including today */
+	/** Distinct users active over the last 7 Pacific days, including today */
 	wau: number
-	/** Distinct users active over the last 30 UTC days, including today */
+	/** Distinct users active over the last 30 Pacific days, including today */
 	mau: number
-	/** The last 30 UTC days, oldest first, with zero-filled days */
+	/** The last 30 Pacific days, oldest first, with zero-filled days */
 	activeByDay: Array<{ date: string; count: number }>
-	/** The earliest UTC date with a marker (`YYYY-MM-DD`), or null before anyone has been seen */
+	/** The earliest Pacific date with a marker (`YYYY-MM-DD`), or null before anyone has been seen */
 	activeSince: string | null
 }
 
@@ -48,7 +49,6 @@ const TOKEN_PREFIX = 'token:'
 const MARKER_PREFIX = 'au:'
 const SKIPPED_WARNING = '[STATS] active users not recorded: ACTIVE_USER_HMAC_KEY is missing or too short'
 
-const DAY_SECONDS = 86400
 const WEEK_DAYS = 7
 const MONTH_DAYS = 30
 /** Hex characters kept from each HMAC: 128 bits */
@@ -93,7 +93,7 @@ export async function hashUserId(key: CryptoKey, userId: string): Promise<string
  * Records who is active now and recomputes the active-user summary at `summary:active-users`.
  *
  * Lists the access-token keys in production OAUTH_KV (names only), takes the distinct user IDs in memory and writes an
- * empty `au:<UTC date>:<hash>` marker for each user not yet marked today. Access tokens last an hour and are renewed while a
+ * empty `au:<Pacific date>:<hash>` marker for each user not yet marked today. Access tokens last an hour and are renewed while a
  * client is in use, so the hourly run sees nearly everyone active in that hour. The counts come from every listed marker
  * plus this run's hashes.
  *
@@ -108,7 +108,7 @@ export async function refreshActiveUsers(env: DashEnv, now: Date = new Date()): 
 	}
 
 	const nowSeconds = Math.floor(now.getTime() / 1000)
-	const today = utcDate(dayNumber(nowSeconds))
+	const today = pacificDate(now.getTime())
 
 	const [tokenKeys, markerKeys] = await Promise.all([listKvKeys(env, TOKEN_PREFIX), listDashKeys(env.DASH_KV, MARKER_PREFIX)])
 	const userIds = new Set<string>()
@@ -121,20 +121,31 @@ export async function refreshActiveUsers(env: DashEnv, now: Date = new Date()): 
 	const key = await importHmacKey(secret)
 	const hashesNow = await Promise.all([...userIds].map((userId) => hashUserId(key, userId)))
 
-	/** Hashes by UTC date, from the stored markers and this run */
+	/** Hashes by Pacific date, from the stored markers and this run */
 	const byDate = new Map<string, Set<string>>()
 	const add = (date: string, hash: string): void => {
 		const hashes = byDate.get(date) ?? new Set<string>()
 		hashes.add(hash)
 		byDate.set(date, hashes)
 	}
+	/**
+	 * Markers dated after today's Pacific date were written under UTC dates, before days switched to Pacific time. The
+	 * activity they record happened today in Pacific time, so they move onto today rather than counting tomorrow.
+	 */
+	const lateMarkers: string[] = []
+	const lateHashes = new Set<string>()
 	for (const name of markerKeys) {
 		const marker = parseMarkerKey(name)
-		if (marker) add(marker.date, marker.hash)
+		if (!marker) continue
+		if (marker.date > today) {
+			lateMarkers.push(name)
+			lateHashes.add(marker.hash)
+		} else add(marker.date, marker.hash)
 	}
 
+	const activeToday = [...new Set([...hashesNow, ...lateHashes])]
 	const markedToday = byDate.get(today) ?? new Set<string>()
-	const toWrite = hashesNow.filter((hash) => !markedToday.has(hash))
+	const toWrite = activeToday.filter((hash) => !markedToday.has(hash))
 	for (let i = 0; i < toWrite.length; i += WRITE_CONCURRENCY) {
 		await Promise.all(
 			toWrite
@@ -142,7 +153,11 @@ export async function refreshActiveUsers(env: DashEnv, now: Date = new Date()): 
 				.map((hash) => env.DASH_KV.put(`${MARKER_PREFIX}${today}:${hash}`, '', { expirationTtl: ACTIVE_USER_TTL_SECONDS })),
 		)
 	}
-	for (const hash of hashesNow) add(today, hash)
+	// Deleted only after today's markers are written, so a failed run loses nothing
+	for (let i = 0; i < lateMarkers.length; i += WRITE_CONCURRENCY) {
+		await Promise.all(lateMarkers.slice(i, i + WRITE_CONCURRENCY).map((name) => env.DASH_KV.delete(name)))
+	}
+	for (const hash of activeToday) add(today, hash)
 
 	const summary = summarise(byDate, now)
 	await env.DASH_KV.put(SUMMARY_KEY, JSON.stringify(summary))
@@ -159,33 +174,22 @@ function parseMarkerKey(name: string): { date: string; hash: string } | null {
 	return match ? { date: match[1], hash: match[2] } : null
 }
 
-function dayNumber(seconds: number): number {
-	return Math.floor(seconds / DAY_SECONDS)
-}
-
-function utcDate(day: number): string {
-	return new Date(day * DAY_SECONDS * 1000).toISOString().slice(0, 10)
-}
-
-/** Distinct hashes over the `days` UTC days ending today */
-function distinctOver(byDate: Map<string, Set<string>>, today: number, days: number): number {
+/** Distinct hashes over the given dates */
+function distinctOver(byDate: Map<string, Set<string>>, dates: string[]): number {
 	const hashes = new Set<string>()
-	for (let day = today - days + 1; day <= today; day++) for (const hash of byDate.get(utcDate(day)) ?? []) hashes.add(hash)
+	for (const date of dates) for (const hash of byDate.get(date) ?? []) hashes.add(hash)
 	return hashes.size
 }
 
 function summarise(byDate: Map<string, Set<string>>, now: Date): ActiveUsersSummary {
-	const today = dayNumber(Math.floor(now.getTime() / 1000))
+	const month = lastPacificDates(now, MONTH_DAYS)
 	const dates = [...byDate].filter(([, hashes]) => hashes.size > 0).map(([date]) => date)
 	return {
 		computedAt: now.toISOString(),
-		dau: distinctOver(byDate, today, 1),
-		wau: distinctOver(byDate, today, WEEK_DAYS),
-		mau: distinctOver(byDate, today, MONTH_DAYS),
-		activeByDay: Array.from({ length: MONTH_DAYS }, (_, i) => {
-			const date = utcDate(today - (MONTH_DAYS - 1) + i)
-			return { date, count: byDate.get(date)?.size ?? 0 }
-		}),
+		dau: distinctOver(byDate, month.slice(-1)),
+		wau: distinctOver(byDate, month.slice(-WEEK_DAYS)),
+		mau: distinctOver(byDate, month),
+		activeByDay: month.map((date) => ({ date, count: byDate.get(date)?.size ?? 0 })),
 		// ISO dates sort as text
 		activeSince: dates.length > 0 ? dates.sort()[0] : null,
 	}

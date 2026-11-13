@@ -17,7 +17,7 @@ vi.mock('../src/cfApi', async (importOriginal) => ({
 
 const DAY = 86400
 
-/** Noon UTC today, so every fixture time lands on a predictable UTC day and every KV expiration is in the real future */
+/** Noon UTC today, the same calendar date in Pacific time, so every fixture time lands on a predictable day and every KV expiration is in the real future */
 const NOW = new Date(Math.floor(Date.now() / (DAY * 1000)) * DAY * 1000 + 12 * 3600 * 1000)
 const NOW_S = NOW.getTime() / 1000
 const HOUR_LATER = new Date(NOW.getTime() + 3600 * 1000)
@@ -117,7 +117,7 @@ describe('refreshGrantSummary', () => {
 		expect(summary.registeredClients).toBe(2)
 	})
 
-	it('should chart sign-ins from live and expired grants over the last 30 UTC days', async () => {
+	it('should chart sign-ins from live and expired grants over the last 30 Pacific days', async () => {
 		const summary = await refreshGrantSummary(env, NOW)
 
 		expect(summary.signInsByDay).toHaveLength(30)
@@ -133,6 +133,30 @@ describe('refreshGrantSummary', () => {
 		expect(byDate.get(utcDate(NOW_S))).toBe(0)
 
 		expect(summary.signInsLast7d).toBe(1)
+	})
+
+	it('should put a sign-in on its Pacific date when UTC has already reached the next day', async () => {
+		const utcMidnight = Math.floor(NOW_S / DAY) * DAY
+		// 01:00 UTC is 17:00 or 18:00 Pacific on the previous date; the grant was created half an hour earlier
+		const lateEvening = new Date((utcMidnight + 3600) * 1000)
+		grant(ALICE, 'grantA3', {
+			clientId: DCR_CLAUDE,
+			createdAt: utcMidnight + 1800,
+			expiresAt: utcMidnight + 30 * DAY,
+			refreshTokenId: 'r4',
+		})
+
+		const summary = await refreshGrantSummary(env, lateEvening)
+
+		expect(summary.signInsByDay[29]).toEqual({ date: utcDate(utcMidnight - DAY), count: 1 })
+	})
+
+	it('should skip a retained index entry without a usable createdAt instead of failing the refresh', async () => {
+		await env.DASH_KV.put('gi:grantBroken', JSON.stringify({ label: 'unknown' }))
+
+		const summary = await refreshGrantSummary(env, NOW)
+
+		expect(summary.signInsByDay.reduce((sum, day) => sum + day.count, 0)).toBe(3)
 	})
 
 	it('should label clients by registered name or CIMD URL and sort them by users', async () => {

@@ -4,6 +4,7 @@ import type { ActiveUsersSummary } from './activeUsers'
 import type { GrantSummary } from './grants'
 import { isLoadError, isNotConfigured } from './model'
 import type { DashboardModel, LoadError } from './model'
+import { addDays, formatPacificTime, pacificDate } from './pacific'
 import type { ToolRow, ToolStats } from './tools'
 import type { TrafficSummary } from './traffic'
 
@@ -52,12 +53,12 @@ function formatMs(ms: unknown): string {
 	return `${(ms / 1000).toFixed(1)} s`
 }
 
-/** `2026-11-12 15:30 UTC`, or DASH for a value that isn't a timestamp */
+/** `2026-11-12 07:30 PST` (PDT in summer), or DASH for a value that isn't a timestamp */
 function formatTime(iso: unknown): string {
 	if (typeof iso !== 'string') return DASH
 	const ms = Date.parse(iso)
 	if (!Number.isFinite(ms)) return DASH
-	return `${new Date(ms).toISOString().slice(0, 16).replace('T', ' ')} UTC`
+	return formatPacificTime(ms)
 }
 
 /** `Nov 12` for a `YYYY-MM-DD` date */
@@ -69,11 +70,6 @@ function formatDay(date: string): string {
 /** True for a `YYYY-MM-DD` string */
 function isIsoDate(value: unknown): value is string {
 	return typeof value === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(value) && Number.isFinite(Date.parse(value))
-}
-
-/** The `YYYY-MM-DD` date `days` days after `date` (before, for a negative count) */
-function addDays(date: string, days: number): string {
-	return new Date(Date.parse(date) + days * 86_400_000).toISOString().slice(0, 10)
 }
 
 /** Axis ticks: in full under 10,000, compact (20K, 1.5M) on an axis that reaches it */
@@ -155,15 +151,15 @@ function activeTile(
 	return sourcedTile(label, state, value, note)
 }
 
-/** The UTC day an active-user summary counts as today, or null if its computedAt isn't a timestamp */
+/** The Pacific day an active-user summary counts as today, or null if its computedAt isn't a timestamp */
 function summaryDay(summary: ActiveUsersSummary): string | null {
 	const ms = typeof summary.computedAt === 'string' ? Date.parse(summary.computedAt) : Number.NaN
-	return Number.isFinite(ms) ? new Date(ms).toISOString().slice(0, 10) : null
+	return Number.isFinite(ms) ? pacificDate(ms) : null
 }
 
 /** A window count's note, which says the count is partial until counting covers the whole window */
 function windowNote(summary: ActiveUsersSummary, days: number): string {
-	const full = `Distinct users, last ${days} UTC days`
+	const full = `Distinct users, last ${days} Pacific days`
 	if (summary.activeSince === null) return 'No active users seen yet'
 	const today = summaryDay(summary)
 	if (!isIsoDate(summary.activeSince) || today === null) return full
@@ -185,7 +181,7 @@ function renderTiles(model: DashboardModel): string {
 			(a) => formatCount(a.dau),
 			(a) => {
 				const today = summaryDay(a)
-				return today === null ? 'UTC day so far' : `So far on ${formatDay(today)} (UTC)`
+				return today === null ? 'Pacific day so far' : `So far on ${formatDay(today)} (Pacific)`
 			},
 		),
 		activeTile(
@@ -388,7 +384,7 @@ ${tableView(
 )}`
 	}
 	return `<section class="panel"><h2>Active users, last 30 days</h2>
-<p class="caption">Distinct users whose AI client held a live access token at any hourly check that UTC day.</p>
+<p class="caption">Distinct users whose AI client held a live access token at any hourly check that Pacific day.</p>
 ${body}
 </section>`
 }
