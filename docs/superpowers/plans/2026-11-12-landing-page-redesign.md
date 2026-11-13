@@ -19,7 +19,7 @@
 - Palette (exact): background `#ece6dc`, raised `#f7f3ec`, border `#d9d0c3`, heading `#22201d`, body `#504a43`/`#5a534b`, muted `#6d665e`, accent `#b8432f`, code bg `#22201d` with text `#efe7da`. Wave layers `#b8432f`, `#d39b3f`, `#8a9a72`, `#6f8aa3`, `#8c6278` at ~0.85 opacity.
 - Only third-party request on the page: Google Fonts (Bricolage Grotesque 400 and 700, opsz 12..96). No unpkg, no icon CDN.
 - Canonical, OG/Twitter URLs, `og:image`, JSON-LD and FAQ answers stay hardcoded to `https://lastfm-mcp.com`. Everything the visitor copies uses `{{ORIGIN}}`.
-- `<title>` is exactly "Last.fm MCP: connect your Last.fm history to Claude, ChatGPT and other AI assistants" (subject to Task 2's ChatGPT ruling in the spec). No `keywords` meta. No `Crawl-delay` or per-bot groups in `robots.txt`.
+- `<title>` is exactly "Last.fm MCP: Connect your Last.fm history to Claude, ChatGPT, and other AI assistants" (subject to Task 2's ChatGPT ruling in the spec). No `keywords` meta. No `Crawl-delay` or per-bot groups in `robots.txt`.
 - Never claim access can be revoked on Last.fm. Never claim any tool works without sign-in.
 - Layout works at 375px with a 16px gutter and no horizontal scroll. Don't put `overflow-x: hidden` on `body` (it breaks vertical scrolling); use `overflow-x: clip` on `html` if needed.
 - Any element hidden with the `hidden` attribute whose class sets `display` needs a `[hidden] { display: none }` rule, or it stays visible.

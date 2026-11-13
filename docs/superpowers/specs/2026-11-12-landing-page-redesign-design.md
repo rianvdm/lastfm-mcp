@@ -66,18 +66,36 @@ Picked from three live mockups ("Your history is the wave"). The approved mockup
 
 A streamgraph along the bottom of the hero: five stacked layers in terracotta `#b8432f`, ochre `#d39b3f`, sage `#8a9a72`, dusty blue `#6f8aa3` and plum `#8c6278`, about 0.85 opacity, flowing slowly right to left. It stands for a listening life moving between phases. Layer thicknesses come from layered sines (see `hero-c-v3.html`), not from real data.
 
-Two small labels sit above the stream and cross-fade every few seconds through hand-written lines:
+Hand-written "insights" fade in and out above the stream. Three slots sit in the hero (two below 700px wide), empty in the served HTML, and the script fills them from these lines, in this order:
 
+- 2007 · emo, briefly
 - 2009 · post-rock phase
 - 2011 · that one Bon Iver winter
+- 2013 · everything on Pitchfork
+- 2014 · film scores while working
 - 2016 · one album on repeat
+- 2018 · city pop rabbit hole
 - 2019 · back to the 90s
+- 2021 · lockdown ambient
+- 2023 · finally got into Talk Talk
 - 2024 · jazz, apparently
 - 2026 · everything at once
 
 Post-review change (2026-11-12): the 2016 line was "2016 · 400 plays of one album"; the copy review flagged the exact count as unmeasured on a synthetic graphic.
 
-The labels are decorative and get `aria-hidden="true"`. With `prefers-reduced-motion: reduce`, draw one static frame and don't cycle the labels. Pause the animation when the tab is hidden or the hero is off screen, as the current page does with its `running` flag.
+Each label is Bricolage Grotesque 400 at 20px (16px below 700px wide), `#2c2824` on `rgba(236, 230, 220, 0.82)` with 4px 12px padding (3px 10px small) and a 6px radius. Hidden, it sits at opacity 0, 6px low; visible, it rises into place.
+
+Each slot runs on its own clock, independent of the others:
+
+- **First appearance:** one random start per slot between 700 and 9000 ms after the slots start, at least 1500 ms from the others, in random slot order. The slots start once the web font has loaded (or after 3 s without it), so labels are measured in the real font.
+- **Cycle:** pick a line no other slot is showing, place it, fade in, hold for a random 2500–8000 ms, fade out, then rest. A rest is a random 6000–11000 ms a quarter of the time, otherwise 800–5000 ms.
+- **Fade:** each appearance picks a random 1.0–1.9 s and passes it to the CSS as `--fade`, which times both the opacity and the movement. The slot waits that same time after fading out before freeing its line and spot.
+- **Placement:** a random spot at least 16px from the hero's sides, between 36px and 200px above its bottom edge, and at least 16px from every other label still on screen. After 30 tries without a clear spot, the slot tries again 800 ms later.
+- **Resize:** once the hero's size has changed by more than 1px and stayed put for 150 ms, every label clears at once with no fade, and each active slot (two or three for the new width) starts again at a random 600–3000 ms, at least 800 ms apart. If the wave is paused, the slots stay empty until it resumes. Before any label has appeared, a resize keeps the staggered first appearances and only stops or starts the third slot.
+
+The labels are decorative and get `aria-hidden="true"`; without JavaScript, nothing shows. With `prefers-reduced-motion: reduce`, draw one static frame and show fixed labels instead: 2009, 2018 and 2024 at left 8%, 40% and 70%, 150px, 110px and 160px from the bottom (the first two on small screens). Pause the wave and the labels when the tab is hidden, the hero is off screen, or reduced motion turns on. A pause cancels every slot's pending step and leaves any label on screen fully visible; on resume, each visible label holds for a fresh random time and each empty slot schedules its next appearance.
+
+Post-ship change (2026-11-12): after the redesign shipped, the two small cross-fading labels became these insights: larger, twelve lines instead of six, three slots instead of two, placed at random and each on its own clock. Rian approved the mockups `insights-v1.html` and `insights-v2.html` in `.superpowers/brainstorm/9184-1794525134/content/` (gitignored, reference only); v2 added the random holds, rests, fades and first appearances after the first version's timing read as a 1-2-3 rhythm.
 
 ### Page structure and copy
 
@@ -157,7 +175,7 @@ Contents, in order:
 Today the share image is a stock photo at 1200×797 that previews crop, the sitemap's `lastmod` changes on every request, and the JSON-LD is a bare `SoftwareApplication`. Live checks on 2026-11-12: `robots.txt` allows everything except `/mcp`, `/authorize` and `/oauth`, and spoofed GPTBot, ClaudeBot, PerplexityBot, OAI-SearchBot and Googlebot user agents all get 200.
 
 **Title and description.**
-- `<title>`: "Last.fm MCP: connect your Last.fm history to Claude, ChatGPT, and other AI assistants". The visible headline stays "Ask your AI about everything you've ever listened to."
+- `<title>`: "Last.fm MCP: Connect your Last.fm history to Claude, ChatGPT, and other AI assistants". The visible headline stays "Ask your AI about everything you've ever listened to."
 - Meta description: "Ask your AI when you first played an album, what you had on repeat last summer, or what to play next. Free and open source, and it only reads."
 - Remove the `keywords` meta tag.
 - `<meta name="theme-color" content="#ece6dc">`.
@@ -169,6 +187,8 @@ Today the share image is a stock photo at 1200×797 that previews crop, the site
 - Tags: `og:type` website, `og:site_name` "Last.fm MCP", `og:title`, `og:description`, `og:url` `https://lastfm-mcp.com/`, `og:image` `https://lastfm-mcp.com/og.png`, `og:image:width` 1200, `og:image:height` 630, `og:image:alt` "Last.fm MCP: Ask your AI about everything you've ever listened to."; `twitter:card` `summary_large_image` with matching title, description, image and `twitter:image:alt`. Image and canonical URLs stay hardcoded to production.
 
 Post-review change (2026-11-12): the title gained an Oxford comma and the description says "first played" instead of "first heard", since Last.fm only knows what was scrobbled. The headline, alt text and share card are unchanged. The shipped FAQ lives in `src/pages/faq.ts`: the review added the Authenticate step to the Claude answer, and the ChatGPT answer now says "on the web" and points to the setup section instead of promising that any other app works.
+
+Post-ship change (2026-11-12): "Connect" in the title, `og:title` and `twitter:title` is now capitalised.
 
 **FAQ.** Draft questions and answers below; Task 2's verification may change them, and the ChatGPT answer must match what the docs confirm.
 - *How do I connect Last.fm to Claude?* In Claude, go to Settings → Connectors, click Add custom connector, paste `https://lastfm-mcp.com/mcp`, and sign in to Last.fm. In Claude Code, run `claude mcp add --transport http lastfm https://lastfm-mcp.com/mcp`, then `/mcp` to sign in.
