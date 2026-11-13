@@ -3,7 +3,7 @@
 import { createScheduledController, env } from 'cloudflare:test'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-import { CfApiError, getKvJson, listKvKeys } from '../src/cfApi'
+import { analyticsSqlApi, CfApiError, getKvJson, listKvKeys } from '../src/cfApi'
 import { MAX_FETCHES_PER_RUN, readGrantSummary, refreshGrantSummary } from '../src/grants'
 import type { GrantSummary } from '../src/grants'
 import worker from '../src/index'
@@ -13,6 +13,8 @@ vi.mock('../src/cfApi', async (importOriginal) => ({
 	...(await importOriginal<typeof import('../src/cfApi')>()),
 	listKvKeys: vi.fn(),
 	getKvJson: vi.fn(),
+	// The scheduled handler also refreshes traffic, which must never reach the real Analytics SQL API
+	analyticsSqlApi: vi.fn(),
 }))
 
 const DAY = 86400
@@ -87,6 +89,7 @@ async function clearDashKv(): Promise<void> {
 }
 
 beforeEach(async () => {
+	vi.mocked(analyticsSqlApi).mockResolvedValue([])
 	oauthKv = new Map()
 	valueReads = []
 	vi.mocked(listKvKeys).mockImplementation(async (_env, prefix) =>

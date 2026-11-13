@@ -4,7 +4,7 @@ import type { ActiveUsersSummary } from '../../src/activeUsers'
 import type { GrantSummary } from '../../src/grants'
 import type { DashboardModel } from '../../src/model'
 import type { ToolRow, ToolStats } from '../../src/tools'
-import type { TrafficSummary } from '../../src/traffic'
+import type { TrafficDays, TrafficLast24h } from '../../src/traffic'
 
 const DAY_MS = 86_400_000
 export const FIXTURE_NOW = new Date('2026-11-12T15:30:00.000Z')
@@ -48,14 +48,18 @@ export function fixtureActiveUsers(): ActiveUsersSummary {
 	}
 }
 
-export function fixtureTraffic(): TrafficSummary {
+export function fixtureTrafficDays(): TrafficDays {
 	return {
+		computedAt: '2026-11-12T15:17:00.000Z',
 		days: fixtureDates().map((date, i) => {
 			const requests = 38_000 + ((i * 2_731) % 11_000) + (i === 29 ? -20_000 : 0)
 			return { date, requests, errors: i === 21 ? 64 : (i * 3) % 7, disconnected: Math.round(requests * 0.11) }
 		}),
-		last24h: { requests: 44_812, errors: 9 },
 	}
+}
+
+export function fixtureTraffic24h(): TrafficLast24h {
+	return { requests: 44_812, errors: 9 }
 }
 
 function toolRow(tool: string, calls: number, extra: Partial<ToolRow> = {}): ToolRow {
@@ -94,7 +98,8 @@ export function fixtureModel(): DashboardModel {
 		generatedAt: FIXTURE_NOW.toISOString(),
 		activeUsers: fixtureActiveUsers(),
 		grants: fixtureGrants(),
-		traffic: fixtureTraffic(),
+		trafficDays: fixtureTrafficDays(),
+		traffic24h: fixtureTraffic24h(),
 		tools: fixtureTools(),
 	}
 }

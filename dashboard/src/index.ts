@@ -7,6 +7,7 @@ import type { DashEnv } from './env'
 import { refreshGrantSummary } from './grants'
 import { buildDashboardModel } from './model'
 import { renderDashboard } from './page'
+import { refreshTrafficDays } from './traffic'
 
 /** Marks a warm-up refresh as started, so reloads before the first summary exists don't each start another one */
 const WARMUP_KEY = 'warmup:grants'
@@ -47,13 +48,25 @@ async function refreshActiveUsersSafely(env: DashEnv, now: Date): Promise<void> 
 	}
 }
 
+/** Refreshes the 30-day traffic summary and contains any failure, logging only the status, as for the grant summary */
+async function refreshTrafficSafely(env: DashEnv, now: Date): Promise<void> {
+	try {
+		await refreshTrafficDays(env, now)
+	} catch (error) {
+		// The previous summary stays in DASH_KV
+		const status = error instanceof CfApiError ? ` (status ${error.status})` : ''
+		console.error(`[STATS] traffic refresh failed${status}`)
+	}
+}
+
 /**
- * Runs both hourly refreshes, each failure contained to its own summary. Active users go first: they're the headline
- * numbers. The shared per-invocation budget is worked through in activeUsers.ts.
+ * Runs the three hourly refreshes, each failure contained to its own summary. Active users go first: they're the headline
+ * numbers. The shared per-invocation budget is worked through in activeUsers.ts; traffic adds one query and one write.
  */
 async function refreshAll(env: DashEnv, now: Date): Promise<void> {
 	await refreshActiveUsersSafely(env, now)
 	await refreshGrantsSafely(env, now)
+	await refreshTrafficSafely(env, now)
 }
 
 /** Starts the summary refreshes after the response, unless one was started within the warm-up window */
@@ -75,7 +88,7 @@ export default {
 		const url = new URL(request.url)
 		if (request.method === 'GET' && url.pathname === '/') {
 			const model = await buildDashboardModel(env)
-			if (model.grants === null || model.activeUsers === null) await startWarmup(env, ctx)
+			if (model.grants === null || model.activeUsers === null || model.trafficDays === null) await startWarmup(env, ctx)
 			return new Response(renderDashboard(model), { headers: PAGE_HEADERS })
 		}
 		return new Response('Not found', { status: 404, headers: { 'Content-Type': 'text/plain; charset=utf-8' } })

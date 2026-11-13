@@ -12,16 +12,19 @@ import {
 	userIdFromTokenKey,
 } from '../src/activeUsers'
 import type { ActiveUsersSummary } from '../src/activeUsers'
-import { CfApiError, getKvJson, listKvKeys } from '../src/cfApi'
+import { analyticsSqlApi, CfApiError, getKvJson, listKvKeys } from '../src/cfApi'
 import type { KvKey } from '../src/cfApi'
 import type { DashEnv } from '../src/env'
 import { readGrantSummary } from '../src/grants'
+import { readTrafficDays } from '../src/traffic'
 import worker from '../src/index'
 
 vi.mock('../src/cfApi', async (importOriginal) => ({
 	...(await importOriginal<typeof import('../src/cfApi')>()),
 	listKvKeys: vi.fn(),
 	getKvJson: vi.fn(),
+	// The scheduled handler also refreshes traffic, which must never reach the real Analytics SQL API
+	analyticsSqlApi: vi.fn(),
 }))
 
 const DAY = 86400
@@ -95,6 +98,7 @@ async function markerKeys(): Promise<string[]> {
 
 beforeEach(async () => {
 	vi.clearAllMocks()
+	vi.mocked(analyticsSqlApi).mockResolvedValue([])
 	tokenKeys = []
 	puts = []
 	vi.mocked(listKvKeys).mockImplementation(async (_env, prefix) => tokenKeys.filter(({ name }) => name.startsWith(prefix)))
@@ -359,12 +363,33 @@ describe('refreshActiveUsers', () => {
 })
 
 describe('scheduled', () => {
-	it('should refresh active users and the grant summary in the same run', async () => {
+	it('should refresh active users, the grant summary and the daily traffic in the same run', async () => {
 		activeNow(ALICE, BOB)
 
 		await worker.scheduled(createScheduledController({ scheduledTime: NOW, cron: '17 * * * *' }), testEnv())
 
 		expect((await readActiveUsersSummary(testEnv()))?.dau).toBe(2)
+		expect(await readGrantSummary(testEnv())).not.toBeNull()
+		expect((await readTrafficDays(testEnv()))?.computedAt).toBe(NOW.toISOString())
+	})
+
+	it('should log a failed traffic refresh by status only, and still refresh the other summaries', async () => {
+		const consoleSpies = (['error', 'warn', 'log', 'info', 'debug'] as const).map((method) =>
+			vi.spyOn(console, method).mockImplementation(() => {}),
+		)
+		activeNow(ALICE)
+		vi.mocked(analyticsSqlApi).mockRejectedValue(new CfApiError(429, `Analytics SQL API failed (429): token:${ALICE}:x:y`))
+
+		await expect(
+			worker.scheduled(createScheduledController({ scheduledTime: NOW, cron: '17 * * * *' }), testEnv()),
+		).resolves.toBeUndefined()
+
+		const [errorSpy] = consoleSpies
+		expect(errorSpy).toHaveBeenCalledExactlyOnceWith('[STATS] traffic refresh failed (status 429)')
+		const logged = JSON.stringify(consoleSpies.flatMap((spy) => spy.mock.calls))
+		for (const username of USERNAMES) expect(logged).not.toContain(username)
+		expect(await readTrafficDays(testEnv())).toBeNull()
+		expect((await readActiveUsersSummary(testEnv()))?.dau).toBe(1)
 		expect(await readGrantSummary(testEnv())).not.toBeNull()
 	})
 

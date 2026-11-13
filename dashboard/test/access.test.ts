@@ -21,6 +21,8 @@ const accessEnv: DashEnv = { ...env, ACCESS_AUD: AUD }
 /** The same, with an HMAC key, so active users are counted */
 const configuredEnv: DashEnv = { ...accessEnv, ACTIVE_USER_HMAC_KEY: 'a'.repeat(32) }
 
+const TRAFFIC_DAYS = { computedAt: '2026-11-12T15:17:00.000Z', days: [] }
+
 const GRANT_SUMMARY = {
 	computedAt: '2026-11-12T15:17:00.000Z',
 	liveGrants: 3,
@@ -198,8 +200,9 @@ describe('dashboard Worker fetch', () => {
 		expect(kvListCalls()).toBe(listsAfterFirst)
 	})
 
-	it('should not start a refresh when the grant summary exists and active users are not configured', async () => {
+	it('should not start a refresh when the grant and traffic summaries exist and active users are not configured', async () => {
 		await env.DASH_KV.put('summary:grants', JSON.stringify(GRANT_SUMMARY))
+		await env.DASH_KV.put('summary:traffic-days', JSON.stringify(TRAFFIC_DAYS))
 
 		const html = await (await serve(requestWith(await signToken()))).text()
 
@@ -210,6 +213,7 @@ describe('dashboard Worker fetch', () => {
 
 	it('should start a refresh when active users are configured but have no summary yet', async () => {
 		await env.DASH_KV.put('summary:grants', JSON.stringify(GRANT_SUMMARY))
+		await env.DASH_KV.put('summary:traffic-days', JSON.stringify(TRAFFIC_DAYS))
 
 		const html = await (await serve(requestWith(await signToken()), configuredEnv)).text()
 
@@ -218,8 +222,19 @@ describe('dashboard Worker fetch', () => {
 		expect(kvListCalls()).toBeGreaterThan(0)
 	})
 
-	it('should not start a refresh when both summaries exist', async () => {
+	it('should start a refresh when the daily traffic summary is missing', async () => {
 		await env.DASH_KV.put('summary:grants', JSON.stringify(GRANT_SUMMARY))
+
+		const html = await (await serve(requestWith(await signToken()))).text()
+
+		expect(html).toContain('warming up: the first 30-day traffic count is being computed')
+		expect(errorSpy).toHaveBeenCalledWith('[STATS] traffic refresh failed (status 403)')
+		expect(kvListCalls()).toBeGreaterThan(0)
+	})
+
+	it('should not start a refresh when every summary exists', async () => {
+		await env.DASH_KV.put('summary:grants', JSON.stringify(GRANT_SUMMARY))
+		await env.DASH_KV.put('summary:traffic-days', JSON.stringify(TRAFFIC_DAYS))
 		await env.DASH_KV.put(
 			'summary:active-users',
 			JSON.stringify({ computedAt: '2026-11-12T15:17:00.000Z', dau: 1, wau: 1, mau: 1, activeByDay: [], activeSince: '2026-11-12' }),

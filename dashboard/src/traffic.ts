@@ -1,15 +1,29 @@
-// ABOUTME: Daily request, error and client-disconnect counts for the production MCP Worker from the Analytics SQL API (beta).
-// ABOUTME: Two queries over events.workersInvocations run in parallel: 30 days by hour and status, added into Pacific days, and the last 24 hours.
+// ABOUTME: Request, error and client-disconnect counts for the production MCP Worker from the Analytics SQL API (beta).
+// ABOUTME: The hourly cron stores 30 Pacific days, added up from hourly rows, in DASH_KV; the page queries the last 24 hours live.
 import { analyticsSqlApi, toCount } from './cfApi'
 import type { DashEnv } from './env'
 import { lastPacificDates, pacificDate } from './pacific'
 
-export interface TrafficSummary {
-	/** The last 30 Pacific days, oldest first, zero-filled */
-	days: Array<{ date: string; requests: number; errors: number; disconnected: number }>
-	last24h: { requests: number; errors: number }
+export interface TrafficDay {
+	date: string
+	requests: number
+	errors: number
+	disconnected: number
 }
 
+/** The cron's 30-day summary: the 30-day query takes about 7 seconds uncached, too slow to run on a page load */
+export interface TrafficDays {
+	computedAt: string
+	/** The last 30 Pacific days as of computedAt, oldest first, zero-filled */
+	days: TrafficDay[]
+}
+
+export interface TrafficLast24h {
+	requests: number
+	errors: number
+}
+
+const SUMMARY_KEY = 'summary:traffic-days'
 const DAYS = 30
 const HOUR_MS = 3_600_000
 const DAY_MS = 24 * HOUR_MS
@@ -87,24 +101,26 @@ function sqlTimestamp(ms: number): string {
 	return `${new Date(ms).toISOString().slice(0, 19)}Z`
 }
 
-/** Fetches the 30-day daily traffic and the last 24 hours for the production MCP Worker (`SCRIPT_NAME`) */
-export async function fetchTraffic(env: DashEnv, now: Date = new Date()): Promise<TrafficSummary> {
-	const scriptName = env.SCRIPT_NAME
-	if (!SCRIPT_NAME.test(scriptName)) throw new Error('SCRIPT_NAME is not a valid Worker script name')
+/** A SCRIPT_NAME safe to interpolate into SQL; it throws before any query is sent otherwise */
+function scriptNameOf(env: DashEnv): string {
+	if (!SCRIPT_NAME.test(env.SCRIPT_NAME)) throw new Error('SCRIPT_NAME is not a valid Worker script name')
+	return env.SCRIPT_NAME
+}
 
-	const nowMs = now.getTime()
+/**
+ * Recomputes the last 30 Pacific days of traffic for the production MCP Worker (`SCRIPT_NAME`) and stores them at
+ * `summary:traffic-days`. A failed query rejects and leaves the previous summary in place.
+ */
+export async function refreshTrafficDays(env: DashEnv, now: Date = new Date()): Promise<TrafficDays> {
+	const scriptName = scriptNameOf(env)
 	const dates = lastPacificDates(now, DAYS)
 	// UTC midnight of the first Pacific date is 7 or 8 hours before that day starts in Pacific time; the extra hours are
 	// dropped below. The upper bound is the end of the current hour.
 	const sinceMs = Date.parse(dates[0])
-	const untilMs = Math.floor(nowMs / HOUR_MS) * HOUR_MS + HOUR_MS
+	const untilMs = Math.floor(now.getTime() / HOUR_MS) * HOUR_MS + HOUR_MS
+	const hourRows = await analyticsSqlApi<HourSqlRow>(env, dailySql(scriptName, sqlTimestamp(sinceMs), sqlTimestamp(untilMs)))
 
-	const [hourRows, totalsRows] = await Promise.all([
-		analyticsSqlApi<HourSqlRow>(env, dailySql(scriptName, sqlTimestamp(sinceMs), sqlTimestamp(untilMs))),
-		analyticsSqlApi<TotalsSqlRow>(env, last24hSql(scriptName, sqlTimestamp(nowMs - DAY_MS), sqlTimestamp(nowMs))),
-	])
-
-	const byDate = new Map(dates.map((date) => [date, { date, requests: 0, errors: 0, disconnected: 0 }]))
+	const byDate = new Map(dates.map((date): [string, TrafficDay] => [date, { date, requests: 0, errors: 0, disconnected: 0 }]))
 	for (const row of hourRows) {
 		const hourMs = parseHour(row.hour)
 		if (!Number.isFinite(hourMs)) continue
@@ -117,11 +133,26 @@ export async function fetchTraffic(env: DashEnv, now: Date = new Date()): Promis
 		else if (!NON_ERROR.has(status)) day.errors += requests
 	}
 
+	const summary: TrafficDays = { computedAt: now.toISOString(), days: [...byDate.values()] }
+	await env.DASH_KV.put(SUMMARY_KEY, JSON.stringify(summary))
+	return summary
+}
+
+/** The stored 30-day traffic summary, or null before the first refresh */
+export async function readTrafficDays(env: DashEnv): Promise<TrafficDays | null> {
+	return env.DASH_KV.get<TrafficDays>(SUMMARY_KEY, 'json')
+}
+
+/** Counts the production MCP Worker's requests and errors over the 24 hours before `now` */
+export async function fetchTrafficLast24h(env: DashEnv, now: Date = new Date()): Promise<TrafficLast24h> {
+	const scriptName = scriptNameOf(env)
+	const nowMs = now.getTime()
+	const rows = await analyticsSqlApi<TotalsSqlRow>(env, last24hSql(scriptName, sqlTimestamp(nowMs - DAY_MS), sqlTimestamp(nowMs)))
+
 	const last24h = { requests: 0, errors: 0 }
-	for (const row of totalsRows) {
+	for (const row of rows) {
 		last24h.requests += toCount(row.requests)
 		last24h.errors += toCount(row.errors)
 	}
-
-	return { days: [...byDate.values()], last24h }
+	return last24h
 }
