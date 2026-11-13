@@ -5,14 +5,14 @@ import { describe, expect, it } from 'vitest'
 import type { DashboardModel } from '../src/model'
 import { renderDashboard } from '../src/page'
 import type { ToolStats } from '../src/tools'
-import type { TrafficSummary } from '../src/traffic'
+import type { TrafficDays } from '../src/traffic'
 import type { ActiveUsersSummary } from '../src/activeUsers'
 import { fixtureActiveUsers, fixtureDates, fixtureGrants, fixtureModel, fixtureTools } from './fixtures/model'
 
 const EMPTY_TOOLS: ToolStats = { firstEventAt: null, last24h: [], last7d: [], clients7d: [] }
 
-function zeroTraffic(): TrafficSummary {
-	return { days: fixtureDates().map((date) => ({ date, requests: 0, errors: 0, disconnected: 0 })), last24h: { requests: 0, errors: 0 } }
+function zeroTrafficDays(): TrafficDays {
+	return { computedAt: '2026-11-12T15:17:00.000Z', days: fixtureDates().map((date) => ({ date, requests: 0, errors: 0, disconnected: 0 })) }
 }
 
 function activeUsers(fields: Partial<ActiveUsersSummary>): ActiveUsersSummary {
@@ -112,13 +112,39 @@ describe('renderDashboard', () => {
 		expectNoBrokenNumbers(html)
 	})
 
-	it('should show a failed traffic load in its tiles and chart, and keep the other panels', () => {
-		const html = renderDashboard({ ...fixtureModel(), traffic: { error: 'HTTP 429' } })
+	it('should show a failed 24-hour traffic load in its tiles, and keep the chart and the other panels', () => {
+		const html = renderDashboard({ ...fixtureModel(), traffic24h: { error: 'HTTP 429' } })
 
-		expect(html.match(/couldn't load: HTTP 429/g)?.length).toBeGreaterThanOrEqual(2)
+		expect(tileText(html, 'Requests, last 24 hours')).toBe("— couldn't load: HTTP 429")
+		expect(tileText(html, 'Error rate, last 24 hours')).toBe("— couldn't load: HTTP 429")
+		expect(html).toContain('Daily requests over the last 30 days')
 		expect(html).toContain('get_recent_tracks')
 		expect(html).toContain('>512<')
 		expectNoBrokenNumbers(html)
+	})
+
+	it('should show a failed daily traffic read in the chart panel only', () => {
+		const html = renderDashboard({ ...fixtureModel(), trafficDays: { error: 'unexpected error' } })
+
+		expect(html).toMatch(/Requests, last 30 days<\/h2>\s*<p class="load-error">.*?couldn't load: unexpected error/)
+		expect(html).not.toContain('Daily requests over the last 30 days')
+		expect(tileText(html, 'Requests, last 24 hours')).toBe('44,812')
+		expectNoBrokenNumbers(html)
+	})
+
+	it('should say the daily traffic is warming up before the first cron run, and keep the 24-hour tiles', () => {
+		const html = renderDashboard({ ...fixtureModel(), trafficDays: null })
+
+		expect(html).toContain('warming up: the first 30-day traffic count is being computed, so check back in a few minutes')
+		expect(html).not.toContain('Daily requests over the last 30 days')
+		expect(tileText(html, 'Requests, last 24 hours')).toBe('44,812')
+		expectNoBrokenNumbers(html)
+	})
+
+	it('should say when the daily traffic was computed and that it refreshes hourly', () => {
+		const html = renderDashboard(fixtureModel())
+
+		expect(html).toContain('Daily counts computed 2026-11-12 07:17 PST; they refresh hourly.')
 	})
 
 	it('should show a failed grant summary read in the grant panels', () => {
@@ -138,7 +164,12 @@ describe('renderDashboard', () => {
 	})
 
 	it('should never print NaN, Infinity or undefined with no tool data and a tool with no cache lookups', () => {
-		const empty = renderDashboard({ ...fixtureModel(), tools: EMPTY_TOOLS, traffic: zeroTraffic() })
+		const empty = renderDashboard({
+			...fixtureModel(),
+			tools: EMPTY_TOOLS,
+			trafficDays: zeroTrafficDays(),
+			traffic24h: { requests: 0, errors: 0 },
+		})
 		expect(empty).toContain('no data yet')
 		expect(empty).toContain('No tool events yet')
 		expectNoBrokenNumbers(empty)
@@ -216,7 +247,9 @@ describe('renderDashboard', () => {
 		expect(html).toContain(
 			"Errors are requests that threw an uncaught exception or hit a Workers limit such as CPU or memory. Requests closed by the client aren't errors; tool failures are in the Tools table.",
 		)
-		expect(html).toContain('Traffic comes from the Analytics SQL API (beta). Traffic and tool numbers are cached for up to 5 minutes.')
+		expect(html).toContain(
+			'Traffic comes from the Analytics SQL API (beta). Daily traffic refreshes hourly; the 24-hour traffic and tool numbers are cached for up to 5 minutes.',
+		)
 		expect(html).not.toContain('GraphQL')
 		expect(html).toContain('Page generated 2026-11-12 07:30 PST')
 		expect(html).toContain('Grant summary computed 2026-11-12 07:17 PST')

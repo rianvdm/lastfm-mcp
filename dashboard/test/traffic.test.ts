@@ -1,11 +1,11 @@
-// ABOUTME: Tests the dashboard's 30-day traffic summary built from the Analytics SQL API (beta) for the production MCP Worker.
-// ABOUTME: Replaces the SQL client with canned rows and checks zero-filled days, status splits, the 24-hour totals and the SQL text.
+// ABOUTME: Tests the dashboard's traffic loads from the Analytics SQL API (beta): the cron's 30-day summary and the live 24-hour totals.
+// ABOUTME: Replaces the SQL client with canned rows and checks zero-filled days, status splits, the stored summary and the SQL text.
 import { env } from 'cloudflare:test'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { MockInstance } from 'vitest'
 
 import { analyticsSqlApi, CfApiError } from '../src/cfApi'
-import { fetchTraffic } from '../src/traffic'
+import { fetchTrafficLast24h, readTrafficDays, refreshTrafficDays } from '../src/traffic'
 
 vi.mock('../src/cfApi', async (importOriginal) => ({
 	...(await importOriginal<typeof import('../src/cfApi')>()),
@@ -40,17 +40,23 @@ function respond(days: HourRow[], totals: TotalsRow[]): void {
 	sqlMock.mockImplementation(async (_env, sql) => (isDailyQuery(sql) ? days : totals) as never)
 }
 
-function sentQueries(): { daily: string; last24h: string } {
+/** The one query sent, which must be the daily one (`daily`) or the 24-hour one */
+function sentQuery(daily: boolean): string {
 	const queries = sqlMock.mock.calls.map(([, sql]) => sql)
-	const daily = queries.find(isDailyQuery)
-	const last24h = queries.find((sql) => !isDailyQuery(sql))
-	if (!daily || !last24h) throw new Error('expected one daily and one 24-hour query')
-	return { daily, last24h }
+	expect(queries).toHaveLength(1)
+	expect(isDailyQuery(queries[0])).toBe(daily)
+	return queries[0]
+}
+
+async function clearDashKv(): Promise<void> {
+	const { keys } = await env.DASH_KV.list()
+	await Promise.all(keys.map(({ name }) => env.DASH_KV.delete(name)))
 }
 
 let fetchSpy: MockInstance<typeof fetch>
 
-beforeEach(() => {
+beforeEach(async () => {
+	await clearDashKv()
 	// The SQL client is mocked; a real request reaching fetch would mean the mock leaked
 	fetchSpy = vi.spyOn(globalThis, 'fetch').mockRejectedValue(new Error('traffic tests must not reach the network'))
 })
@@ -61,7 +67,7 @@ afterEach(() => {
 	vi.resetAllMocks()
 })
 
-describe('fetchTraffic', () => {
+describe('refreshTrafficDays', () => {
 	it('should add the hourly SQL rows into 30 zero-filled Pacific days, oldest first, split into requests, errors and disconnects', async () => {
 		respond(
 			[
@@ -74,11 +80,12 @@ describe('fetchTraffic', () => {
 				{ hour: '2026-11-09 20:00:00', status: 'success', requests: 100 },
 				{ hour: '2026-10-14 12:00:00', status: 'success', requests: '3' },
 			],
-			[{ requests: '44000', errors: '5' }],
+			[],
 		)
 
-		const traffic = await fetchTraffic(env, NOW)
+		const traffic = await refreshTrafficDays(env, NOW)
 
+		expect(traffic.computedAt).toBe(NOW.toISOString())
 		expect(traffic.days).toHaveLength(30)
 		expect(traffic.days[0]).toEqual({ date: '2026-10-14', requests: 3, errors: 0, disconnected: 0 })
 		expect(traffic.days[29]).toEqual({ date: '2026-11-12', requests: 45302, errors: 2, disconnected: 5300 })
@@ -88,18 +95,55 @@ describe('fetchTraffic', () => {
 		const dates = traffic.days.map((day) => day.date)
 		expect(new Set(dates).size).toBe(30)
 		expect([...dates].sort()).toEqual(dates)
-		expect(traffic.last24h).toEqual({ requests: 44000, errors: 5 })
+	})
+
+	it('should store the summary in DASH_KV for the page to read', async () => {
+		respond([{ hour: '2026-11-12 10:00:00', status: 'success', requests: 5 }], [])
+
+		const traffic = await refreshTrafficDays(env, NOW)
+
+		expect(await readTrafficDays(env)).toEqual(traffic)
+	})
+
+	it('should keep the previous summary when the query fails', async () => {
+		respond([{ hour: '2026-11-12 10:00:00', status: 'success', requests: 5 }], [])
+		const first = await refreshTrafficDays(env, NOW)
+		sqlMock.mockRejectedValue(new CfApiError(422, 'Analytics SQL API failed (422): unknown column'))
+
+		await expect(refreshTrafficDays(env, new Date(NOW.getTime() + 3_600_000))).rejects.toMatchObject({ status: 422 })
+
+		expect(await readTrafficDays(env)).toEqual(first)
+	})
+
+	it('should read null before the first refresh', async () => {
+		expect(await readTrafficDays(env)).toBeNull()
+	})
+
+	it.each([
+		['no days', { computedAt: '2026-11-12T15:17:00.000Z' }],
+		['days that are not a list', { computedAt: '2026-11-12T15:17:00.000Z', days: null }],
+		['a day without a date', { computedAt: '2026-11-12T15:17:00.000Z', days: [{ requests: 1, errors: 0, disconnected: 0 }] }],
+		[
+			'a count that is not a number',
+			{ computedAt: '2026-11-12T15:17:00.000Z', days: [{ date: '2026-11-12', requests: '1', errors: 0, disconnected: 0 }] },
+		],
+		['no computedAt', { days: [] }],
+		['a value that is not an object', 'oops'],
+	])('should read a stored summary with %s as null', async (_case, stored) => {
+		await env.DASH_KV.put('summary:traffic-days', JSON.stringify(stored))
+
+		expect(await readTrafficDays(env)).toBeNull()
 	})
 
 	it('should put an evening hour on its Pacific date when UTC has already reached the next day', async () => {
 		respond([{ hour: '2026-11-13 02:00:00', status: 'success', requests: 12 }], [])
 
-		const traffic = await fetchTraffic(env, new Date('2026-11-13T02:30:00.000Z'))
+		const traffic = await refreshTrafficDays(env, new Date('2026-11-13T02:30:00.000Z'))
 
 		expect(traffic.days[29]).toEqual({ date: '2026-11-12', requests: 12, errors: 0, disconnected: 0 })
 		expect(traffic.days[0].date).toBe('2026-10-14')
-		expect(sentQueries().daily).toContain("timestamp >= '2026-10-14T00:00:00Z'")
-		expect(sentQueries().daily).toContain("timestamp < '2026-11-13T03:00:00Z'")
+		expect(sentQuery(true)).toContain("timestamp >= '2026-10-14T00:00:00Z'")
+		expect(sentQuery(true)).toContain("timestamp < '2026-11-13T03:00:00Z'")
 	})
 
 	it('should put both 1am hours of the November DST change, and its late evening, on Nov 1', async () => {
@@ -116,7 +160,7 @@ describe('fetchTraffic', () => {
 			[],
 		)
 
-		const traffic = await fetchTraffic(env, NOW)
+		const traffic = await refreshTrafficDays(env, NOW)
 
 		const byDate = new Map(traffic.days.map((day) => [day.date, day.requests]))
 		expect(byDate.get('2026-10-31')).toBe(1)
@@ -125,20 +169,19 @@ describe('fetchTraffic', () => {
 	})
 
 	it('should count a value that is not a number as zero', async () => {
-		respond([{ hour: '2026-11-12 10:00:00', status: 'success', requests: 'lots' }], [{ requests: '', errors: 'n/a' }])
+		respond([{ hour: '2026-11-12 10:00:00', status: 'success', requests: 'lots' }], [])
 
-		const traffic = await fetchTraffic(env, NOW)
+		const traffic = await refreshTrafficDays(env, NOW)
 
 		expect(traffic.days[29]).toEqual({ date: '2026-11-12', requests: 0, errors: 0, disconnected: 0 })
-		expect(traffic.last24h).toEqual({ requests: 0, errors: 0 })
 	})
 
 	it('should query the production script by hour from the UTC midnight before the first Pacific day, with literal time bounds', async () => {
 		respond([], [])
 
-		await fetchTraffic(env, NOW)
+		await refreshTrafficDays(env, NOW)
 
-		const { daily } = sentQueries()
+		const daily = sentQuery(true)
 		expect(daily).toContain('FROM events.workersInvocations')
 		expect(daily).toContain(`scriptName = '${env.SCRIPT_NAME}'`)
 		expect(daily).toContain("timestamp >= '2026-10-14T00:00:00Z'")
@@ -150,12 +193,40 @@ describe('fetchTraffic', () => {
 		expect(daily).not.toContain('toDate(')
 	})
 
-	it('should count the last 24 hours with count() and the agreed countIf error rule', async () => {
+	it('should ignore rows outside the window or without a usable hour', async () => {
+		respond(
+			[
+				// 20:00 PDT on Oct 13, before the window's first Pacific day
+				{ hour: '2026-10-14 03:00:00', status: 'success', requests: 999 },
+				// 01:00 PST on Nov 13, after today
+				{ hour: '2026-11-13 09:00:00', status: 'success', requests: 999 },
+				{ hour: 'garbage', status: 'success', requests: 999 },
+			],
+			[],
+		)
+
+		const traffic = await refreshTrafficDays(env, NOW)
+
+		expect(traffic.days.every((day) => day.requests === 0 && day.errors === 0)).toBe(true)
+	})
+
+	it('should report 30 zero days when the script has no rows at all', async () => {
 		respond([], [])
 
-		await fetchTraffic(env, NOW)
+		const traffic = await refreshTrafficDays(env, NOW)
 
-		const { last24h } = sentQueries()
+		expect(traffic.days).toHaveLength(30)
+		expect(traffic.days.every((day) => day.requests === 0)).toBe(true)
+	})
+})
+
+describe('fetchTrafficLast24h', () => {
+	it('should send only the 24-hour query, with count() and the agreed countIf error rule', async () => {
+		respond([], [{ requests: '44000', errors: '5' }])
+
+		expect(await fetchTrafficLast24h(env, NOW)).toEqual({ requests: 44000, errors: 5 })
+
+		const last24h = sentQuery(false)
 		expect(last24h).toContain('FROM events.workersInvocations')
 		expect(last24h).toContain(`scriptName = '${env.SCRIPT_NAME}'`)
 		expect(last24h).toContain("timestamp >= '2026-11-11T15:30:00Z'")
@@ -164,12 +235,42 @@ describe('fetchTraffic', () => {
 		expect(last24h).toContain(`${ERRORS_EXPR} AS errors`)
 	})
 
+	it('should sum every row and count a value that is not a number as zero', async () => {
+		respond(
+			[],
+			[
+				{ requests: 10, errors: 1 },
+				{ requests: '5', errors: '0' },
+				{ requests: '', errors: 'n/a' },
+			],
+		)
+
+		expect(await fetchTrafficLast24h(env, NOW)).toEqual({ requests: 15, errors: 1 })
+	})
+
+	it('should report zero when there are no rows at all', async () => {
+		respond([], [])
+
+		expect(await fetchTrafficLast24h(env, NOW)).toEqual({ requests: 0, errors: 0 })
+	})
+
+	it('should reject when the query fails', async () => {
+		sqlMock.mockRejectedValue(new CfApiError(403, 'Analytics SQL API failed (403): Authentication error'))
+
+		await expect(fetchTrafficLast24h(env, NOW)).rejects.toMatchObject({ status: 403 })
+	})
+})
+
+describe('both traffic loads', () => {
 	it('should never weight by sampleInterval or use what the dataset rejects', async () => {
 		respond([], [])
 
-		await fetchTraffic(env, NOW)
+		await refreshTrafficDays(env, NOW)
+		await fetchTrafficLast24h(env, NOW)
 
-		for (const sql of Object.values(sentQueries())) {
+		const queries = sqlMock.mock.calls.map(([, sql]) => sql)
+		expect(queries).toHaveLength(2)
+		for (const sql of queries) {
 			expect(sql).not.toMatch(/sampleInterval/i)
 			expect(sql).not.toMatch(/\bFORMAT\b/i)
 			expect(sql).not.toMatch(/\b(MIN|MAX)\s*\(/i)
@@ -179,77 +280,14 @@ describe('fetchTraffic', () => {
 		}
 	})
 
-	it('should send both queries before either answers', async () => {
-		let release: () => void = () => {}
-		const gate = new Promise<void>((resolve) => {
-			release = resolve
-		})
-		sqlMock.mockImplementation(async () => {
-			await gate
-			return []
-		})
-
-		const pending = fetchTraffic(env, NOW)
-		await Promise.resolve()
-
-		expect(sqlMock).toHaveBeenCalledTimes(2)
-		release()
-		await expect(pending).resolves.toMatchObject({ last24h: { requests: 0, errors: 0 } })
-	})
-
-	it('should ignore rows outside the window or without a usable hour, and sum every 24-hour row', async () => {
-		respond(
-			[
-				// 20:00 PDT on Oct 13, before the window's first Pacific day
-				{ hour: '2026-10-14 03:00:00', status: 'success', requests: 999 },
-				// 01:00 PST on Nov 13, after today
-				{ hour: '2026-11-13 09:00:00', status: 'success', requests: 999 },
-				{ hour: 'garbage', status: 'success', requests: 999 },
-			],
-			[
-				{ requests: 10, errors: 1 },
-				{ requests: '5', errors: '0' },
-			],
-		)
-
-		const traffic = await fetchTraffic(env, NOW)
-
-		expect(traffic.days.every((day) => day.requests === 0 && day.errors === 0)).toBe(true)
-		expect(traffic.last24h).toEqual({ requests: 15, errors: 1 })
-	})
-
-	it('should report zero traffic when the script has no rows at all', async () => {
-		respond([], [])
-
-		const traffic = await fetchTraffic(env, NOW)
-
-		expect(traffic.days).toHaveLength(30)
-		expect(traffic.last24h).toEqual({ requests: 0, errors: 0 })
-	})
-
 	it('should refuse a SCRIPT_NAME that is not a plain identifier before sending any query', async () => {
 		respond([], [])
 
-		await expect(fetchTraffic({ ...env, SCRIPT_NAME: "lastfm-mcp-prod' OR '1'='1" }, NOW)).rejects.toThrow(/SCRIPT_NAME/)
-		await expect(fetchTraffic({ ...env, SCRIPT_NAME: '' }, NOW)).rejects.toThrow(/SCRIPT_NAME/)
+		for (const SCRIPT_NAME of ["lastfm-mcp-prod' OR '1'='1", '']) {
+			await expect(refreshTrafficDays({ ...env, SCRIPT_NAME }, NOW)).rejects.toThrow(/SCRIPT_NAME/)
+			await expect(fetchTrafficLast24h({ ...env, SCRIPT_NAME }, NOW)).rejects.toThrow(/SCRIPT_NAME/)
+		}
 		expect(sqlMock).not.toHaveBeenCalled()
-	})
-
-	it('should reject when the daily query fails, even though the 24-hour query succeeds', async () => {
-		sqlMock.mockImplementation(async (_env, sql) => {
-			if (isDailyQuery(sql)) throw new CfApiError(422, 'Analytics SQL API failed (422): unknown column')
-			return [{ requests: 1, errors: 0 }] as never
-		})
-
-		await expect(fetchTraffic(env, NOW)).rejects.toMatchObject({ status: 422 })
-	})
-
-	it('should reject when the 24-hour query fails, even though the daily query succeeds', async () => {
-		sqlMock.mockImplementation(async (_env, sql) => {
-			if (!isDailyQuery(sql)) throw new CfApiError(403, 'Analytics SQL API failed (403): Authentication error')
-			return [] as never
-		})
-
-		await expect(fetchTraffic(env, NOW)).rejects.toMatchObject({ status: 403 })
+		expect(await readTrafficDays(env)).toBeNull()
 	})
 })

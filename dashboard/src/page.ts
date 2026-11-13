@@ -6,7 +6,6 @@ import { isLoadError, isNotConfigured } from './model'
 import type { DashboardModel, LoadError } from './model'
 import { addDays, formatPacificTime, pacificDate } from './pacific'
 import type { ToolRow, ToolStats } from './tools'
-import type { TrafficSummary } from './traffic'
 
 const DASH = '—'
 const NO_DATA = 'no data yet'
@@ -203,12 +202,12 @@ function renderTiles(model: DashboardModel): string {
 			(g) => formatCount(g.signInsLast7d),
 			() => 'Sign-in events, not new users',
 		),
-		sourcedTile('Requests, last 24 hours', model.traffic, (t) => formatCount(t.last24h.requests)),
+		sourcedTile('Requests, last 24 hours', model.traffic24h, (t) => formatCount(t.requests)),
 		sourcedTile(
 			'Error rate, last 24 hours',
-			model.traffic,
-			(t) => formatPercent(ratio(t.last24h.errors, t.last24h.requests)),
-			(t) => `${formatCount(t.last24h.errors)} errors`,
+			model.traffic24h,
+			(t) => formatPercent(ratio(t.errors, t.requests)),
+			(t) => `${formatCount(t.errors)} errors`,
 		),
 		sourcedTile(
 			'Tool calls, last 24 hours',
@@ -394,9 +393,13 @@ const REQUEST_SERIES: ChartSeries[] = [
 	{ name: 'Closed by client', color: '--series-2' },
 ]
 
-function renderTrafficSection(traffic: TrafficSummary | LoadError): string {
+const TRAFFIC_WARMING_UP = 'warming up: the first 30-day traffic count is being computed, so check back in a few minutes'
+
+function renderTrafficSection(traffic: DashboardModel['trafficDays']): string {
 	let body: string
-	if (isLoadError(traffic)) {
+	if (traffic === null) {
+		body = emptyNote(TRAFFIC_WARMING_UP)
+	} else if (isLoadError(traffic)) {
 		body = loadErrorNote(traffic.error)
 	} else {
 		const days = traffic.days
@@ -406,7 +409,7 @@ function renderTrafficSection(traffic: TrafficSummary | LoadError): string {
 				`${formatDay(day.date)}: ${formatCount(day.requests)} requests (${formatCount(day.disconnected)} closed by client), ${formatCount(day.errors)} errors`,
 		)
 		body = `${legend(REQUEST_SERIES)}
-<p class="caption">Closed by client means the client hung up before the response finished. Most are MCP session streams held open for minutes or hours and dropped when a session ends, so they aren't errors.</p>
+<p class="caption">Closed by client means the client hung up before the response finished. Most are MCP session streams held open for minutes or hours and dropped when a session ends, so they aren't errors. Daily counts computed ${esc(formatTime(traffic.computedAt))}; they refresh hourly.</p>
 ${columnChart({
 	label: 'Daily requests over the last 30 days, split into served and closed by the client',
 	dates,
@@ -601,7 +604,7 @@ function renderNotes(model: DashboardModel): string {
 ${activeUsersNote(model.activeUsers)}
 ${tracking}
 <p>Errors are requests that threw an uncaught exception or hit a Workers limit such as CPU or memory. Requests closed by the client aren't errors; tool failures are in the Tools table.</p>
-<p>Traffic comes from the Analytics SQL API (beta). Traffic and tool numbers are cached for up to 5 minutes.</p>
+<p>Traffic comes from the Analytics SQL API (beta). Daily traffic refreshes hourly; the 24-hour traffic and tool numbers are cached for up to 5 minutes.</p>
 <p>Page generated ${esc(formatTime(model.generatedAt))}.${computed}</p>
 </footer>`
 }
@@ -749,7 +752,7 @@ export function renderDashboard(model: DashboardModel): string {
 </header>
 ${renderTiles(model)}
 ${renderActiveUsersSection(model.activeUsers)}
-${renderTrafficSection(model.traffic)}
+${renderTrafficSection(model.trafficDays)}
 ${renderSignInsSection(model.grants)}
 ${renderClientsSection(model)}
 ${renderToolsSection(model.tools)}

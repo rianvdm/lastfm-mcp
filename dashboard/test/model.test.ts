@@ -1,4 +1,4 @@
-// ABOUTME: Tests how the dashboard assembles its page model from the grant summary, traffic and tool loads.
+// ABOUTME: Tests how the dashboard assembles its page model from the cron's summaries and the live 24-hour traffic and tool loads.
 // ABOUTME: Mocks each load to check that one failure becomes a short reason for its panel, and that loads are cached in DASH_KV.
 import { env } from 'cloudflare:test'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -12,8 +12,8 @@ import type { GrantSummary } from '../src/grants'
 import { buildDashboardModel, loadFailureReason } from '../src/model'
 import { fetchToolStats } from '../src/tools'
 import type { ToolStats } from '../src/tools'
-import { fetchTraffic } from '../src/traffic'
-import type { TrafficSummary } from '../src/traffic'
+import { fetchTrafficLast24h, readTrafficDays } from '../src/traffic'
+import type { TrafficDays, TrafficLast24h } from '../src/traffic'
 
 vi.mock('../src/grants', async (importOriginal) => ({
 	...(await importOriginal<typeof import('../src/grants')>()),
@@ -23,7 +23,7 @@ vi.mock('../src/activeUsers', async (importOriginal) => ({
 	...(await importOriginal<typeof import('../src/activeUsers')>()),
 	readActiveUsersSummary: vi.fn(),
 }))
-vi.mock('../src/traffic', () => ({ fetchTraffic: vi.fn() }))
+vi.mock('../src/traffic', () => ({ fetchTrafficLast24h: vi.fn(), readTrafficDays: vi.fn() }))
 vi.mock('../src/tools', () => ({ fetchToolStats: vi.fn() }))
 
 const NOW = new Date('2026-11-12T15:30:00.000Z')
@@ -49,7 +49,8 @@ const ACTIVE: ActiveUsersSummary = {
 	activeSince: '2026-11-01',
 }
 const HMAC_KEY = 'h'.repeat(32)
-const TRAFFIC: TrafficSummary = { days: [], last24h: { requests: 10, errors: 1 } }
+const TRAFFIC_DAYS: TrafficDays = { computedAt: '2026-11-12T15:17:00.000Z', days: [] }
+const LAST_24H: TrafficLast24h = { requests: 10, errors: 1 }
 const TOOLS: ToolStats = { firstEventAt: null, last24h: [], last7d: [], clients7d: [] }
 
 // Read the spy through this handle: in workerd, reading console.error again doesn't return the spy
@@ -64,7 +65,8 @@ beforeEach(async () => {
 	await clearDashKv()
 	vi.mocked(readGrantSummary).mockResolvedValue(SUMMARY)
 	vi.mocked(readActiveUsersSummary).mockResolvedValue(ACTIVE)
-	vi.mocked(fetchTraffic).mockResolvedValue(TRAFFIC)
+	vi.mocked(readTrafficDays).mockResolvedValue(TRAFFIC_DAYS)
+	vi.mocked(fetchTrafficLast24h).mockResolvedValue(LAST_24H)
 	vi.mocked(fetchToolStats).mockResolvedValue(TOOLS)
 	errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
 })
@@ -75,12 +77,13 @@ afterEach(() => {
 })
 
 describe('buildDashboardModel', () => {
-	it('should combine the four loads', async () => {
+	it('should combine the five loads', async () => {
 		expect(await buildDashboardModel({ ...env, ACTIVE_USER_HMAC_KEY: HMAC_KEY }, NOW)).toEqual({
 			generatedAt: NOW.toISOString(),
 			activeUsers: ACTIVE,
 			grants: SUMMARY,
-			traffic: TRAFFIC,
+			trafficDays: TRAFFIC_DAYS,
+			traffic24h: LAST_24H,
 			tools: TOOLS,
 		})
 	})
@@ -111,6 +114,22 @@ describe('buildDashboardModel', () => {
 		expect(errorSpy).toHaveBeenCalledWith('[STATS] active users load failed: unexpected error')
 	})
 
+	it('should keep a missing daily traffic summary as null', async () => {
+		vi.mocked(readTrafficDays).mockResolvedValue(null)
+
+		expect((await buildDashboardModel(env, NOW)).trafficDays).toBeNull()
+	})
+
+	it('should turn a failed daily traffic read into an error for its panel and keep the 24-hour numbers', async () => {
+		vi.mocked(readTrafficDays).mockRejectedValue(new Error('KV down'))
+
+		const model = await buildDashboardModel(env, NOW)
+
+		expect(model.trafficDays).toEqual({ error: 'unexpected error' })
+		expect(model.traffic24h).toEqual(LAST_24H)
+		expect(errorSpy).toHaveBeenCalledWith('[STATS] daily traffic load failed: unexpected error')
+	})
+
 	it('should keep a missing grant summary as null', async () => {
 		vi.mocked(readGrantSummary).mockResolvedValue(null)
 
@@ -124,34 +143,36 @@ describe('buildDashboardModel', () => {
 
 		expect(model.tools).toEqual({ error: 'HTTP 403' })
 		expect(model.grants).toEqual(SUMMARY)
-		expect(model.traffic).toEqual(TRAFFIC)
+		expect(model.traffic24h).toEqual(LAST_24H)
+		expect(model.trafficDays).toEqual(TRAFFIC_DAYS)
 		expect(JSON.stringify(model)).not.toContain('alice-user')
 	})
 
 	it('should log a failed load by its short reason only', async () => {
-		vi.mocked(fetchTraffic).mockRejectedValue(new CfApiError(429, 'Analytics SQL API failed (429): grant:alice-user:abc'))
+		vi.mocked(fetchTrafficLast24h).mockRejectedValue(new CfApiError(429, 'Analytics SQL API failed (429): grant:alice-user:abc'))
 
 		await buildDashboardModel(env, NOW)
 
-		expect(errorSpy).toHaveBeenCalledWith('[STATS] traffic load failed: HTTP 429')
+		expect(errorSpy).toHaveBeenCalledWith('[STATS] 24-hour traffic load failed: HTTP 429')
 		expect(JSON.stringify(errorSpy.mock.calls)).not.toContain('alice-user')
 	})
 
-	it('should serve traffic and tools from DASH_KV within the cache window', async () => {
+	it('should serve the 24-hour traffic and tools from DASH_KV within the cache window', async () => {
 		await buildDashboardModel(env, NOW)
 		await buildDashboardModel(env, NOW)
 
-		expect(fetchTraffic).toHaveBeenCalledTimes(1)
+		expect(fetchTrafficLast24h).toHaveBeenCalledTimes(1)
 		expect(fetchToolStats).toHaveBeenCalledTimes(1)
-		// The grant summary is already a cached value the cron writes, so it's read every time
+		// The grant and daily traffic summaries are already values the cron writes, so they're read every time
 		expect(readGrantSummary).toHaveBeenCalledTimes(2)
+		expect(readTrafficDays).toHaveBeenCalledTimes(2)
 	})
 
 	it('should retry a failed load on the next build instead of caching the failure', async () => {
-		vi.mocked(fetchTraffic).mockRejectedValueOnce(new CfApiError(500, 'Analytics SQL API failed (500)'))
+		vi.mocked(fetchTrafficLast24h).mockRejectedValueOnce(new CfApiError(500, 'Analytics SQL API failed (500)'))
 
-		expect((await buildDashboardModel(env, NOW)).traffic).toEqual({ error: 'HTTP 500' })
-		expect((await buildDashboardModel(env, NOW)).traffic).toEqual(TRAFFIC)
+		expect((await buildDashboardModel(env, NOW)).traffic24h).toEqual({ error: 'HTTP 500' })
+		expect((await buildDashboardModel(env, NOW)).traffic24h).toEqual(LAST_24H)
 	})
 })
 
