@@ -186,6 +186,13 @@
 				opacity: 0;
 			}
 
+			/* A label settled by a pause appears at once rather than fading in */
+			@media (prefers-reduced-motion: reduce) {
+				.wave-label {
+					transition: none;
+				}
+			}
+
 			.wave-label-early {
 				left: 38%;
 				bottom: 176px;
@@ -1033,18 +1040,27 @@ url = "{{ORIGIN}}/mcp"</code></pre>
 				const labelInterval = 3500 // ms between swaps
 				const fadeDuration = 1300 // ms; a little longer than the CSS opacity transition
 				let labelTimer = 0
+				let fadeTimer = 0
 				let turn = 0
 
 				const swapNextLabel = () => {
 					const label = labels[turn]
-					turn = (turn + 1) % labels.length
 					const next = (label.lines.indexOf(label.element.textContent) + 1) % label.lines.length
 					label.element.classList.add('is-fading')
-					// Runs even if the wave pauses mid-fade, so a label is never left invisible
-					setTimeout(() => {
+					fadeTimer = setTimeout(() => {
+						fadeTimer = 0
 						label.element.textContent = label.lines[next]
 						label.element.classList.remove('is-fading')
+						// Only a finished swap passes the turn on, so one interrupted by a pause is retried on resume
+						turn = (turn + 1) % labels.length
 					}, fadeDuration)
+				}
+
+				// Cancels a swap in progress and shows the label with its current text
+				const settleLabels = () => {
+					clearTimeout(fadeTimer)
+					fadeTimer = 0
+					labels.forEach((label) => label.element.classList.remove('is-fading'))
 				}
 
 				// Pause and resume
@@ -1063,6 +1079,7 @@ url = "{{ORIGIN}}/mcp"</code></pre>
 					frameId = 0
 					clearInterval(labelTimer)
 					labelTimer = 0
+					settleLabels()
 				}
 
 				const update = () => {
