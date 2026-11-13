@@ -1112,6 +1112,9 @@ url = "{{ORIGIN}}/mcp"</code></pre>
 				const clearance = 16 // px from the hero's sides, and between labels
 				const band = { lowest: 36, highest: 200 } // px from the hero's bottom edge to a label's bottom and top
 				const fontWait = 3000 // ms to wait for the web font before measuring labels without it
+				const resizeDelay = 150 // ms of quiet after the hero's size changes before the labels start over
+				const restartRange = [600, 3000] // ms after that reset
+				const restartSpacing = 800 // ms between restarts
 
 				const wideScreen = window.matchMedia('(min-width: 700px)')
 				const activeSlotCount = () => (wideScreen.matches ? 3 : 2)
@@ -1128,16 +1131,18 @@ url = "{{ORIGIN}}/mcp"</code></pre>
 				}))
 				let fontsReady = false
 				let insightsFixed = false
+				let heroSize = { width: hero.clientWidth, height: hero.clientHeight }
+				let resizeTimer = 0
 
 				const randomBetween = ([min, max]) => min + Math.random() * (max - min)
 				const restDelay = () => randomBetween(Math.random() < longRestChance ? longRestRange : restRange)
 
-				// Start times for `count` first appearances: spread the slack left after the minimum spacing at random, then
-				// shuffle, so the slots come in a different order each time
-				const firstStarts = (count) => {
-					const slack = firstStartRange[1] - firstStartRange[0] - Math.max(0, count - 1) * firstStartSpacing
+				// `count` start times in `range`, at least `spacing` apart: spread the slack left after the spacing at random,
+				// then shuffle, so the slots come in a different order each time
+				const spacedStarts = (count, [min, max], spacing) => {
+					const slack = max - min - Math.max(0, count - 1) * spacing
 					const offsets = Array.from({ length: count }, () => Math.random() * slack).sort((a, b) => a - b)
-					const starts = offsets.map((offset, i) => firstStartRange[0] + offset + i * firstStartSpacing)
+					const starts = offsets.map((offset, i) => min + offset + i * spacing)
 					for (let i = starts.length - 1; i > 0; i--) {
 						const j = Math.floor(Math.random() * (i + 1))
 						;[starts[i], starts[j]] = [starts[j], starts[i]]
@@ -1230,8 +1235,8 @@ url = "{{ORIGIN}}/mcp"</code></pre>
 				const resumeInsights = () => {
 					if (insightsFixed) clearFixedInsights()
 					if (!fontsReady) return
-					const idle = slots.filter((slot) => !slot.timer && (slot.line || slot.index < activeSlotCount()))
-					const starts = firstStarts(idle.filter((slot) => !slot.line && !slot.shown).length)
+					const idle = slots.filter((slot) => !slot.timer && slot.index < activeSlotCount())
+					const starts = spacedStarts(idle.filter((slot) => !slot.line && !slot.shown).length, firstStartRange, firstStartSpacing)
 					idle.forEach((slot) => {
 						if (slot.line) schedule(slot, hideInsight, randomBetween(holdRange))
 						else if (!slot.shown) schedule(slot, showInsight, starts.pop())
@@ -1266,6 +1271,39 @@ url = "{{ORIGIN}}/mcp"</code></pre>
 					})
 				}
 
+				// Labels were placed against the old size, so once the hero has settled at a new one, every slot starts over:
+				// cleared at once, then each active slot (two or three for the new width) gets a fresh start, unless the wave
+				// is paused, when resume schedules them. Before any label has appeared nothing is stale, so the slots keep
+				// their staggered first appearances and only the count of active slots is brought up to date.
+				const resetInsights = () => {
+					resizeTimer = 0
+					if (insightsFixed) {
+						showFixedInsights()
+						return
+					}
+					if (!slots.some((slot) => slot.line || slot.shown)) {
+						slots.forEach((slot) => {
+							if (slot.index < activeSlotCount()) return
+							clearTimeout(slot.timer)
+							slot.timer = 0
+						})
+						if (frameId) resumeInsights()
+						return
+					}
+					slots.forEach((slot) => {
+						clearTimeout(slot.timer)
+						slot.timer = 0
+						slot.element.style.transition = 'none'
+						slot.element.classList.remove('is-in')
+						slot.element.textContent = ''
+						Object.assign(slot, { line: null, rect: null })
+					})
+					if (!frameId) return
+					const active = slots.filter((slot) => slot.index < activeSlotCount())
+					const starts = spacedStarts(active.length, restartRange, restartSpacing)
+					active.forEach((slot, i) => schedule(slot, showInsight, starts[i]))
+				}
+
 				// Pause and resume
 				const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)')
 				let heroOnScreen = true
@@ -1291,20 +1329,23 @@ url = "{{ORIGIN}}/mcp"</code></pre>
 
 				reducedMotion.addEventListener('change', update)
 				document.addEventListener('visibilitychange', update)
-				wideScreen.addEventListener('change', () => {
-					if (insightsFixed) showFixedInsights()
-					else if (frameId) resumeInsights()
-				})
 				if ('IntersectionObserver' in window) {
 					new IntersectionObserver((entries) => {
 						heroOnScreen = entries[entries.length - 1].isIntersecting
 						update()
 					}).observe(hero)
 				}
-				// While paused, a resize (or the web font changing the hero's height) still needs a fresh still frame
+				// While paused, a resize (or the web font changing the hero's height) still needs a fresh still frame. A real
+				// change in the hero's size (more than 1px) also resets the labels once resizing settles.
 				if ('ResizeObserver' in window) {
 					new ResizeObserver(() => {
 						if (!frameId) draw()
+						const width = hero.clientWidth
+						const height = hero.clientHeight
+						if (Math.abs(width - heroSize.width) <= 1 && Math.abs(height - heroSize.height) <= 1) return
+						heroSize = { width, height }
+						clearTimeout(resizeTimer)
+						resizeTimer = setTimeout(resetInsights, resizeDelay)
 					}).observe(canvas)
 				}
 

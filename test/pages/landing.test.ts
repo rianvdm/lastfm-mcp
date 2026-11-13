@@ -4,7 +4,7 @@ import { describe, it, expect } from 'vitest'
 
 import { FAQ_ITEMS } from '../../src/pages/faq'
 import { buildLandingPage } from '../../src/pages/landing'
-import { runWave, type WaveHarness } from './wave-harness'
+import { runWave, type InsightEvent, type WaveHarness } from './wave-harness'
 
 const ORIGIN = 'https://staging.example'
 
@@ -257,6 +257,44 @@ describe('buildLandingPage', () => {
 		const firstShown = (wave: WaveHarness) =>
 			[0, 1, 2].map((slot) => wave.events.find((event) => event.slot === slot && event.type === 'in')?.time)
 
+		/**
+		 * Checks a fade-in against the hero's current size: the label is inside the band, its line is unique, and it's at
+		 * least 16 px from every other label still on screen.
+		 */
+		const expectPlacedWell = (wave: WaveHarness, { slot, slots, time }: InsightEvent, context: string) => {
+			const where = `${context}, slot ${slot} at ${time} ms`
+			const label = slots[slot]
+			const left = parseFloat(label.left)
+			const top = parseFloat(label.top)
+			expect(label.bottom, where).toBe('')
+			expect(left, where).toBeGreaterThanOrEqual(16)
+			expect(left + label.width, where).toBeLessThanOrEqual(wave.heroWidth - 16)
+			expect(top, where).toBeGreaterThanOrEqual(wave.heroHeight - 200)
+			expect(top + label.height, where).toBeLessThanOrEqual(wave.heroHeight - 36)
+
+			const texts = slots.map((state) => state.text).filter((text) => text !== '')
+			expect(new Set(texts).size, where).toBe(texts.length)
+			for (const [index, other] of slots.entries()) {
+				if (index === slot || other.text === '') continue
+				const otherLeft = parseFloat(other.left)
+				const otherTop = parseFloat(other.top)
+				const apartAcross = Math.max(otherLeft - (left + label.width), left - (otherLeft + other.width))
+				const apartDown = Math.max(otherTop - (top + label.height), top - (otherTop + other.height))
+				expect(Math.max(apartAcross, apartDown), where).toBeGreaterThanOrEqual(16)
+			}
+		}
+
+		/** Advances in small steps until a label is fully in (faded in, not yet fading out). Returns its slot. */
+		const untilHolding = (wave: WaveHarness) => {
+			for (let step = 0; step < 2000; step++) {
+				wave.advance(50)
+				const holding = wave.events.filter((event) => event.type === 'in').at(-1)
+				const fade = parseFloat(holding?.slots[holding.slot].fade ?? '')
+				if (holding && wave.insights()[holding.slot].visible && wave.now() - holding.time > fade) return holding.slot
+			}
+			throw new Error('No label settled into its hold')
+		}
+
 		/** Advances until a label is fading out: it still has its text but has lost `is-in`. Returns its slot. */
 		const untilFadingOut = (wave: WaveHarness) => {
 			for (let step = 0; step < 2000; step++) {
@@ -330,28 +368,7 @@ describe('buildLandingPage', () => {
 						const shows = wave.events.filter((event) => event.type === 'in')
 						expect(shows.length).toBeGreaterThan(20)
 
-						for (const { slot, slots, time } of shows) {
-							const where = `seed ${seed}, slot ${slot} at ${time} ms`
-							const label = slots[slot]
-							const left = parseFloat(label.left)
-							const top = parseFloat(label.top)
-							expect(label.bottom, where).toBe('')
-							expect(left, where).toBeGreaterThanOrEqual(16)
-							expect(left + label.width, where).toBeLessThanOrEqual(wave.heroWidth - 16)
-							expect(top, where).toBeGreaterThanOrEqual(wave.heroHeight - 200)
-							expect(top + label.height, where).toBeLessThanOrEqual(wave.heroHeight - 36)
-
-							const texts = slots.map((state) => state.text).filter((text) => text !== '')
-							expect(new Set(texts).size, where).toBe(texts.length)
-							for (const [index, other] of slots.entries()) {
-								if (index === slot || other.text === '') continue
-								const otherLeft = parseFloat(other.left)
-								const otherTop = parseFloat(other.top)
-								const apartAcross = Math.max(otherLeft - (left + label.width), left - (otherLeft + other.width))
-								const apartDown = Math.max(otherTop - (top + label.height), top - (otherTop + other.height))
-								expect(Math.max(apartAcross, apartDown), where).toBeGreaterThanOrEqual(16)
-							}
-						}
+						for (const show of shows) expectPlacedWell(wave, show, `seed ${seed}`)
 					}
 				})
 
@@ -411,21 +428,161 @@ describe('buildLandingPage', () => {
 				expect(longShare).toBeGreaterThan(0.15)
 				expect(longShare).toBeLessThan(0.35)
 			})
+		})
 
-			it('starts the third slot when a narrow screen widens, and lets it finish when it narrows again', async () => {
-				const wave = await runWave(html, { seed: 5, width: 375 })
-				wave.advance(20_000)
-				expect(wave.pendingTimers()).toBe(2)
+		describe('resizing', () => {
+			const resizes = [
+				{ name: 'within the wide layout', from: 1300, to: 1000 },
+				{ name: 'across 700px, from wide to narrow', from: 1300, to: 375 },
+				{ name: 'within the narrow layout', from: 375, to: 500 },
+				{ name: 'across 700px, from narrow to wide', from: 375, to: 1300 },
+			]
+			const moments = [
+				{ name: 'during a hold', reach: untilHolding },
+				{ name: 'during a fade-out', reach: untilFadingOut },
+			]
+			const resizeDelay = 150
 
-				wave.setViewportWidth(1300)
+			for (const { name, from, to } of resizes) {
+				const activeSlots = to >= 700 ? 3 : 2
+				const empty = (slot: number) => ({ text: '', visible: false, transition: 'none', slot })
+				const cleared = () => [0, 1, 2].map(empty)
+				const labels = (wave: WaveHarness) =>
+					wave.insights().map(({ text, visible, transition }, slot) => ({ text, visible, transition, slot }))
+
+				/** Runs on after the reset, checking every placement against the new size and one timer per active slot. */
+				const expectFreshCycle = (wave: WaveHarness, resetAt: number, where: string) => {
+					const firstAfter = (slot: number) =>
+						wave.events.find((event) => event.slot === slot && event.type === 'in' && event.time > resetAt)
+					for (let step = 0; step < 1200; step++) {
+						wave.advance(100)
+						expect(wave.pendingTimers(), `${where} at ${wave.now()} ms`).toBe(activeSlots)
+					}
+					const shows = wave.events.filter((event) => event.type === 'in' && event.time > resetAt)
+					expect(shows.length, where).toBeGreaterThan(5)
+					for (const show of shows) expectPlacedWell(wave, show, where)
+					if (activeSlots === 2)
+						expect(
+							shows.some((show) => show.slot === 2),
+							where,
+						).toBe(false)
+					return firstAfter
+				}
+
+				for (const { name: moment, reach } of moments) {
+					it(`clears every label and restarts each active slot when the hero resizes ${name}, ${moment}`, async () => {
+						const where = `${from}px to ${to}px ${moment}`
+						const wave = await runWave(html, { seed: 6, width: from })
+						wave.advance(10_000)
+						reach(wave)
+
+						wave.setViewportWidth(to)
+						wave.advance(resizeDelay)
+						const resetAt = wave.now()
+
+						expect(labels(wave), where).toEqual(cleared())
+						expect(wave.pendingTimers(), where).toBe(activeSlots)
+						const firstAfter = expectFreshCycle(wave, resetAt, where)
+						// Fresh starts 600–3000 ms after the reset, at least 800 ms apart
+						const starts = [...Array(activeSlots).keys()].map((slot) => firstAfter(slot)!.time - resetAt).sort((x, y) => x - y)
+						expect(starts[0], where).toBeGreaterThanOrEqual(600)
+						expect(starts.at(-1), where).toBeLessThanOrEqual(3000)
+						for (let i = 1; i < starts.length; i++) expect(starts[i] - starts[i - 1], where).toBeGreaterThanOrEqual(800)
+					})
+				}
+
+				it(`clears every label while paused when the hero resizes ${name}, and restarts them on resume`, async () => {
+					const where = `${from}px to ${to}px while paused`
+					const wave = await runWave(html, { seed: 8, width: from })
+					wave.advance(10_000)
+					untilHolding(wave)
+					wave.setTabHidden(true)
+
+					wave.setViewportWidth(to)
+					wave.advance(resizeDelay)
+					expect(labels(wave), where).toEqual(cleared())
+					expect(wave.pendingTimers(), where).toBe(0)
+					wave.advance(30_000)
+					expect(labels(wave), where).toEqual(cleared())
+
+					wave.setTabHidden(false)
+					expect(wave.pendingTimers(), where).toBe(activeSlots)
+					expectFreshCycle(wave, wave.now(), where)
+				})
+			}
+
+			it('ignores a change of 1px or less', async () => {
+				const wave = await runWave(html, { seed: 6 })
+				wave.advance(10_000)
+				untilHolding(wave)
+				const before = wave.insights()
+				const timers = wave.pendingTimers()
+
+				wave.setViewportWidth(1301)
+				expect(wave.pendingTimers()).toBe(timers)
+				wave.advance(resizeDelay)
+				expect(wave.insights()).toEqual(before)
+			})
+
+			it('waits for the resizing to settle before clearing anything', async () => {
+				const wave = await runWave(html, { seed: 6 })
+				wave.advance(10_000)
+				untilHolding(wave)
+				const before = wave.insights()
+
+				wave.setViewportWidth(1200)
+				wave.advance(100)
+				wave.setViewportWidth(1100)
+				wave.advance(resizeDelay - 1)
+				expect(wave.insights().map((state) => state.text)).toEqual(before.map((state) => state.text))
+
+				wave.advance(1)
+				expect(wave.insights().every((state) => state.text === '' && !state.visible)).toBe(true)
 				expect(wave.pendingTimers()).toBe(3)
-				wave.advance(20_000)
-				expect(wave.events.some((event) => event.slot === 2 && event.type === 'in')).toBe(true)
+			})
+
+			it('keeps the first-appearance stagger when the hero resizes before any label has appeared', async () => {
+				const wave = await runWave(html, { seed: 12 })
+				wave.advance(100)
+				wave.setViewportWidth(1000)
+				wave.advance(resizeDelay)
+				expect(wave.pendingTimers()).toBe(3)
+
+				wave.advance(9000)
+				const times = firstShown(wave) as number[]
+				expect(times.every((time) => time >= 700 && time <= 9000)).toBe(true)
+				const sorted = [...times].sort((a, b) => a - b)
+				expect(sorted[1] - sorted[0]).toBeGreaterThanOrEqual(1500)
+				expect(sorted[2] - sorted[1]).toBeGreaterThanOrEqual(1500)
+			})
+
+			it('stops the third slot at once when the screen narrows before it has appeared', async () => {
+				const wave = await runWave(html, { seed: 12 })
+				wave.advance(100)
+				wave.setViewportWidth(375)
+				wave.advance(resizeDelay)
+
+				expect(wave.pendingTimers()).toBe(2)
+				wave.advance(60_000)
+				expect(wave.events.some((event) => event.slot === 2)).toBe(false)
+			})
+
+			it('shows the fixed labels for the new size under reduced motion', async () => {
+				const wave = await runWave(html, { reducedMotion: true })
 
 				wave.setViewportWidth(375)
-				wave.advance(30_000)
-				expect(wave.insights()[2]).toMatchObject({ text: '', visible: false })
-				expect(wave.pendingTimers()).toBe(2)
+				wave.advance(resizeDelay)
+				expect(wave.insights().map(({ text, visible }) => ({ text, visible }))).toEqual([
+					{ text: FIXED_INSIGHTS[0].text, visible: true },
+					{ text: FIXED_INSIGHTS[1].text, visible: true },
+					{ text: '', visible: false },
+				])
+				expect(wave.pendingTimers()).toBe(0)
+
+				wave.setViewportWidth(1300)
+				wave.advance(resizeDelay)
+				expect(wave.insights().map((state) => state.text)).toEqual(FIXED_INSIGHTS.map((label) => label.text))
+				expect(wave.pendingTimers()).toBe(0)
 			})
 		})
 
@@ -507,9 +664,10 @@ describe('buildLandingPage', () => {
 
 				it('freezes a label that was fading in, fully visible and without a transition', async () => {
 					const wave = await runWave(html, { seed: 4 })
-					wave.advance(9000)
+					while (!wave.events.some((event) => event.type === 'in')) wave.advance(50)
+					wave.advance(100)
 					const latest = wave.events.filter((event) => event.type === 'in').at(-1)!
-					wave.advance(latest.time + 200 - wave.now())
+					expect(wave.now() - latest.time).toBeLessThan(parseFloat(latest.slots[latest.slot].fade))
 
 					pause(wave)
 

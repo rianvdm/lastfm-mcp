@@ -1,5 +1,5 @@
 // ABOUTME: Runs the landing page's hero-wave script against a tiny fake DOM, a manual clock and a seeded Math.random.
-// ABOUTME: Lets tests pause and resume the wave and its insight labels, and inspect timers, label state and a log of changes.
+// ABOUTME: Lets tests pause, resume and resize the wave and its insight labels, and inspect timers, label state and a change log.
 
 const WAVE_SCRIPT_START = '// The hero wave:'
 
@@ -39,7 +39,7 @@ export interface WaveHarness {
 	/** Every change to a slot so far, in order. */
 	events: InsightEvent[]
 	now: () => number
-	/** Moves the clock forward, firing timeouts in order. */
+	/** Moves the clock forward, firing timeouts in order. Throws on a negative step: the clock never runs backwards. */
 	advance: (ms: number) => void
 	/** Timeouts still scheduled. */
 	pendingTimers: () => number
@@ -48,7 +48,7 @@ export interface WaveHarness {
 	setReducedMotion: (reduce: boolean) => void
 	setTabHidden: (hidden: boolean) => void
 	setHeroOnScreen: (onScreen: boolean) => void
-	/** Changes the viewport width and fires the script's width media query listener. */
+	/** Changes the viewport and hero width (the hero's height follows), then delivers the ResizeObserver callbacks. */
 	setViewportWidth: (width: number) => void
 }
 
@@ -95,6 +95,7 @@ export async function runWave(html: string, options: WaveOptions = {}): Promise<
 	const listeners = new Map<string, () => void>()
 	const events: InsightEvent[] = []
 	let intersect: (entries: { isIntersecting: boolean }[]) => void = () => {}
+	const resizeCallbacks: (() => void)[] = []
 
 	const setTimeout = (callback: () => void, ms: number) => {
 		const id = nextId++
@@ -217,7 +218,13 @@ export async function runWave(html: string, options: WaveOptions = {}): Promise<
 		}
 		observe() {}
 	}
-	const window = { devicePixelRatio: 2, matchMedia, IntersectionObserver }
+	class ResizeObserver {
+		constructor(callback: () => void) {
+			resizeCallbacks.push(callback)
+		}
+		observe() {}
+	}
+	const window = { devicePixelRatio: 2, matchMedia, IntersectionObserver, ResizeObserver }
 	const random = seededRandom(options.seed ?? 1)
 	const fakeMath = Object.create(Math, { random: { value: random } })
 
@@ -225,6 +232,7 @@ export async function runWave(html: string, options: WaveOptions = {}): Promise<
 		window,
 		document,
 		IntersectionObserver,
+		ResizeObserver,
 		Math: fakeMath,
 		requestAnimationFrame: () => {
 			const id = nextId++
@@ -250,6 +258,7 @@ export async function runWave(html: string, options: WaveOptions = {}): Promise<
 		events,
 		now: () => now,
 		advance: (ms) => {
+			if (ms < 0) throw new Error(`advance(${ms}): the clock can't run backwards`)
 			const until = now + ms
 			for (;;) {
 				const next = [...timers.values()].filter((t) => t.due <= until).sort((a, b) => a.due - b.due || a.id - b.id)[0]
@@ -273,7 +282,7 @@ export async function runWave(html: string, options: WaveOptions = {}): Promise<
 		setHeroOnScreen: (onScreen) => intersect([{ isIntersecting: onScreen }]),
 		setViewportWidth: (value) => {
 			width = value
-			listeners.get(WIDE_QUERY)?.()
+			resizeCallbacks.forEach((callback) => callback())
 		},
 	}
 }
