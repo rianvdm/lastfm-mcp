@@ -26,6 +26,7 @@
 		"format": "prettier --write .",
 		"format:check": "prettier --check .",
 		"build": "wrangler deploy --dry-run --outdir dist",
+		"render:share": "node scripts/render-share-images.mjs",
 		"setup:prod": "./scripts/setup-production.sh",
 		"dashboard:dev": "wrangler dev -c dashboard/wrangler.toml",
 		"dashboard:deploy": "wrangler deploy -c dashboard/wrangler.toml"

@@ -15,12 +15,35 @@
 		<meta name="robots" content="index, follow" />
 		<meta name="theme-color" content="#ece6dc" />
 		<link rel="canonical" href="https://lastfm-mcp.com" />
+		<!-- Share card and link previews: URLs stay on production whatever origin serves the page -->
+		<meta property="og:type" content="website" />
+		<meta property="og:site_name" content="Last.fm MCP" />
+		<meta property="og:title" content="Last.fm MCP: connect your Last.fm history to Claude, ChatGPT and other AI assistants" />
+		<meta
+			property="og:description"
+			content="Ask your AI when you first heard an album, what you had on repeat last summer, or what to play next. Free and open source, and it only reads."
+		/>
+		<meta property="og:url" content="https://lastfm-mcp.com/" />
+		<meta property="og:image" content="https://lastfm-mcp.com/og.png" />
+		<meta property="og:image:width" content="1200" />
+		<meta property="og:image:height" content="630" />
+		<meta property="og:image:alt" content="Last.fm MCP: Ask your AI about everything you've ever listened to." />
+		<meta name="twitter:card" content="summary_large_image" />
+		<meta name="twitter:title" content="Last.fm MCP: connect your Last.fm history to Claude, ChatGPT and other AI assistants" />
+		<meta
+			name="twitter:description"
+			content="Ask your AI when you first heard an album, what you had on repeat last summer, or what to play next. Free and open source, and it only reads."
+		/>
+		<meta name="twitter:image" content="https://lastfm-mcp.com/og.png" />
+		<meta name="twitter:image:alt" content="Last.fm MCP: Ask your AI about everything you've ever listened to." />
 		<link rel="alternate" type="text/plain" href="/llms.txt" title="Setup instructions for AI agents" />
 		<link
 			rel="icon"
 			type="image/svg+xml"
 			href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23d51007' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M3 18v-6a9 9 0 0 1 18 0v6'/%3E%3Cpath d='M21 19a2 2 0 0 1-2 2h-1a2 2 0 0 1-2-2v-3a2 2 0 0 1 2-2h3zM3 19a2 2 0 0 0 2 2h1a2 2 0 0 0 2-2v-3a2 2 0 0 0-2-2H3z'/%3E%3C/svg%3E"
 		/>
+		<link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+		<!-- STRUCTURED DATA -->
 		<link rel="preconnect" href="https://fonts.googleapis.com" />
 		<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 		<link
@@ -495,6 +518,18 @@
 				margin: 18px 0 8px;
 				color: var(--heading);
 				font-size: 15px;
+			}
+
+			/* Questions */
+			.faq {
+				display: grid;
+				gap: 22px;
+				max-width: 720px;
+			}
+
+			.faq p {
+				margin: 0;
+				color: var(--body-soft);
 			}
 
 			/* What you're agreeing to */

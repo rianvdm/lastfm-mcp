@@ -1,0 +1,68 @@
+<!doctype html>
+<!--
+	ABOUTME: Source of apple-touch-icon.png, the home-screen and bookmark icon for lastfm-mcp.com: a sand square with a small wave.
+	ABOUTME: Drawn at 540×540, three times the icon's size, and downscaled to 180×180 by scripts/render-share-images.mjs.
+-->
+<html lang="en">
+	<head>
+		<meta charset="utf-8" />
+		<title>Last.fm MCP icon</title>
+		<style>
+			html,
+			body {
+				margin: 0;
+				width: 540px;
+				height: 540px;
+				overflow: hidden;
+				background: #ece6dc;
+			}
+
+			canvas {
+				display: block;
+			}
+		</style>
+	</head>
+	<body>
+		<canvas width="540" height="540" aria-hidden="true"></canvas>
+
+		<script>
+			// The share card's wave (the landing page's layer maths), with the card's 1200px of stream squeezed into the
+			// icon's width so the swells still read at 180px. iOS rounds the corners itself, so the square stays square.
+			;(() => {
+				const canvas = document.querySelector('canvas')
+				const context = canvas.getContext('2d')
+				const layerColors = ['#b8432f', '#d39b3f', '#8a9a72', '#6f8aa3', '#8c6278']
+				const layerOpacity = 0.85
+				const maxLayerThickness = 40
+				const centre = canvas.height / 2
+				const columnWidth = 3
+				const streamLength = 1200 // stream positions shown across the icon's width
+
+				const thickness = (x, layer) => {
+					const swell = 0.5 + 0.5 * Math.sin(x * (0.006 + layer * 0.0017) + layer * 1.9) * Math.sin(x * 0.0033 + layer * 2.3)
+					return Math.max(0.03, swell) * maxLayerThickness
+				}
+
+				const columns = []
+				for (let x = 0; x <= canvas.width + columnWidth; x += columnWidth) {
+					const position = (x / canvas.width) * streamLength
+					const boundaries = [0]
+					layerColors.forEach((_, layer) => boundaries.push(boundaries[layer] + thickness(position, layer)))
+					const top = centre - boundaries[boundaries.length - 1] / 2
+					columns.push({ x, ys: boundaries.map((b) => top + b) })
+				}
+
+				context.globalAlpha = layerOpacity
+				layerColors.forEach((color, layer) => {
+					context.beginPath()
+					context.moveTo(columns[0].x, columns[0].ys[layer])
+					for (let i = 1; i < columns.length; i++) context.lineTo(columns[i].x, columns[i].ys[layer])
+					for (let i = columns.length - 1; i >= 0; i--) context.lineTo(columns[i].x, columns[i].ys[layer + 1])
+					context.closePath()
+					context.fillStyle = color
+					context.fill()
+				})
+			})()
+		</script>
+	</body>
+</html>

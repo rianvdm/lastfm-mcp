@@ -9,8 +9,10 @@ import { LastfmOAuthHandler, type LastfmUserProps } from './auth/oauth-handler'
 import { normalizeAuthorizeResource, normalizeTokenResource } from './auth/resource-indicator'
 import { PROTOCOL_VERSION, SERVER_VERSION } from './mcp/protocol'
 import { createMcpServer } from './mcp/server'
-import { buildLandingPage } from './pages/landing'
+import { buildLandingPage, LANDING_PAGE_UPDATED } from './pages/landing'
 import { buildLlmsTxt } from './pages/llms-txt'
+import appleTouchIcon from './pages/share/apple-touch-icon.png'
+import shareCard from './pages/share/og.png'
 import type { Env } from './types/env'
 import { httpsRedirect } from './utils/httpsRedirect'
 import { buildRateLimitResponse, checkRateLimit, rateLimitKeyFromRequest } from './utils/rateLimit'
@@ -58,6 +60,12 @@ const mcpApiHandler = {
 		return createMcpHandler(() => server, MCP_HANDLER_OPTIONS)(request, env, ctx)
 	},
 }
+
+/** Images served as-is, rendered from src/pages/share/*.html by scripts/render-share-images.mjs */
+const SHARE_IMAGES = new Map<string, ArrayBuffer>([
+	['/og.png', shareCard],
+	['/apple-touch-icon.png', appleTouchIcon],
+])
 
 /** Longest client_name kept in the registration log line. The name is self-asserted, so it is capped. */
 const LOGGED_CLIENT_NAME_MAX = 100
@@ -158,6 +166,18 @@ export default {
 			})
 		}
 
+		// Share card for link previews (og:image) and the home-screen icon
+		const shareImage = SHARE_IMAGES.get(url.pathname)
+		if (shareImage && request.method === 'GET') {
+			return new Response(shareImage, {
+				status: 200,
+				headers: {
+					'Content-Type': 'image/png',
+					'Cache-Control': 'public, max-age=86400',
+				},
+			})
+		}
+
 		// MCP server discovery endpoint for Claude Desktop Connectors
 		if ((url.pathname === '/.well-known/mcp.json' || url.pathname === '/.well-known/mcp') && request.method === 'GET') {
 			return new Response(
@@ -222,16 +242,14 @@ export default {
 			)
 		}
 
-		// Sitemap for search engines
+		// Sitemap for search engines. lastmod only moves when the page does; Google ignores changefreq and priority.
 		if (url.pathname === '/sitemap.xml' && request.method === 'GET') {
 			return new Response(
 				`<?xml version="1.0" encoding="UTF-8"?>
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
   <url>
     <loc>https://lastfm-mcp.com/</loc>
-    <lastmod>${new Date().toISOString().split('T')[0]}</lastmod>
-    <changefreq>weekly</changefreq>
-    <priority>1.0</priority>
+    <lastmod>${LANDING_PAGE_UPDATED}</lastmod>
   </url>
 </urlset>`,
 				{
@@ -244,12 +262,15 @@ export default {
 			)
 		}
 
-		// Robots.txt for search engines
+		// Robots.txt: one group for every crawler. No Crawl-delay or per-bot groups: Google's parser can merge a
+		// Crawl-delay-only group into the next group's Disallow lines.
 		if (url.pathname === '/robots.txt' && request.method === 'GET') {
 			return new Response(
 				`User-agent: *
 Allow: /
 Allow: /health
+Allow: /llms.txt
+Allow: /og.png
 Disallow: /mcp
 Disallow: /authorize
 Disallow: /oauth
