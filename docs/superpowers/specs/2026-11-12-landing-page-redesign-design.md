@@ -174,7 +174,7 @@ Contents, in order:
 Today the share image is a stock photo at 1200×797 that previews crop, the sitemap's `lastmod` changes on every request, and the JSON-LD is a bare `SoftwareApplication`. Live checks on 2026-11-12: `robots.txt` allows everything except `/mcp`, `/authorize` and `/oauth`, and spoofed GPTBot, ClaudeBot, PerplexityBot, OAI-SearchBot and Googlebot user agents all get 200.
 
 **Title and description.**
-- `<title>`: "Last.fm MCP: connect your Last.fm history to Claude, ChatGPT, and other AI assistants". The visible headline stays "Ask your AI about everything you've ever listened to."
+- `<title>`: "Last.fm MCP: Connect your Last.fm history to Claude, ChatGPT, and other AI assistants". The visible headline stays "Ask your AI about everything you've ever listened to."
 - Meta description: "Ask your AI when you first played an album, what you had on repeat last summer, or what to play next. Free and open source, and it only reads."
 - Remove the `keywords` meta tag.
 - `<meta name="theme-color" content="#ece6dc">`.
@@ -186,6 +186,8 @@ Today the share image is a stock photo at 1200×797 that previews crop, the site
 - Tags: `og:type` website, `og:site_name` "Last.fm MCP", `og:title`, `og:description`, `og:url` `https://lastfm-mcp.com/`, `og:image` `https://lastfm-mcp.com/og.png`, `og:image:width` 1200, `og:image:height` 630, `og:image:alt` "Last.fm MCP: Ask your AI about everything you've ever listened to."; `twitter:card` `summary_large_image` with matching title, description, image and `twitter:image:alt`. Image and canonical URLs stay hardcoded to production.
 
 Post-review change (2026-11-12): the title gained an Oxford comma and the description says "first played" instead of "first heard", since Last.fm only knows what was scrobbled. The headline, alt text and share card are unchanged. The shipped FAQ lives in `src/pages/faq.ts`: the review added the Authenticate step to the Claude answer, and the ChatGPT answer now says "on the web" and points to the setup section instead of promising that any other app works.
+
+Post-ship change (2026-11-12): "Connect" in the title, `og:title` and `twitter:title` is now capitalised.
 
 **FAQ.** Draft questions and answers below; Task 2's verification may change them, and the ChatGPT answer must match what the docs confirm.
 - *How do I connect Last.fm to Claude?* In Claude, go to Settings → Connectors, click Add custom connector, paste `https://lastfm-mcp.com/mcp`, and sign in to Last.fm. In Claude Code, run `claude mcp add --transport http lastfm https://lastfm-mcp.com/mcp`, then `/mcp` to sign in.

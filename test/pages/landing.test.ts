@@ -8,7 +8,7 @@ import { runWave, type WaveHarness } from './wave-harness'
 
 const ORIGIN = 'https://staging.example'
 
-const TITLE = 'Last.fm MCP: connect your Last.fm history to Claude, ChatGPT, and other AI assistants'
+const TITLE = 'Last.fm MCP: Connect your Last.fm history to Claude, ChatGPT, and other AI assistants'
 const DESCRIPTION =
 	'Ask your AI when you first played an album, what you had on repeat last summer, or what to play next. Free and open source, and it only reads.'
 const IMAGE_ALT = "Last.fm MCP: Ask your AI about everything you've ever listened to."
