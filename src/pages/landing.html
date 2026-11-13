@@ -191,39 +191,42 @@
 				height: 100%;
 			}
 
-			.wave-label {
+			/* Insights: lines the wave script places at random above the stream, each fading in and out on its own clock */
+			.wave-insight {
 				position: absolute;
 				z-index: 1;
-				font-size: 12px;
-				color: #3d3833;
-				background: rgba(236, 230, 220, 0.8);
-				padding: 2px 8px;
-				border-radius: 4px;
+				font-weight: 400;
+				font-size: 20px;
+				color: #2c2824;
+				background: rgba(236, 230, 220, 0.82);
+				padding: 4px 12px;
+				border-radius: 6px;
 				white-space: nowrap;
 				pointer-events: none;
-				/* The wave script fades a label out, swaps its text, then fades it back in */
-				transition: opacity 1.2s ease;
-			}
-
-			.wave-label.is-fading {
 				opacity: 0;
+				transform: translateY(6px);
+				/* The script picks each appearance's fade length and waits the same time before reusing the slot */
+				transition:
+					opacity var(--fade, 1.4s) ease,
+					transform var(--fade, 1.4s) ease;
 			}
 
-			/* A label settled by a pause appears at once rather than fading in */
-			@media (prefers-reduced-motion: reduce) {
-				.wave-label {
-					transition: none;
+			.wave-insight.is-in {
+				opacity: 1;
+				transform: none;
+			}
+
+			@media (max-width: 699.98px) {
+				.wave-insight {
+					font-size: 16px;
+					padding: 3px 10px;
 				}
 			}
 
-			.wave-label-early {
-				left: 38%;
-				bottom: 176px;
-			}
-
-			.wave-label-late {
-				right: 8%;
-				bottom: 182px;
+			@media (prefers-reduced-motion: reduce) {
+				.wave-insight {
+					transition: none;
+				}
 			}
 
 			.hero-copy {
@@ -581,16 +584,6 @@
 					padding-top: 28px;
 				}
 
-				.wave-label-early {
-					left: var(--gutter);
-					bottom: 184px;
-				}
-
-				.wave-label-late {
-					right: var(--gutter);
-					bottom: 156px;
-				}
-
 				.section {
 					padding: 44px 0;
 				}
@@ -636,8 +629,9 @@
 		<main>
 			<section class="hero">
 				<canvas id="wave" aria-hidden="true"></canvas>
-				<span class="wave-label wave-label-early" aria-hidden="true">2009 · post-rock phase</span>
-				<span class="wave-label wave-label-late" aria-hidden="true">2024 · jazz, apparently</span>
+				<span class="wave-insight" aria-hidden="true"></span>
+				<span class="wave-insight" aria-hidden="true"></span>
+				<span class="wave-insight" aria-hidden="true"></span>
 				<div class="wrap">
 					<div class="hero-copy">
 						<h1>Ask your AI about everything you've ever listened to.</h1>
@@ -1008,9 +1002,9 @@ url = "{{ORIGIN}}/mcp"</code></pre>
 			})()
 
 			// The hero wave: a streamgraph of five stacked layers drifting right to left, standing for years of listening
-			// moving between phases. Thicknesses come from layered sines, not real data. Two labels above it cross-fade
-			// through hand-written lines. Reduced motion gets one still frame and fixed labels; everything pauses while
-			// the tab is hidden or the hero is off screen.
+			// moving between phases. Thicknesses come from layered sines, not real data. Hand-written "insights" fade in
+			// and out above it at random spots, each slot on its own clock. Reduced motion gets one still frame and fixed
+			// labels; everything pauses while the tab is hidden or the hero is off screen.
 			;(() => {
 				const canvas = document.getElementById('wave')
 				const context = canvas.getContext('2d')
@@ -1083,44 +1077,193 @@ url = "{{ORIGIN}}/mcp"</code></pre>
 					frameId = requestAnimationFrame(tick)
 				}
 
-				// Labels: the early label (left) walks the first three lines and the late label (right) the last three,
-				// taking turns, so the left one always shows the earlier year
-				const lines = [
+				// Insights: three slots above the stream (two on narrow screens), each on its own clock. A slot picks a line
+				// no other slot is showing, places it at random in a band above the stream clear of the other labels, fades
+				// it in, holds it, fades it out, rests, and repeats.
+				const insightLines = [
+					'2007 · emo, briefly',
 					'2009 · post-rock phase',
 					'2011 · that one Bon Iver winter',
+					'2013 · everything on Pitchfork',
+					'2014 · film scores while working',
 					'2016 · one album on repeat',
+					'2018 · city pop rabbit hole',
 					'2019 · back to the 90s',
+					'2021 · lockdown ambient',
+					'2023 · finally got into Talk Talk',
 					'2024 · jazz, apparently',
 					'2026 · everything at once',
 				]
-				const labels = [
-					{ element: hero.querySelector('.wave-label-early'), lines: lines.slice(0, 3) },
-					{ element: hero.querySelector('.wave-label-late'), lines: lines.slice(3) },
+				// With reduced motion the slots show these instead, and never change
+				const fixedInsights = [
+					{ line: '2009 · post-rock phase', left: '8%', bottom: '150px' },
+					{ line: '2018 · city pop rabbit hole', left: '40%', bottom: '110px' },
+					{ line: '2024 · jazz, apparently', left: '70%', bottom: '160px' },
 				]
-				const labelInterval = 3500 // ms between swaps
-				const fadeDuration = 1300 // ms; a little longer than the CSS opacity transition
-				let labelTimer = 0
-				let fadeTimer = 0
-				let turn = 0
+				const firstStartRange = [700, 9000] // ms after the slots start
+				const firstStartSpacing = 1500 // ms; first appearances are at least this far apart, in random slot order
+				const holdRange = [2500, 8000] // ms fully visible
+				const fadeRange = [1000, 1900] // ms; each appearance's fade, passed to the CSS as --fade
+				const restRange = [800, 5000] // ms empty between appearances
+				const longRestRange = [6000, 11000]
+				const longRestChance = 0.25
+				const retryDelay = 800 // ms before a slot tries again when no position is clear
+				const placementAttempts = 30
+				const clearance = 16 // px from the hero's sides, and between labels
+				const band = { lowest: 36, highest: 200 } // px from the hero's bottom edge to a label's bottom and top
+				const fontWait = 3000 // ms to wait for the web font before measuring labels without it
 
-				const swapNextLabel = () => {
-					const label = labels[turn]
-					const next = (label.lines.indexOf(label.element.textContent) + 1) % label.lines.length
-					label.element.classList.add('is-fading')
-					fadeTimer = setTimeout(() => {
-						fadeTimer = 0
-						label.element.textContent = label.lines[next]
-						label.element.classList.remove('is-fading')
-						// Only a finished swap passes the turn on, so one interrupted by a pause is retried on resume
-						turn = (turn + 1) % labels.length
-					}, fadeDuration)
+				const wideScreen = window.matchMedia('(min-width: 700px)')
+				const activeSlotCount = () => (wideScreen.matches ? 3 : 2)
+				// timer: the slot's one pending step. line and rect: what it shows and where, from fade-in until its fade-out ends.
+				// shown: whether it has appeared since the slots last started, so a first appearance gets the staggered start.
+				const slots = Array.from(hero.querySelectorAll('.wave-insight'), (element, index) => ({
+					element,
+					index,
+					timer: 0,
+					line: null,
+					rect: null,
+					fade: 0,
+					shown: false,
+				}))
+				let fontsReady = false
+				let insightsFixed = false
+
+				const randomBetween = ([min, max]) => min + Math.random() * (max - min)
+				const restDelay = () => randomBetween(Math.random() < longRestChance ? longRestRange : restRange)
+
+				// Start times for `count` first appearances: spread the slack left after the minimum spacing at random, then
+				// shuffle, so the slots come in a different order each time
+				const firstStarts = (count) => {
+					const slack = firstStartRange[1] - firstStartRange[0] - Math.max(0, count - 1) * firstStartSpacing
+					const offsets = Array.from({ length: count }, () => Math.random() * slack).sort((a, b) => a - b)
+					const starts = offsets.map((offset, i) => firstStartRange[0] + offset + i * firstStartSpacing)
+					for (let i = starts.length - 1; i > 0; i--) {
+						const j = Math.floor(Math.random() * (i + 1))
+						;[starts[i], starts[j]] = [starts[j], starts[i]]
+					}
+					return starts
 				}
 
-				// Cancels a swap in progress and shows the label with its current text
-				const settleLabels = () => {
-					clearTimeout(fadeTimer)
-					fadeTimer = 0
-					labels.forEach((label) => label.element.classList.remove('is-fading'))
+				// Only one step per slot is ever pending, so pausing can cancel every slot cleanly
+				const schedule = (slot, step, delay) => {
+					slot.timer = setTimeout(() => {
+						slot.timer = 0
+						step(slot)
+					}, delay)
+				}
+
+				// A random spot in the band, at least `clearance` from every other label, or null if 30 tries find none.
+				// Reads the label's size, so call it after setting the text.
+				const placeInsight = (element) => {
+					const width = element.offsetWidth
+					const height = element.offsetHeight
+					const others = slots.filter((slot) => slot.rect).map((slot) => slot.rect)
+					for (let attempt = 0; attempt < placementAttempts; attempt++) {
+						const left = Math.round(randomBetween([clearance, Math.max(clearance, hero.clientWidth - width - clearance)]))
+						const top = Math.round(randomBetween([hero.clientHeight - band.highest, hero.clientHeight - band.lowest - height]))
+						const rect = { left, top, right: left + width, bottom: top + height }
+						const crowded = others.some(
+							(other) =>
+								rect.left < other.right + clearance &&
+								rect.right + clearance > other.left &&
+								rect.top < other.bottom + clearance &&
+								rect.bottom + clearance > other.top,
+						)
+						if (!crowded) return rect
+					}
+					return null
+				}
+
+				const showInsight = (slot) => {
+					// A narrow screen leaves the last slot empty; it starts again if the screen widens
+					if (slot.index >= activeSlotCount()) return
+					const taken = slots.map((other) => other.line)
+					const free = insightLines.filter((line) => !taken.includes(line))
+					const line = free[Math.floor(Math.random() * free.length)]
+					const { element } = slot
+					element.textContent = line
+					element.style.transition = ''
+					const rect = placeInsight(element)
+					if (!rect) {
+						element.textContent = ''
+						schedule(slot, showInsight, retryDelay)
+						return
+					}
+					Object.assign(slot, { line, rect, shown: true, fade: Math.round(randomBetween(fadeRange)) })
+					element.style.setProperty('--fade', `${slot.fade}ms`)
+					element.style.left = `${rect.left}px`
+					element.style.top = `${rect.top}px`
+					element.style.bottom = ''
+					element.classList.add('is-in')
+					schedule(slot, hideInsight, randomBetween(holdRange))
+				}
+
+				const hideInsight = (slot) => {
+					slot.element.style.transition = ''
+					slot.element.classList.remove('is-in')
+					schedule(slot, finishInsight, slot.fade)
+				}
+
+				// The fade-out is over: free the line and the spot, then rest
+				const finishInsight = (slot) => {
+					slot.element.textContent = ''
+					slot.line = null
+					slot.rect = null
+					schedule(slot, showInsight, restDelay())
+				}
+
+				// Cancels every slot's pending step. A label that was fading in or out stays where it is, fully visible at once.
+				const pauseInsights = () => {
+					slots.forEach((slot) => {
+						clearTimeout(slot.timer)
+						slot.timer = 0
+						if (slot.line && !insightsFixed) {
+							slot.element.style.transition = 'none'
+							slot.element.classList.add('is-in')
+						}
+					})
+				}
+
+				// Gives every slot without a pending step its next one: a fresh hold for a visible label, the staggered start
+				// for a slot yet to appear, and a rest for the others
+				const resumeInsights = () => {
+					if (insightsFixed) clearFixedInsights()
+					if (!fontsReady) return
+					const idle = slots.filter((slot) => !slot.timer && (slot.line || slot.index < activeSlotCount()))
+					const starts = firstStarts(idle.filter((slot) => !slot.line && !slot.shown).length)
+					idle.forEach((slot) => {
+						if (slot.line) schedule(slot, hideInsight, randomBetween(holdRange))
+						else if (!slot.shown) schedule(slot, showInsight, starts.pop())
+						else schedule(slot, showInsight, restDelay())
+					})
+				}
+
+				const showFixedInsights = () => {
+					insightsFixed = true
+					slots.forEach((slot) => {
+						const fixed = slot.index < activeSlotCount() ? fixedInsights[slot.index] : null
+						const { element } = slot
+						slot.line = fixed ? fixed.line : null
+						slot.rect = null
+						element.textContent = slot.line || ''
+						element.style.left = fixed ? fixed.left : ''
+						element.style.top = ''
+						element.style.bottom = fixed ? fixed.bottom : ''
+						if (fixed) element.classList.add('is-in')
+						else element.classList.remove('is-in')
+					})
+				}
+
+				// Empties every slot at once, so no new appearance starts from a fixed label still fading out
+				const clearFixedInsights = () => {
+					insightsFixed = false
+					slots.forEach((slot) => {
+						slot.element.style.transition = 'none'
+						slot.element.classList.remove('is-in')
+						slot.element.textContent = ''
+						Object.assign(slot, { line: null, rect: null, shown: false })
+					})
 				}
 
 				// Pause and resume
@@ -1131,24 +1274,27 @@ url = "{{ORIGIN}}/mcp"</code></pre>
 					if (frameId) return
 					lastTime = null
 					frameId = requestAnimationFrame(tick)
-					labelTimer = setInterval(swapNextLabel, labelInterval)
+					resumeInsights()
 				}
 
 				const stop = () => {
 					cancelAnimationFrame(frameId)
 					frameId = 0
-					clearInterval(labelTimer)
-					labelTimer = 0
-					settleLabels()
+					pauseInsights()
 				}
 
 				const update = () => {
 					if (!reducedMotion.matches && !document.hidden && heroOnScreen) start()
 					else stop()
+					if (reducedMotion.matches) showFixedInsights()
 				}
 
 				reducedMotion.addEventListener('change', update)
 				document.addEventListener('visibilitychange', update)
+				wideScreen.addEventListener('change', () => {
+					if (insightsFixed) showFixedInsights()
+					else if (frameId) resumeInsights()
+				})
 				if ('IntersectionObserver' in window) {
 					new IntersectionObserver((entries) => {
 						heroOnScreen = entries[entries.length - 1].isIntersecting
@@ -1161,6 +1307,16 @@ url = "{{ORIGIN}}/mcp"</code></pre>
 						if (!frameId) draw()
 					}).observe(canvas)
 				}
+
+				// Labels are measured to place them, so the slots wait for the web font, though not for ever
+				const fontsLoaded = () => {
+					if (fontsReady) return
+					fontsReady = true
+					clearTimeout(fontTimer)
+					if (frameId) resumeInsights()
+				}
+				const fontTimer = setTimeout(fontsLoaded, fontWait)
+				;(document.fonts ? document.fonts.ready : Promise.resolve()).then(fontsLoaded, fontsLoaded)
 
 				draw()
 				update()

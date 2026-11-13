@@ -66,18 +66,35 @@ Picked from three live mockups ("Your history is the wave"). The approved mockup
 
 A streamgraph along the bottom of the hero: five stacked layers in terracotta `#b8432f`, ochre `#d39b3f`, sage `#8a9a72`, dusty blue `#6f8aa3` and plum `#8c6278`, about 0.85 opacity, flowing slowly right to left. It stands for a listening life moving between phases. Layer thicknesses come from layered sines (see `hero-c-v3.html`), not from real data.
 
-Two small labels sit above the stream and cross-fade every few seconds through hand-written lines:
+Hand-written "insights" fade in and out above the stream. Three slots sit in the hero (two below 700px wide), empty in the served HTML, and the script fills them from these lines, in this order:
 
+- 2007 · emo, briefly
 - 2009 · post-rock phase
 - 2011 · that one Bon Iver winter
+- 2013 · everything on Pitchfork
+- 2014 · film scores while working
 - 2016 · one album on repeat
+- 2018 · city pop rabbit hole
 - 2019 · back to the 90s
+- 2021 · lockdown ambient
+- 2023 · finally got into Talk Talk
 - 2024 · jazz, apparently
 - 2026 · everything at once
 
 Post-review change (2026-11-12): the 2016 line was "2016 · 400 plays of one album"; the copy review flagged the exact count as unmeasured on a synthetic graphic.
 
-The labels are decorative and get `aria-hidden="true"`. With `prefers-reduced-motion: reduce`, draw one static frame and don't cycle the labels. Pause the animation when the tab is hidden or the hero is off screen, as the current page does with its `running` flag.
+Each label is Bricolage Grotesque 400 at 20px (16px below 700px wide), `#2c2824` on `rgba(236, 230, 220, 0.82)` with 4px 12px padding (3px 10px small) and a 6px radius. Hidden, it sits at opacity 0, 6px low; visible, it rises into place.
+
+Each slot runs on its own clock, independent of the others:
+
+- **First appearance:** one random start per slot between 700 and 9000 ms after the slots start, at least 1500 ms from the others, in random slot order. The slots start once the web font has loaded (or after 3 s without it), so labels are measured in the real font.
+- **Cycle:** pick a line no other slot is showing, place it, fade in, hold for a random 2500–8000 ms, fade out, then rest. A rest is a random 6000–11000 ms a quarter of the time, otherwise 800–5000 ms.
+- **Fade:** each appearance picks a random 1.0–1.9 s and passes it to the CSS as `--fade`, which times both the opacity and the movement. The slot waits that same time after fading out before freeing its line and spot.
+- **Placement:** a random spot at least 16px from the hero's sides, between 36px and 200px above its bottom edge, and at least 16px from every other label still on screen. After 30 tries without a clear spot, the slot tries again 800 ms later.
+
+The labels are decorative and get `aria-hidden="true"`; without JavaScript, nothing shows. With `prefers-reduced-motion: reduce`, draw one static frame and show fixed labels instead: 2009, 2018 and 2024 at left 8%, 40% and 70%, 150px, 110px and 160px from the bottom (the first two on small screens). Pause the wave and the labels when the tab is hidden, the hero is off screen, or reduced motion turns on. A pause cancels every slot's pending step and leaves any label on screen fully visible; on resume, each visible label holds for a fresh random time and each empty slot schedules its next appearance.
+
+Post-ship change (2026-11-12): after the redesign shipped, the two small cross-fading labels became these insights: larger, twelve lines instead of six, three slots instead of two, placed at random and each on its own clock. Rian approved the mockups `insights-v1.html` and `insights-v2.html` in `.superpowers/brainstorm/9184-1794525134/content/` (gitignored, reference only); v2 added the random holds, rests, fades and first appearances after the first version's timing read as a 1-2-3 rhythm.
 
 ### Page structure and copy
 
