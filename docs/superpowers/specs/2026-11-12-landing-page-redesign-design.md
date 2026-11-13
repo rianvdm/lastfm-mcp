@@ -87,7 +87,7 @@ Each label is Bricolage Grotesque 400 at 20px (16px below 700px wide), `#2c2824`
 
 Each slot runs on its own clock, independent of the others:
 
-- **First appearance:** one random start per slot between 700 and 9000 ms after the slots start, at least 1500 ms from the others, in random slot order. The slots start once the web font has loaded (or after 3 s without it), so labels are measured in the real font.
+- **First appearance:** one label, in a random slot, comes in 200 ms after the slots start, so the hero never sits empty. The other slots start at random between 1700 and 9000 ms, at least 1500 ms apart. (Until 2026-11-13 every slot started at random between 700 and 9000 ms, which often left the hero empty for 2–3 s.) The slots start once the web font has loaded (or after 3 s without it), so labels are measured in the real font.
 - **Cycle:** pick a line no other slot is showing, place it, fade in, hold for a random 2500–8000 ms, fade out, then rest. A rest is a random 6000–11000 ms a quarter of the time, otherwise 800–5000 ms.
 - **Fade:** each appearance picks a random 1.0–1.9 s and passes it to the CSS as `--fade`, which times both the opacity and the movement. The slot waits that same time after fading out before freeing its line and spot.
 - **Placement:** a random spot at least 16px from the hero's sides, between 36px and 200px above its bottom edge, and at least 16px from every other label still on screen. After 30 tries without a clear spot, the slot tries again 800 ms later.

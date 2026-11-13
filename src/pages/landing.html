@@ -1100,8 +1100,9 @@ url = "{{ORIGIN}}/mcp"</code></pre>
 					{ line: '2018 · city pop rabbit hole', left: '40%', bottom: '110px' },
 					{ line: '2024 · jazz, apparently', left: '70%', bottom: '160px' },
 				]
-				const firstStartRange = [700, 9000] // ms after the slots start
-				const firstStartSpacing = 1500 // ms; first appearances are at least this far apart, in random slot order
+				const firstStartDelay = 200 // ms after the slots start; one label, in a random slot, appears almost at once
+				const firstStartRange = [1700, 9000] // ms after the slots start, for every other slot's first appearance
+				const firstStartSpacing = 1500 // ms; first appearances are at least this far apart
 				const holdRange = [2500, 8000] // ms fully visible
 				const fadeRange = [1000, 1900] // ms; each appearance's fade, passed to the CSS as --fade
 				const restRange = [800, 5000] // ms empty between appearances
@@ -1142,12 +1143,23 @@ url = "{{ORIGIN}}/mcp"</code></pre>
 				const spacedStarts = (count, [min, max], spacing) => {
 					const slack = max - min - Math.max(0, count - 1) * spacing
 					const offsets = Array.from({ length: count }, () => Math.random() * slack).sort((a, b) => a - b)
-					const starts = offsets.map((offset, i) => min + offset + i * spacing)
-					for (let i = starts.length - 1; i > 0; i--) {
+					return shuffle(offsets.map((offset, i) => min + offset + i * spacing))
+				}
+
+				const shuffle = (items) => {
+					for (let i = items.length - 1; i > 0; i--) {
 						const j = Math.floor(Math.random() * (i + 1))
-						;[starts[i], starts[j]] = [starts[j], starts[i]]
+						;[items[i], items[j]] = [items[j], items[i]]
 					}
-					return starts
+					return items
+				}
+
+				// First appearances in random slot order. When nothing has shown or been scheduled yet, one label comes in
+				// almost at once so the page doesn't sit empty; otherwise every start is spread across the range.
+				const firstStarts = (count) => {
+					const opening = !slots.some((slot) => slot.timer || slot.shown)
+					if (!opening || count === 0) return spacedStarts(count, firstStartRange, firstStartSpacing)
+					return shuffle([firstStartDelay, ...spacedStarts(count - 1, firstStartRange, firstStartSpacing)])
 				}
 
 				// Only one step per slot is ever pending, so pausing can cancel every slot cleanly
@@ -1236,7 +1248,7 @@ url = "{{ORIGIN}}/mcp"</code></pre>
 					if (insightsFixed) clearFixedInsights()
 					if (!fontsReady) return
 					const idle = slots.filter((slot) => !slot.timer && slot.index < activeSlotCount())
-					const starts = spacedStarts(idle.filter((slot) => !slot.line && !slot.shown).length, firstStartRange, firstStartSpacing)
+					const starts = firstStarts(idle.filter((slot) => !slot.line && !slot.shown).length)
 					idle.forEach((slot) => {
 						if (slot.line) schedule(slot, hideInsight, randomBetween(holdRange))
 						else if (!slot.shown) schedule(slot, showInsight, starts.pop())

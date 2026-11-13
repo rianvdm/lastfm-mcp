@@ -5,7 +5,7 @@ import landing from './landing.html'
 import { fillPlaceholders } from './template'
 
 /** When the landing page last changed (ISO date). The sitemap's <lastmod>; update it with any change to the page. */
-export const LANDING_PAGE_UPDATED = '2026-11-12'
+export const LANDING_PAGE_UPDATED = '2026-11-13'
 
 const SITE_URL = 'https://lastfm-mcp.com/'
 const SITE_NAME = 'Last.fm MCP'

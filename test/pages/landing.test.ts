@@ -306,23 +306,24 @@ describe('buildLandingPage', () => {
 		}
 
 		describe('first appearances', () => {
-			it('shows nothing before 700 ms, then every slot by 9 s, at least 1500 ms apart', async () => {
+			it('brings one label in at 200 ms, then the others between 1.7 and 9 s, at least 1500 ms apart', async () => {
 				for (const seed of seeds) {
 					const wave = await runWave(html, { seed })
-					wave.advance(699)
+					wave.advance(199)
 					expect(
 						wave.events.filter((event) => event.type === 'in'),
 						`seed ${seed}`,
 					).toEqual([])
 
-					wave.advance(9000 - 699)
+					wave.advance(9000 - 199)
 					const times = firstShown(wave)
 					expect(
-						times.every((time) => time !== undefined && time >= 700 && time <= 9000),
+						times.every((time) => time !== undefined && time <= 9000),
 						`seed ${seed}: ${times}`,
 					).toBe(true)
 					const sorted = (times as number[]).sort((a, b) => a - b)
-					expect(sorted[1] - sorted[0], `seed ${seed}`).toBeGreaterThanOrEqual(1500)
+					expect(sorted[0], `seed ${seed}`).toBe(200)
+					expect(sorted[1], `seed ${seed}`).toBeGreaterThanOrEqual(1700)
 					expect(sorted[2] - sorted[1], `seed ${seed}`).toBeGreaterThanOrEqual(1500)
 				}
 			})
@@ -346,7 +347,8 @@ describe('buildLandingPage', () => {
 
 				wave.advance(1 + 9000)
 				const times = firstShown(wave)
-				expect(times.every((time) => time !== undefined && time >= 3000 + 700)).toBe(true)
+				expect(times.every((time) => time !== undefined && time >= 3000 + 200)).toBe(true)
+				expect(Math.min(...(times as number[]))).toBe(3000 + 200)
 			})
 
 			it('still starts the slots when the web font fails to load', async () => {
@@ -543,22 +545,25 @@ describe('buildLandingPage', () => {
 
 			it('keeps the first-appearance stagger when the hero resizes before any label has appeared', async () => {
 				const wave = await runWave(html, { seed: 12 })
-				wave.advance(100)
+				// Settles at 170 ms, before the first label comes in at 200 ms
+				wave.advance(20)
 				wave.setViewportWidth(1000)
 				wave.advance(resizeDelay)
 				expect(wave.pendingTimers()).toBe(3)
 
 				wave.advance(9000)
 				const times = firstShown(wave) as number[]
-				expect(times.every((time) => time >= 700 && time <= 9000)).toBe(true)
 				const sorted = [...times].sort((a, b) => a - b)
-				expect(sorted[1] - sorted[0]).toBeGreaterThanOrEqual(1500)
+				expect(sorted[0]).toBe(200)
+				expect(sorted[1]).toBeGreaterThanOrEqual(1700)
+				expect(sorted[2]).toBeLessThanOrEqual(9000)
 				expect(sorted[2] - sorted[1]).toBeGreaterThanOrEqual(1500)
 			})
 
 			it('stops the third slot at once when the screen narrows before it has appeared', async () => {
 				const wave = await runWave(html, { seed: 12 })
-				wave.advance(100)
+				// Settles at 170 ms, before the first label comes in at 200 ms
+				wave.advance(20)
 				wave.setViewportWidth(375)
 				wave.advance(resizeDelay)
 
@@ -632,7 +637,7 @@ describe('buildLandingPage', () => {
 				const shown = [0, 1, 2].map(
 					(slot) => wave.events.find((event) => event.slot === slot && event.type === 'in' && event.time > resumedAt)?.time,
 				)
-				expect(shown.every((time) => time !== undefined && time >= resumedAt + 700)).toBe(true)
+				expect(shown.every((time) => time !== undefined && time >= resumedAt + 200)).toBe(true)
 			})
 		})
 
