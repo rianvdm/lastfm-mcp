@@ -61,6 +61,8 @@ describe('createMcpServer registration', () => {
 
 		for (const tool of tools) {
 			expect(tool.title, `${tool.name} has no title`).toBeTruthy()
+			// Every MCP request needs Last.fm sign-in, so no description may say a tool works without it
+			expect(tool.description, `${tool.name} claims it needs no sign-in`).not.toMatch(/no authentication required|for private profiles/i)
 			expect(tool.annotations, `${tool.name} has no annotations`).toEqual({
 				readOnlyHint: true,
 				destructiveHint: false,
