@@ -505,7 +505,7 @@ describe('cache tally', () => {
 
 	beforeEach(() => {
 		mockKV = createMockKV()
-		tally = { hits: 0, misses: 0 }
+		tally = { hits: 0, misses: 0, requests: 0 }
 		vi.spyOn(console, 'log').mockImplementation(() => {})
 	})
 
@@ -518,10 +518,10 @@ describe('cache tally', () => {
 		const fetcher = vi.fn().mockResolvedValue({ name: 'Test Data' })
 
 		await inTally(() => cache.getOrFetch('trackInfo', 'test-key', fetcher))
-		expect(tally).toEqual({ hits: 0, misses: 1 })
+		expect(tally).toEqual({ hits: 0, misses: 1, requests: 0 })
 
 		await inTally(() => cache.getOrFetch('trackInfo', 'test-key', fetcher))
-		expect(tally).toEqual({ hits: 1, misses: 1 })
+		expect(tally).toEqual({ hits: 1, misses: 1, requests: 0 })
 		expect(fetcher).toHaveBeenCalledTimes(1)
 	})
 
@@ -529,7 +529,7 @@ describe('cache tally', () => {
 		const cache = new SmartCache(mockKV as unknown as KVNamespace)
 		let resolveFetch: (value: { name: string }) => void = () => {}
 		const fetcher = vi.fn(() => new Promise<{ name: string }>((resolve) => (resolveFetch = resolve)))
-		const firstTally: CacheTally = { hits: 0, misses: 0 }
+		const firstTally: CacheTally = { hits: 0, misses: 0, requests: 0 }
 
 		const first = runWithCacheTally(firstTally, () => cache.getOrFetch('trackInfo', 'test-key', fetcher))
 		await vi.waitFor(() => expect(fetcher).toHaveBeenCalledTimes(1))
@@ -538,8 +538,8 @@ describe('cache tally', () => {
 		await Promise.all([first, second])
 
 		expect(fetcher).toHaveBeenCalledTimes(1)
-		expect(firstTally).toEqual({ hits: 0, misses: 1 })
-		expect(tally).toEqual({ hits: 1, misses: 0 })
+		expect(firstTally).toEqual({ hits: 0, misses: 1, requests: 0 })
+		expect(tally).toEqual({ hits: 1, misses: 0, requests: 0 })
 	})
 
 	it('should count a forced refresh as a miss', async () => {
@@ -551,7 +551,7 @@ describe('cache tally', () => {
 			await cache.getOrFetch('trackInfo', 'test-key', fetcher, { forceRefresh: true })
 		})
 
-		expect(tally).toEqual({ hits: 0, misses: 2 })
+		expect(tally).toEqual({ hits: 0, misses: 2, requests: 0 })
 	})
 
 	it('should count a miss when the fetch fails', async () => {
@@ -562,7 +562,7 @@ describe('cache tally', () => {
 			'down',
 		)
 
-		expect(tally).toEqual({ hits: 0, misses: 1 })
+		expect(tally).toEqual({ hits: 0, misses: 1, requests: 0 })
 	})
 
 	it('should leave the tally alone for plain get and set', async () => {
@@ -573,7 +573,7 @@ describe('cache tally', () => {
 			await cache.get('trackInfo', 'test-key')
 		})
 
-		expect(tally).toEqual({ hits: 0, misses: 0 })
+		expect(tally).toEqual({ hits: 0, misses: 0, requests: 0 })
 	})
 
 	it('should count lookups through createLastfmCache', async () => {
@@ -585,7 +585,7 @@ describe('cache tally', () => {
 			await cache.getOrFetch('trackInfo', 'test-key', fetcher)
 		})
 
-		expect(tally).toEqual({ hits: 1, misses: 1 })
+		expect(tally).toEqual({ hits: 1, misses: 1, requests: 0 })
 	})
 
 	it('should count every lookup as a miss without KV storage', async () => {
@@ -597,20 +597,20 @@ describe('cache tally', () => {
 			await cache.getOrFetch('trackInfo', 'test-key', fetcher)
 		})
 
-		expect(tally).toEqual({ hits: 0, misses: 2 })
+		expect(tally).toEqual({ hits: 0, misses: 2, requests: 0 })
 	})
 
 	it('should count only into the tally of the run that made the lookup', async () => {
 		const cache = new SmartCache(mockKV as unknown as KVNamespace)
-		const otherTally: CacheTally = { hits: 0, misses: 0 }
+		const otherTally: CacheTally = { hits: 0, misses: 0, requests: 0 }
 
 		await Promise.all([
 			inTally(() => cache.getOrFetch('trackInfo', 'test-key', vi.fn().mockResolvedValue({ name: 'Test Data' }))),
 			runWithCacheTally(otherTally, async () => 'no lookup'),
 		])
 
-		expect(tally).toEqual({ hits: 0, misses: 1 })
-		expect(otherTally).toEqual({ hits: 0, misses: 0 })
+		expect(tally).toEqual({ hits: 0, misses: 1, requests: 0 })
+		expect(otherTally).toEqual({ hits: 0, misses: 0, requests: 0 })
 	})
 
 	it('should work outside any tally', async () => {

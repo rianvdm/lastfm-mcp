@@ -1,10 +1,9 @@
-/**
- * Tests for Last.fm API client
- * Critical tests for core business logic that was previously untested
- */
-
+// ABOUTME: Tests for LastfmClient, the typed Last.fm API client.
+// ABOUTME: Covers request formation, response parsing, error handling, retry options and per-attempt request counting.
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
+
 import { LastfmClient } from '../../src/clients/lastfm'
+import { runWithCacheTally, type CacheTally } from '../../src/utils/cacheTally'
 import { fetchWithRetry } from '../../src/utils/retry'
 import type {
 	LastfmRecentTracksResponse,
@@ -106,6 +105,7 @@ describe('LastfmClient', () => {
 
 	afterEach(() => {
 		vi.useRealTimers()
+		vi.restoreAllMocks()
 	})
 
 	describe('constructor', () => {
@@ -400,6 +400,24 @@ describe('LastfmClient', () => {
 					jitterFactor: 0.1,
 				}),
 			)
+		})
+
+		it('should count every HTTP attempt into the current tally', async () => {
+			const actual = await vi.importActual<typeof import('../../src/utils/retry')>('../../src/utils/retry')
+			mockFetchWithRetry.mockImplementationOnce(actual.fetchWithRetry)
+			vi.spyOn(console, 'log').mockImplementation(() => {})
+			const fetchSpy = vi
+				.spyOn(globalThis, 'fetch')
+				.mockResolvedValueOnce(new Response('Rate limited', { status: 429 }))
+				.mockResolvedValueOnce(Response.json(mockArtistInfoResponse))
+			const tally: CacheTally = { hits: 0, misses: 0, requests: 0 }
+
+			const promise = runWithCacheTally(tally, () => client.getArtistInfo('Queen'))
+			await vi.advanceTimersByTimeAsync(2000)
+			await promise
+
+			expect(fetchSpy).toHaveBeenCalledTimes(2)
+			expect(tally.requests).toBe(2)
 		})
 	})
 

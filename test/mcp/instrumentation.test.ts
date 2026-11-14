@@ -12,6 +12,7 @@ import { createMcpServer } from '../../src/mcp/server'
 import { AUTH_REQUIRED_HEADING } from '../../src/mcp/tools/authenticated'
 import { toolError } from '../../src/mcp/tools/error-handler'
 import { SmartCache } from '../../src/utils/cache'
+import { countLastfmRequest } from '../../src/utils/cacheTally'
 
 type ToolHandler = () => unknown
 
@@ -79,7 +80,7 @@ describe('instrumentTools', () => {
 			expect(events).toHaveLength(1)
 			expect(events[0]).toMatchObject({ tool: 'plain', outcome: 'ok', cache: 'none' })
 			expect(events[0].durationMs).toBeGreaterThanOrEqual(0)
-			expect(Object.keys(events[0]).sort()).toEqual(['cache', 'durationMs', 'outcome', 'tool'])
+			expect(Object.keys(events[0]).sort()).toEqual(['cache', 'durationMs', 'lastfmRequests', 'outcome', 'tool'])
 		})
 
 		it('should report error for a toolError result', async () => {
@@ -143,7 +144,7 @@ describe('instrumentTools', () => {
 			expect(actual.isError).toBe(true)
 			expect(events).toHaveLength(1)
 			expect(events[0]).toMatchObject({ tool: 'needs_artist', outcome: 'error', cache: 'none' })
-			expect(Object.keys(events[0]).sort()).toEqual(['cache', 'durationMs', 'outcome', 'tool'])
+			expect(Object.keys(events[0]).sort()).toEqual(['cache', 'durationMs', 'lastfmRequests', 'outcome', 'tool'])
 		})
 
 		it('should report one unknown_tool error event, never the requested name, for an unknown tool', async () => {
@@ -258,6 +259,29 @@ describe('instrumentTools', () => {
 
 			const cacheByTool = Object.fromEntries(events.map((e) => [e.tool, e.cache]))
 			expect(cacheByTool).toEqual({ idle: 'none', lookup: 'miss' })
+		})
+	})
+
+	describe('Last.fm requests', () => {
+		it('should report how many Last.fm requests the call made', async () => {
+			const client = await serverWith(
+				{
+					three_requests: () => {
+						countLastfmRequest()
+						countLastfmRequest()
+						countLastfmRequest()
+						return okResult
+					},
+					no_requests: () => okResult,
+				},
+				onToolCall,
+			)
+
+			await client.callTool({ name: 'three_requests', arguments: {} })
+			await client.callTool({ name: 'no_requests', arguments: {} })
+
+			const requestsByTool = Object.fromEntries(events.map((e) => [e.tool, e.lastfmRequests]))
+			expect(requestsByTool).toEqual({ three_requests: 3, no_requests: 0 })
 		})
 	})
 })

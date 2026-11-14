@@ -33,7 +33,7 @@ describe('CachedLastfmClient', () => {
 	describe('cache tally', () => {
 		it('should count lookups into the current tally', async () => {
 			const getArtistInfo = vi.fn().mockResolvedValue({ artist: { name: 'Radiohead' } })
-			const tally: CacheTally = { hits: 0, misses: 0 }
+			const tally: CacheTally = { hits: 0, misses: 0, requests: 0 }
 			const client = new CachedLastfmClient({ getArtistInfo } as unknown as LastfmClient, memoryKV())
 
 			await runWithCacheTally(tally, async () => {
@@ -42,7 +42,7 @@ describe('CachedLastfmClient', () => {
 			})
 
 			expect(getArtistInfo).toHaveBeenCalledTimes(1)
-			expect(tally).toEqual({ hits: 1, misses: 1 })
+			expect(tally).toEqual({ hits: 1, misses: 1, requests: 0 })
 		})
 	})
 })

@@ -1,7 +1,8 @@
 // ABOUTME: Last.fm API client for fetching user listening data and public music information.
 // ABOUTME: Wraps all Last.fm API endpoints with typed interfaces and retry-enabled HTTP calls.
 
-import { fetchWithRetry, RetryOptions } from '../utils/retry'
+import { countLastfmRequest } from '../utils/cacheTally'
+import { fetchWithRetry, type RetryOptions } from '../utils/retry'
 
 // Last.fm API response interfaces
 export interface LastfmTrack {
@@ -433,6 +434,7 @@ export class LastfmClient {
 			...params,
 		})
 
+		const retryOptions = this.lastfmRetryOptions
 		const response = await fetchWithRetry(
 			`${this.baseUrl}?${searchParams.toString()}`,
 			{
@@ -441,7 +443,15 @@ export class LastfmClient {
 					'User-Agent': 'lastfm-mcp/1.0.0',
 				},
 			},
-			this.lastfmRetryOptions,
+			{
+				...retryOptions,
+				// Counts every HTTP attempt, retries included. An onAttempt already in the options runs first, so an attempt
+				// it refuses by throwing never reaches Last.fm and isn't counted.
+				onAttempt: (attempt) => {
+					retryOptions.onAttempt?.(attempt)
+					countLastfmRequest()
+				},
+			},
 		)
 
 		const data = (await response.json()) as LastfmApiResponse<T>

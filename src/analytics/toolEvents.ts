@@ -12,16 +12,19 @@ export interface ToolCallEvent {
 	outcome: ToolOutcome
 	cache: CacheOutcome
 	durationMs: number
+	/** Last.fm HTTP requests the call made, retries included; 0 when everything came from the cache. */
+	lastfmRequests: number
 }
 
 /**
  * Builds the Analytics Engine data point for one tool call. The dashboard's SQL depends on this layout:
- * index1 = tool; blob1 = tool, blob2 = client label, blob3 = outcome, blob4 = cache, blob5 = server version; double1 = duration in ms.
+ * index1 = tool; blob1 = tool, blob2 = client label, blob3 = outcome, blob4 = cache, blob5 = server version;
+ * double1 = duration in ms, double2 = Last.fm HTTP requests (retries included).
  */
 export function toDataPoint(event: ToolCallEvent, clientLabel: string, serverVersion: string): AnalyticsEngineDataPoint {
 	return {
 		indexes: [event.tool],
 		blobs: [event.tool, clientLabel, event.outcome, event.cache, serverVersion],
-		doubles: [event.durationMs],
+		doubles: [event.durationMs, event.lastfmRequests],
 	}
 }
