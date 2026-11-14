@@ -31,6 +31,7 @@ function result(overrides: Partial<RecommendationResult> = {}): RecommendationRe
 		partial: false,
 		genreNotFound: false,
 		emptyHistory: false,
+		libraryChecked: true,
 		libraryComplete: false,
 		libraryPageSize: 1000,
 		...overrides,
@@ -97,6 +98,20 @@ describe('formatRecommendations', () => {
 			const text = formatRecommendations(result({ libraryComplete: true }))
 			expect(text).toContain('and Cocteau Twins (#14 this year). Not in your library.')
 			expect(text).not.toContain('Not in your top')
+		})
+
+		it('should say the library could not be checked when the overall lookup failed', () => {
+			const unchecked = "Couldn't check your full library, so you may already know this one."
+			for (const libraryComplete of [false, true]) {
+				const text = formatRecommendations(result({ libraryChecked: false, libraryComplete }))
+				expect(text).toContain(`and Cocteau Twins (#14 this year). ${unchecked}`)
+				expect(text).not.toContain('Not in your')
+			}
+
+			const tag = formatRecommendations(
+				result({ genre: 'shoegaze', libraryChecked: false, picks: [pick({ source: 'tag', seeds: [], tagRank: 7 })] }),
+			)
+			expect(tag).toContain(`One of Last.fm's top artists tagged shoegaze (#7). ${unchecked}`)
 		})
 
 		it('should explain a genre top-up by its rank in the tag', () => {

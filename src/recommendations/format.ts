@@ -31,6 +31,8 @@ const PARTIAL_NOTE =
 const EMPTY_HISTORY =
 	"There isn't enough listening history on this Last.fm account yet to base recommendations on. Scrobble a few days of listening and try again."
 
+const LIBRARY_UNCHECKED = "Couldn't check your full library, so you may already know this one."
+
 const ALL_FILTERED = 'Everything that matched is already in your library or excluded. Try a genre, or a shorter exclude list.'
 
 /**
@@ -47,11 +49,17 @@ export function formatRecommendations(result: RecommendationResult, request: Rec
 	// With nothing back from a cut-short call, "ask again" is the useful advice, not "already in your library"
 	if (result.picks.length === 0) return `${heading}\n\n${result.partial ? PARTIAL_NOTE : ALL_FILTERED}`
 
-	const libraryNote = result.libraryComplete ? 'Not in your library.' : `Not in your top ${result.libraryPageSize}.`
+	const libraryNote = libraryNoteFor(result)
 	const sections = [heading, ...result.picks.map((pick, index) => formatPick(pick, index + 1, result.genre, libraryNote))]
 	if (result.partial) sections.push(PARTIAL_NOTE)
 
 	return sections.join('\n\n') + nextSteps(result, request)
+}
+
+/** The reason line's last sentence: how far the library check reached, or that it couldn't run. */
+function libraryNoteFor(result: RecommendationResult): string {
+	if (!result.libraryChecked) return LIBRARY_UNCHECKED
+	return result.libraryComplete ? 'Not in your library.' : `Not in your top ${result.libraryPageSize}.`
 }
 
 function formatPick(pick: Pick, number: number, genre: string | undefined, libraryNote: string): string {

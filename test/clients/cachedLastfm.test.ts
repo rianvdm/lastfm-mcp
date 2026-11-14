@@ -63,6 +63,7 @@ describe('CachedLastfmClient', () => {
 	describe('getRecommendationCandidates', () => {
 		const list = (partial: boolean): CandidateList => ({
 			candidates: [{ name: 'Slowdive', score: 1.5, seeds: [], source: 'similar' }],
+			libraryChecked: true,
 			libraryComplete: false,
 			libraryPageSize: 1000,
 			partial,

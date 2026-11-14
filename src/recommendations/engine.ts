@@ -59,6 +59,8 @@ export interface RecommendationResult {
 	partial: boolean
 	genreNotFound: boolean
 	emptyHistory: boolean
+	/** True when the overall top artists were fetched; false means picks may include artists the user already plays. */
+	libraryChecked: boolean
 	libraryComplete: boolean
 	libraryPageSize: number
 }
@@ -103,6 +105,7 @@ export async function findRecommendations(
 			partial: list.partial || starters.some((starter) => starter.incomplete),
 			genreNotFound: list.genreNotFound,
 			emptyHistory: list.emptyHistory,
+			libraryChecked: list.libraryChecked,
 			libraryComplete: list.libraryComplete,
 			libraryPageSize: list.libraryPageSize,
 		}
@@ -120,6 +123,7 @@ async function candidatesWithinDeadline(client: CachedLastfmClient, username: st
 		if (!(error instanceof RequestBudgetExceeded && error.reason === 'deadline')) throw error
 		return {
 			candidates: [],
+			libraryChecked: false,
 			libraryComplete: false,
 			libraryPageSize: LIBRARY_PAGE_SIZE,
 			partial: true,
@@ -143,16 +147,20 @@ async function buildCandidates(client: CachedLastfmClient, username: string, tag
 	// Any failed window, budget or 5xx alike, leaves the seeds and library short, so the list is partial and not cached
 	let partial = failures.length > 0
 	const windows: Partial<Record<Window, string[]>> = {}
+	let libraryChecked = false
 	let libraryComplete = false
 	windowResults.forEach((result, index) => {
 		if (result.status === 'rejected') return
 		const window = WINDOWS[index]
 		windows[window] = toArray(result.value.topartists?.artist).map((artist) => artist.name)
-		if (window === 'overall') libraryComplete = Number(result.value.topartists?.['@attr']?.total) <= LIBRARY_PAGE_SIZE
+		if (window === 'overall') {
+			libraryChecked = true
+			libraryComplete = Number(result.value.topartists?.['@attr']?.total) <= LIBRARY_PAGE_SIZE
+		}
 	})
 
 	const library = new Set(Object.values(windows).flatMap((names) => names.map(normaliseArtist)))
-	const base = { libraryComplete, libraryPageSize: LIBRARY_PAGE_SIZE }
+	const base = { libraryChecked, libraryComplete, libraryPageSize: LIBRARY_PAGE_SIZE }
 	// A failed window might have held artists, so only claim an empty history when every window answered
 	if (library.size === 0 && !partial) return { ...base, candidates: [], partial, genreNotFound: false, emptyHistory: true }
 

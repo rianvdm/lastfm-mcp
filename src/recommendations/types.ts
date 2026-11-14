@@ -31,6 +31,8 @@ export interface Candidate {
 /** The ranked candidates for one user and genre, as built and cached before `exclude` and `limit` apply. */
 export interface CandidateList {
 	candidates: Candidate[]
+	/** True when the user's overall top artists were fetched, so library removal covers their top `libraryPageSize`. */
+	libraryChecked: boolean
 	/** True when the user's overall top artists came back shorter than the page size, so the library is their whole history. */
 	libraryComplete: boolean
 	/** Page size used for the overall top artists, quoted in "Not in your top N". */

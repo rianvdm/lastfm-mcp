@@ -99,6 +99,7 @@ describe('findRecommendations', () => {
 			partial: false,
 			genreNotFound: false,
 			emptyHistory: false,
+			libraryChecked: true,
 			libraryComplete: true,
 			libraryPageSize: LIBRARY_PAGE_SIZE,
 		})
@@ -307,6 +308,23 @@ describe('findRecommendations', () => {
 		expect(result.partial).toBe(true)
 		expect(result.emptyHistory).toBe(false)
 		expect(result.picks.map((pick) => pick.name)).toEqual(['Mojave 3', 'Chapterhouse', 'Swervedriver'])
+	})
+
+	it('should report libraryChecked false, not a complete library, when the overall lookup fails', async () => {
+		const { client } = stubClient({ ...BASE, windows: { ...BASE.windows, overall: new Error('HTTP 500: Internal Server Error') } })
+
+		const result = await findRecommendations(client, 'rj', { limit: 8, exclude: [] })
+
+		expect(result).toMatchObject({ libraryChecked: false, libraryComplete: false, partial: true })
+		expect(result.picks.length).toBeGreaterThan(0)
+	})
+
+	it('should report libraryChecked true when only a recent window fails', async () => {
+		const { client } = stubClient({ ...BASE, windows: { ...BASE.windows, '12month': new Error('HTTP 500: Internal Server Error') } })
+
+		const result = await findRecommendations(client, 'rj', { limit: 8, exclude: [] })
+
+		expect(result).toMatchObject({ libraryChecked: true, partial: true })
 	})
 
 	it('should rethrow when every window lookup fails', async () => {
@@ -531,7 +549,7 @@ describe('findRecommendations through CachedLastfmClient and LastfmClient', () =
 			const { settled, promise } = await atDeadline(new CachedLastfmClient(new LastfmClient('key'), kv))
 
 			expect(settled).toBe(true)
-			expect(await promise).toMatchObject({ partial: true, picks: [], emptyHistory: false, genreNotFound: false })
+			expect(await promise).toMatchObject({ partial: true, picks: [], emptyHistory: false, genreNotFound: false, libraryChecked: false })
 			expect(requests).toEqual([])
 		})
 
