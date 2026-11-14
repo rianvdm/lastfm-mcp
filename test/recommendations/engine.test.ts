@@ -1,5 +1,5 @@
-// ABOUTME: Tests for the recommendation engine with a stubbed CachedLastfmClient: seeds, fan-out, genre, exclude and starters.
-// ABOUTME: Covers partial results on rate limits and spent budgets, empty history, unknown tags and the exclude-free candidate cache.
+// ABOUTME: Tests for the recommendation engine, mostly with a stubbed CachedLastfmClient, some through the real clients and a fake Last.fm.
+// ABOUTME: Covers seeds, fan-out, genre, exclude, starters, partial results on rate limits, budgets and the deadline, and the cache.
 
 import { describe, it, expect, vi, afterEach } from 'vitest'
 
@@ -451,6 +451,24 @@ function similarTo(artist: string, names: string[]) {
 	return { similarartists: { artist: names.map((name) => ({ name, match: '0.5', url: '' })), '@attr': { artist } } }
 }
 
+/** A Map-backed KV whose get or put never settles for the keys the predicates pick, as a stalled KV would. */
+function stallingKV(stall: { get?: (key: string) => boolean; put?: (key: string) => boolean } = {}) {
+	const store = new Map<string, string>()
+	const never = new Promise<never>(() => {})
+	const kv = {
+		get: async (key: string) => (stall.get?.(key) ? never : (store.get(key) ?? null)),
+		put: async (key: string, value: string) => {
+			if (stall.put?.(key)) return never
+			store.set(key, value)
+		},
+		delete: async (key: string) => {
+			store.delete(key)
+		},
+		list: async () => ({ keys: [...store.keys()].map((name) => ({ name })) }),
+	}
+	return { kv: kv as unknown as KVNamespace, store }
+}
+
 describe('findRecommendations through CachedLastfmClient and LastfmClient', () => {
 	afterEach(() => {
 		vi.useRealTimers()
@@ -492,5 +510,50 @@ describe('findRecommendations through CachedLastfmClient and LastfmClient', () =
 			['C Similar', undefined, []],
 			['D Similar', undefined, []],
 		])
+	})
+
+	describe('hard deadline', () => {
+		/** Starts a call and reports whether it has settled once the deadline has passed in fake time. */
+		async function atDeadline(client: CachedLastfmClient) {
+			let settled = false
+			const promise = findRecommendations(client, 'rj', { limit: 8, exclude: [] }).finally(() => {
+				settled = true
+			})
+			await vi.advanceTimersByTimeAsync(RECOMMENDATION_POLICY.timeoutMs)
+			return { settled, promise }
+		}
+
+		it('should return partial with no picks at the deadline when the candidate cache read stalls', async () => {
+			vi.useFakeTimers()
+			const { requests } = fakeLastfm(() => undefined)
+			const { kv } = stallingKV({ get: (key) => key.startsWith('cache:userRecommendations:') })
+
+			const { settled, promise } = await atDeadline(new CachedLastfmClient(new LastfmClient('key'), kv))
+
+			expect(settled).toBe(true)
+			expect(await promise).toMatchObject({ partial: true, picks: [], emptyHistory: false, genreNotFound: false })
+			expect(requests).toEqual([])
+		})
+
+		it('should keep the picks and return partial at the deadline when a starter cache write stalls', async () => {
+			vi.useFakeTimers()
+			vi.spyOn(console, 'log').mockImplementation(() => {})
+			fakeLastfm((method, params) => {
+				if (method === 'user.gettopartists') return { body: topArtists(params.get('period') === '7day' ? ['Slowdive'] : []) }
+				if (method === 'artist.getsimilar') return { body: similarTo('Slowdive', ['Mojave 3', 'Chapterhouse']) }
+				return undefined
+			})
+			const { kv } = stallingKV({ put: (key) => key.startsWith('cache:artistTopTracks:') })
+
+			const { settled, promise } = await atDeadline(new CachedLastfmClient(new LastfmClient('key'), kv))
+
+			expect(settled).toBe(true)
+			const result = await promise
+			expect(result.partial).toBe(true)
+			expect(result.picks.map((pick) => [pick.name, pick.album, pick.tracks])).toEqual([
+				['Chapterhouse', 'Chapterhouse LP1', []],
+				['Mojave 3', 'Mojave 3 LP1', []],
+			])
+		})
 	})
 })

@@ -1,5 +1,5 @@
 // ABOUTME: Per-call Last.fm request policy (request budget, wall-clock deadline, concurrency cap, short retries) in AsyncLocalStorage.
-// ABOUTME: A tool call opts in with runWithRequestPolicy; LastfmClient sends every request through withPolicy, a no-op outside one.
+// ABOUTME: A tool call opts in with runWithRequestPolicy; LastfmClient sends through withPolicy, other waits use withinDeadline.
 import { AsyncLocalStorage } from 'node:async_hooks'
 
 import type { RetryOptions } from './retry'
@@ -167,6 +167,23 @@ async function untilAborted<T>(signal: AbortSignal, work: Promise<T>): Promise<T
 	} finally {
 		if (onAbort) signal.removeEventListener('abort', onAbort)
 	}
+}
+
+/**
+ * Settles with `work`, or rejects with RequestBudgetExceeded('deadline') once the current policy's deadline passes,
+ * whichever comes first. For work the deadline can't cancel itself, such as KV reads and writes or a cached lookup
+ * another caller started, so a call can stop waiting on it and keep what it already has. The work itself carries on.
+ * Outside a policy it returns `work` unchanged.
+ */
+export function withinDeadline<T>(work: Promise<T>): Promise<T> {
+	const state = currentPolicy.getStore()
+	if (!state) return work
+	if (state.controller.signal.aborted || Date.now() >= state.deadline) {
+		// Nothing waits on the abandoned work, so keep its rejection from going unhandled
+		work.catch(() => {})
+		return Promise.reject(new RequestBudgetExceeded('deadline'))
+	}
+	return untilAborted(state.controller.signal, work)
 }
 
 /**

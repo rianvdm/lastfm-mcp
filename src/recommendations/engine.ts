@@ -3,7 +3,7 @@
 
 import type { CachedLastfmClient } from '../clients/cachedLastfm'
 import { toArray } from '../mcp/tools/formatters'
-import { RECOMMENDATION_POLICY, runWithRequestPolicy } from '../utils/lastfmRequestPolicy'
+import { RECOMMENDATION_POLICY, RequestBudgetExceeded, runWithRequestPolicy, withinDeadline } from '../utils/lastfmRequestPolicy'
 import { applyExclude, applyGenre, normaliseArtist, rankCandidates, selectSeeds } from './scoring'
 import type { Candidate, CandidateList, SeedRef, Window } from './types'
 
@@ -75,8 +75,10 @@ export interface RecommendationOptions {
 /**
  * Finds up to `limit` artists new to `username`. The whole call runs under one RECOMMENDATION_POLICY, so its Last.fm
  * requests share one budget and deadline. Candidates come from the per-user, per-genre cache or are built on a miss;
- * `exclude` and `limit` apply after, and each pick then gets a starter album and tracks. Throws only if every
- * top-artist window lookup fails. A failed window, or a similar-artist, tag or starter lookup failing with anything but
+ * `exclude` and `limit` apply after, and each pick then gets a starter album and tracks. The deadline bounds the whole
+ * call, cache reads and writes included: a candidate step still running at the deadline returns no picks, and a starter
+ * lookup still running leaves its pick without starters, both as `partial`. Throws only if every top-artist window
+ * lookup fails before the deadline. A failed window, or a similar-artist, tag or starter lookup failing with anything but
  * Last.fm's error 6, comes back as `partial`, which also keeps the list out of the cache.
  */
 export async function findRecommendations(
@@ -90,7 +92,7 @@ export async function findRecommendations(
 	const { timeoutMs, ...limits } = RECOMMENDATION_POLICY
 
 	return runWithRequestPolicy({ ...limits, deadlineMs: timeoutMs }, async () => {
-		const list = await client.getRecommendationCandidates(username, tag, () => buildCandidates(client, username, tag))
+		const list = await candidatesWithinDeadline(client, username, tag)
 		const chosen = applyExclude(list.candidates, options.exclude, options.limit)
 		const starters = await Promise.all(chosen.map((candidate) => fetchStarters(client, candidate.name)))
 
@@ -105,6 +107,26 @@ export async function findRecommendations(
 			libraryPageSize: list.libraryPageSize,
 		}
 	})
+}
+
+/**
+ * The cached or freshly built candidates, or an empty partial list if the deadline passes first: a stalled KV read or
+ * write, or a build another call started, can't hold the call past its deadline.
+ */
+async function candidatesWithinDeadline(client: CachedLastfmClient, username: string, tag: string | undefined): Promise<CandidateList> {
+	try {
+		return await withinDeadline(client.getRecommendationCandidates(username, tag, () => buildCandidates(client, username, tag)))
+	} catch (error) {
+		if (!(error instanceof RequestBudgetExceeded && error.reason === 'deadline')) throw error
+		return {
+			candidates: [],
+			libraryComplete: false,
+			libraryPageSize: LIBRARY_PAGE_SIZE,
+			partial: true,
+			genreNotFound: false,
+			emptyHistory: false,
+		}
+	}
 }
 
 /** True for Last.fm error 6, its answer to an unknown artist, user or tag. */
@@ -185,11 +207,14 @@ interface Starters {
 	incomplete: boolean
 }
 
-/** Looks up one album and two tracks for `artist`; a failed or empty lookup just leaves them out. Only error 6 isn't `incomplete`. */
+/**
+ * Looks up one album and two tracks for `artist`; a failed or empty lookup just leaves them out. Only error 6 isn't
+ * `incomplete`. Each lookup gives up at the deadline, cache reads and writes included, so finished picks are kept.
+ */
 async function fetchStarters(client: CachedLastfmClient, artist: string): Promise<Starters> {
 	const [albums, tracks] = await Promise.allSettled([
-		client.getArtistTopAlbums(artist, STARTER_LIMIT),
-		client.getArtistTopTracks(artist, STARTER_LIMIT),
+		withinDeadline(client.getArtistTopAlbums(artist, STARTER_LIMIT)),
+		withinDeadline(client.getArtistTopTracks(artist, STARTER_LIMIT)),
 	])
 	const album = albums.status === 'fulfilled' ? toArray(albums.value.topalbums?.album)[0]?.name : undefined
 

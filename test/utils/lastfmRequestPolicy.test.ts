@@ -8,6 +8,7 @@ import {
 	isRateLimited,
 	runWithRequestPolicy,
 	withPolicy,
+	withinDeadline,
 	type RequestPolicy,
 } from '../../src/utils/lastfmRequestPolicy'
 import { fetchWithRetry, type RetryOptions } from '../../src/utils/retry'
@@ -323,6 +324,43 @@ describe('lastfmRequestPolicy', () => {
 			})
 
 			expect(received).toBeUndefined()
+		})
+	})
+
+	describe('withinDeadline', () => {
+		it('should settle with the work when it finishes before the deadline', async () => {
+			await expect(runWithRequestPolicy(POLICY, () => withinDeadline(Promise.resolve('done')))).resolves.toBe('done')
+			await expect(runWithRequestPolicy(POLICY, () => withinDeadline(Promise.reject(new Error('KV down'))))).rejects.toThrow('KV down')
+		})
+
+		it('should reject with reason deadline when work that is not a Last.fm request is still pending at the deadline', async () => {
+			vi.useFakeTimers()
+
+			const promise = runWithRequestPolicy({ ...POLICY, deadlineMs: 1000 }, () => withinDeadline(new Promise<never>(() => {}))).catch(
+				(e: unknown) => e,
+			)
+			await vi.advanceTimersByTimeAsync(1000)
+			const error = await promise
+
+			expect(error).toBeInstanceOf(RequestBudgetExceeded)
+			expect((error as RequestBudgetExceeded).reason).toBe('deadline')
+			expect(vi.getTimerCount()).toBe(0)
+		})
+
+		it('should reject straight away once the deadline has passed', async () => {
+			vi.useFakeTimers()
+
+			const error = await runWithRequestPolicy({ ...POLICY, deadlineMs: 1000 }, async () => {
+				await vi.advanceTimersByTimeAsync(1000)
+				return withinDeadline(Promise.resolve('late')).catch((e: unknown) => e)
+			})
+
+			expect(error).toBeInstanceOf(RequestBudgetExceeded)
+			expect((error as RequestBudgetExceeded).reason).toBe('deadline')
+		})
+
+		it('should hand back the work unchanged outside a policy', async () => {
+			await expect(withinDeadline(Promise.resolve('done'))).resolves.toBe('done')
 		})
 	})
 
