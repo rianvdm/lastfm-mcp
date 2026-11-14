@@ -45,7 +45,7 @@ More people call `get_music_recommendations`, because it answers "find me someth
 
 - **A rate-limit incident for everyone else.** One recommendation fanning out into a burst of Last.fm calls must not get the shared egress throttled. No 429s were logged in the 72 hours to 2026-11-14 (zero `Retry attempt` lines, zero `API error 29`), with a busiest minute of 192 tool calls; keep it that way.
 - **Recommending what the user already plays heavily.**
-- **Any per-user identifier or preference stored server-side**, in KV or in analytics.
+- **New per-user state on the server**: no stored preferences (`exclude` never reaches KV), and no user identifier in analytics. Caching Last.fm responses per username in KV, as every user tool already does, is unchanged.
 - **A tool slow enough that agents give up on it or users prefer chaining.** A cold call has a hard deadline (see Protecting Last.fm).
 
 ## Constraints
@@ -69,8 +69,8 @@ More people call `get_music_recommendations`, because it answers "find me someth
 
 ### How picks are found
 
-1. **Seeds.** Fetch the user's top artists for `7day`, `1month` and `12month` (about 10–15 each), and `overall` with Last.fm's maximum page size (expected 1000; the builder confirms the maximum). The four calls run concurrently and use the existing 1-hour `userTopArtists` cache.
-2. **Library.** Everything in those four lists counts as "already played". An artist outside the user's top 1000 overall may be recommended. The reason line says "Not in your top 1000", or "Not in your library" when the user's overall list is shorter than the page size. No per-pick play-count lookup: it would cost one unshared call per pick (decided 2026-11-14).
+1. **Seeds.** Fetch the user's top artists for `7day`, `1month` and `12month` (about 10–15 each), and `overall` with Last.fm's maximum page size (expected 1000; the builder confirms the maximum). The four calls run concurrently. A candidate build fetches them fresh rather than reading the 1-hour `userTopArtists` cache, and still writes the fresh values to it (see Caching).
+2. **Library.** Everything in those four lists counts as "already played". An artist outside the user's top 1000 overall may be recommended. The reason line says "Not in your top 1000", or "Not in your library" when the user's overall list is shorter than the page size. If the overall lookup failed, it says neither (see Output). No per-pick play-count lookup: it would cost one unshared call per pick (decided 2026-11-14).
 3. **Fan-out.** Take up to about 12 distinct seeds, favouring recent windows, and fetch similar artists for each through the existing 7-day, cross-user `similarArtists` cache. Use the same `limit` the `get_similar_artists` tool uses by default, so the two share cache entries.
 4. **Score.** A candidate's score sums, over every seed that points to it, the seed's window weight times Last.fm's similarity `match`. Recent windows weigh more (starting point: 7day 3, 1month 2, 12month 1, overall-only 0.5; tunable constants). Remove candidates in the library or in `exclude`. Break ties by number of seeds pointing to the candidate.
 5. **Genre.** When `genre` is set, fetch the tag's top artists once (`tag.getTopArtists`, a new client method, cached about 7 days and shared across users) and keep only candidates in that list. If fewer than `limit` survive, top up with the tag's highest-ranked artists that aren't in the library or `exclude`, with a reason that says so. An unknown tag returns a clear message, not an error.
@@ -81,6 +81,8 @@ More people call `get_music_recommendations`, because it answers "find me someth
 - At most 4 Last.fm requests in flight per tool call (a tunable constant).
 - A budget of 40 Last.fm HTTP requests per tool call, retries included. Counted at `LastfmClient.makeRequest` / `fetchWithRetry`, not from cache misses: a cache miss can make several requests (composite methods) or none (the outer result cache), and retries are the requests that matter while Last.fm is throttling.
 - A wall-clock deadline of 8 seconds per cold call (a tunable constant). The engine's Last.fm calls retry at most once and don't wait out a long `Retry-After`; the existing retry policy (three retries, `Retry-After` up to 15 s) can otherwise stall one lookup for over 30 s. Other tools keep the existing policy.
+- A rate limit stops the call. Once a request fails with a 429 after its one retry, or with error 29, every queued and later request in that call, retries and starters included, is refused without being sent or counted.
+- The deadline bounds the whole call, not only Last.fm requests. KV reads and writes, and a cached lookup another call started, are abandoned when it passes: a candidate step still running returns no picks, and a starter lookup still running leaves its pick without starters. Both count as partial.
 - If the budget or deadline runs out, or Last.fm returns a 429 or error 29, stop fetching and return the picks found so far, with a one-line note that results are partial. Starters are optional: a pick whose starter lookups didn't finish shows without them. Partial results aren't cached. Fail the tool with `toolError` only if the seed step fails.
 - Rough uncached cost: 4 seed calls, about 12 fan-out calls, 1 tag call, and 2 starter calls per pick (16 at the default limit), about 33 in all. At `limit` 15 that's about 47, so a cold call at high limits may hit the budget and return some picks without starters; that's acceptable. Most of the fan-out and starter calls are shared across users and cached for days, so warm calls cost far less. These are estimates; goal 6 measures them.
 
@@ -88,7 +90,7 @@ More people call `get_music_recommendations`, because it answers "find me someth
 
 | Data | TTL | Shared across users |
 | --- | --- | --- |
-| User top artists per window | 1 hour (unchanged) | No |
+| User top artists per window | 1 hour (unchanged); a candidate build skips the cache read | No |
 | Similar artists | 7 days (unchanged) | Yes |
 | Tag top artists (new) | about 7 days | Yes |
 | Artist top albums and tracks | 24 hours (unchanged) | Yes |
@@ -97,6 +99,7 @@ More people call `get_music_recommendations`, because it answers "find me someth
 - Cache the full ranked candidate list per user and `genre`, not the finished output. Apply `exclude` and `limit` when reading it, then fetch starters through their own shared caches. `exclude` is never written to KV, so the anti-goal on stored preferences holds, and a "different ones" call is almost free.
 - Give the key a new version prefix, so no 24-hour entry in the old shape is served after deploy.
 - One hour keeps a list stable within a conversation while still reflecting the week's listening.
+- A candidate build fetches the four top-artist windows fresh instead of reading their own 1-hour cache, and writes the fresh values back for other tools. Otherwise a list cached for an hour could be built from windows already an hour old, two hours behind in all. This costs four Last.fm calls per rebuild.
 
 ### Output
 
@@ -105,7 +108,7 @@ Text, like the other tools:
 - A heading naming the user, and the genre if set.
 - For each pick:
   - the artist
-  - the reason in plain words, citing the user's data, for example "Similar to Slowdive (#2 this week), Mojave 3 (#5 this month) and Cocteau Twins (#14 this year). Not in your top 1000."
+  - the reason in plain words, citing the user's data, for example "Similar to Slowdive (#2 this week), Mojave 3 (#5 this month) and Cocteau Twins (#14 this year). Not in your top 1000." When the overall lookup failed, the library sentence is "Couldn't check your full library, so you may already know this one." instead
   - "Start with:" one album and two tracks
   - the ListenToMore artist line from `buildListenToMoreLine`
 - A partial-results note, when it applies.
