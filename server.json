@@ -1,0 +1,25 @@
+{
+	"$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+	"name": "com.lastfm-mcp/lastfm",
+	"title": "Last.fm MCP",
+	"description": "Unofficial, read-only access to your Last.fm listening history, charts, and music lookups.",
+	"version": "2.8.0",
+	"websiteUrl": "https://lastfm-mcp.com",
+	"repository": {
+		"url": "https://github.com/rianvdm/lastfm-mcp",
+		"source": "github"
+	},
+	"icons": [
+		{
+			"src": "https://lastfm-mcp.com/apple-touch-icon.png",
+			"mimeType": "image/png",
+			"sizes": ["180x180"]
+		}
+	],
+	"remotes": [
+		{
+			"type": "streamable-http",
+			"url": "https://lastfm-mcp.com/mcp"
+		}
+	]
+}
