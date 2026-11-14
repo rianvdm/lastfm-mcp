@@ -1,4 +1,4 @@
-// ABOUTME: Public MCP tools that work without authentication using public Last.fm data.
+// ABOUTME: Lookup MCP tools that read public Last.fm data and don't need the user's Last.fm session.
 // ABOUTME: Provides track/artist/album info, similar artist/track lookups, and server status.
 import { McpServer } from '@modelcontextprotocol/server'
 import { z } from 'zod'
@@ -84,8 +84,7 @@ To get started, connect this server in your MCP client. It opens the Last.fm sig
 		{
 			title: 'Track info',
 			annotations: LASTFM_READ,
-			description:
-				'Get detailed Last.fm information about any track (artist, album, play count, tags, similar tracks) - No authentication required',
+			description: 'Get detailed Last.fm information about any track (artist, album, play count, tags, similar tracks)',
 			inputSchema: z.object({
 				artist: z.string().describe('Artist name'),
 				track: z.string().describe('Track name'),
@@ -151,8 +150,7 @@ ${!username ? '*Note: Sign in to see your personal listening stats for this trac
 		{
 			title: 'Artist info',
 			annotations: LASTFM_READ,
-			description:
-				'Get detailed Last.fm information about any artist (biography, tags, similar artists, top tracks) - No authentication required',
+			description: 'Get detailed Last.fm information about any artist (biography, tags, similar artists, top tracks)',
 			inputSchema: z.object({
 				artist: z.string().describe('Artist name'),
 				username: z.string().optional().describe('Last.fm username (optional, for user-specific data)'),
@@ -216,7 +214,7 @@ ${!username ? '*Note: Sign in to see your personal listening stats for this arti
 		{
 			title: 'Album info',
 			annotations: LASTFM_READ,
-			description: 'Get detailed Last.fm information about any album (track listing, tags, play counts) - No authentication required',
+			description: 'Get detailed Last.fm information about any album (track listing, tags, play counts)',
 			inputSchema: z.object({
 				artist: z.string().describe('Artist name'),
 				album: z.string().describe('Album name'),
@@ -286,7 +284,7 @@ ${!username ? '*Note: Sign in to see your personal listening stats for this albu
 			title: "Artist's top tracks",
 			annotations: LASTFM_READ,
 			description:
-				"Get an artist's globally most-played tracks on Last.fm (not user-specific) - No authentication required. Useful for finding canonical / signature songs by an artist.",
+				"Get an artist's globally most-played tracks on Last.fm (not user-specific). Useful for finding canonical / signature songs by an artist.",
 			inputSchema: z.object({
 				artist: z.string().describe('Artist name'),
 				limit: z.coerce.number().min(1).max(50).optional().default(10).describe('Number of tracks to return (1-50)'),
@@ -331,7 +329,7 @@ ${trackList}${nextSteps}`,
 			title: "Artist's top albums",
 			annotations: LASTFM_READ,
 			description:
-				"Get an artist's globally most-played albums on Last.fm (not user-specific) - No authentication required. Useful for finding the canonical record by an artist.",
+				"Get an artist's globally most-played albums on Last.fm (not user-specific). Useful for finding the canonical record by an artist.",
 			inputSchema: z.object({
 				artist: z.string().describe('Artist name'),
 				limit: z.coerce.number().min(1).max(50).optional().default(10).describe('Number of albums to return (1-50)'),
@@ -377,7 +375,7 @@ ${albumList}${nextSteps}`,
 		{
 			title: 'Similar artists',
 			annotations: LASTFM_READ,
-			description: 'Find artists similar to any artist using Last.fm data - No authentication required',
+			description: 'Find artists similar to any artist using Last.fm data',
 			inputSchema: z.object({
 				artist: z.string().describe('Artist name'),
 				limit: z.coerce.number().min(1).max(100).optional().default(30).describe('Number of similar artists to return (1-100)'),
@@ -420,7 +418,7 @@ ${artistList}${nextSteps}`,
 		{
 			title: 'Similar tracks',
 			annotations: LASTFM_READ,
-			description: 'Find tracks similar to any track using Last.fm data - No authentication required',
+			description: 'Find tracks similar to any track using Last.fm data',
 			inputSchema: z.object({
 				artist: z.string().describe('Artist name'),
 				track: z.string().describe('Track name'),

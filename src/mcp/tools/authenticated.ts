@@ -500,7 +500,7 @@ Total loved tracks: ${data.lovedtracks['@attr'].total}${nextSteps}`,
 		{
 			title: 'Last.fm profile',
 			annotations: LASTFM_READ,
-			description: 'Get Last.fm user profile information and listening statistics - REQUIRES AUTHENTICATION for private profiles',
+			description: 'Get Last.fm user profile information and listening statistics - REQUIRES AUTHENTICATION',
 			inputSchema: z.object({
 				username: z.string().optional().describe('Last.fm username (defaults to authenticated user)'),
 			}),
