@@ -29,9 +29,10 @@ npm run dashboard:deploy # Deploy the dashboard Worker by hand; CI never does
 
 To release:
 
-1. In one PR, bump `version` in `package.json` and `package-lock.json` and `SERVER_VERSION` in `src/mcp/protocol.ts`. `server_info`, the server card and `/health` report `SERVER_VERSION`.
+1. In one PR, bump `version` in `package.json`, `package-lock.json` and `server.json`, and `SERVER_VERSION` in `src/mcp/protocol.ts`. `server_info`, the server card and `/health` report `SERVER_VERSION`; `test/server-json.test.ts` fails if `server.json` drifts from it.
 2. After it merges, tag that merge commit and create the GitHub release.
-3. Publishing a release cross-posts it to elezea.com through `.github/workflows/elezea-release-post.yml`. The endpoint rejects a release whose name isn't `lastfm-mcp vX.Y.Z — <tagline>` or whose body lacks an opening paragraph before its `## What's new` / `## Fixes` / `## Under the hood` sections. To publish on GitHub only, put `<!-- skip-elezea-post -->` in the body. A release runs the workflow file from its tagged commit, so the tag must include the version of the workflow you expect.
+3. Publish the new version to the [official MCP Registry](https://registry.modelcontextprotocol.io) as `com.lastfm-mcp/lastfm`: `MCP_PRIVATE_KEY=<hex> mcp-publisher login dns --domain lastfm-mcp.com`, then `mcp-publisher publish`. The key proves control of the domain through the apex `v=MCPv1` TXT record; it's kept outside the repo. A published version can't be changed, so a listing-only fix publishes a prerelease such as `2.8.0-1`.
+4. Publishing a release cross-posts it to elezea.com through `.github/workflows/elezea-release-post.yml`. The endpoint rejects a release whose name isn't `lastfm-mcp vX.Y.Z — <tagline>` or whose body lacks an opening paragraph before its `## What's new` / `## Fixes` / `## Under the hood` sections. To publish on GitHub only, put `<!-- skip-elezea-post -->` in the body. A release runs the workflow file from its tagged commit, so the tag must include the version of the workflow you expect.
 
 ### Running Tests
 
