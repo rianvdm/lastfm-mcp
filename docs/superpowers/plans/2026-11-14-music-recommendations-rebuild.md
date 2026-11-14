@@ -18,7 +18,7 @@
 - Stringify caught errors with `error instanceof Error ? error.message : 'Unknown error'`.
 - Tool inputs: `username` optional string; `limit` 1–15, default 8; `genre` optional string; `exclude` optional array of up to 50 artist names, matched case-insensitively after trimming.
 - Request policy for the recommendations tool: at most 4 Last.fm requests in flight; budget 40 Last.fm HTTP requests per tool call, retries included; 8-second wall-clock deadline; at most 1 retry, with retry delay capped (no waiting out long `Retry-After`). Other tools keep `maxRetries: 3`, `maxDelayMs: 15000`.
-- Seeds: `7day`, `1month`, `12month` top artists and `overall` with page size 1000 (confirm Last.fm's maximum in Task 3; use it if lower). Starting weights 7day 3, 1month 2, 12month 1, overall-only 0.5. Up to 12 fan-out seeds. Similar-artist `limit` 30 (the `get_similar_artists` tool default, so cache entries are shared). Starter lookups use limit 10 (the `get_artist_top_tracks`/`get_artist_top_albums` tool defaults).
+- Seeds: `7day`, `1month`, `12month` top artists and `overall` with page size 1000 (confirm Last.fm's maximum in Task 4; use it if lower). Starting weights 7day 3, 1month 2, 12month 1, overall-only 0.5. Up to 12 fan-out seeds. Similar-artist `limit` 30 (the `get_similar_artists` tool default, so cache entries are shared). Starter lookups use limit 10 (the `get_artist_top_tracks`/`get_artist_top_albums` tool defaults).
 - Caching: ranked candidate list per user and lowercased `genre`, TTL 1 hour, key carries a `v2` prefix; `exclude` never appears in any KV key or value. Tag top artists TTL 7 days, shared. Partial candidate lists are not cached.
 - Analytics: `ToolCallEvent` gains `lastfmRequests`, written as `double2`. No user identifier in any event.
 - A merge to `main` deploys production. Release bumps `package.json`, `package-lock.json` and `SERVER_VERSION` in `src/mcp/protocol.ts` from 2.8.0 to 2.9.0.
@@ -26,10 +26,10 @@
 ## Review Focus
 
 1. **A user with thin history** (new account; empty `7day` window; empty `overall`). Expect picks from whatever windows have data, and a plain "not enough listening history yet" message when all four are empty, not an error. Test in Task 5.
-2. **Name variants across Last.fm lists** ("The National" vs "the national ", or the same artist in two windows). Expect library and `exclude` matching on the normalised name and one candidate per artist. Test in Task 4.
+2. **Name variants across Last.fm lists** ("The National" vs "the national ", or the same artist in two windows). Expect library and `exclude` matching on the normalised name and one candidate per artist. Test in Task 3.
 3. **One seed's similar-artist lookup fails** (Last.fm error 6, artist not found). Expect that seed skipped, the rest used, and the result not marked partial. Test in Task 5.
 4. **Everything filtered out** (heavy listener plus a long `exclude`). Expect a message suggesting a genre or a shorter exclude list, not an empty heading. Test in Task 6.
-5. **Genre casing and spacing** ("Post Rock" vs "post rock"). Expect one cache entry and the same picks. Test in Task 3 (cache key) and Task 5.
+5. **Genre casing and spacing** ("Post Rock" vs "post rock"). Expect one cache entry and the same picks. Test in Task 4 (cache key) and Task 5.
 
 ---
 
@@ -96,32 +96,7 @@
 - [ ] **Step 4: Run the full suite** — `npx vitest run` — Expected: PASS.
 - [ ] **Step 5: Commit** `git commit -m "feat(client): per-call Last.fm request policy with budget, deadline and concurrency cap"`
 
-### Task 3: Tag lookup and candidate cache plumbing
-
-**Files:**
-- Modify: `src/clients/lastfm.ts` (`getTagTopArtists`, `LastfmTagTopArtistsResponse`)
-- Modify: `src/clients/cachedLastfm.ts` (`getTagTopArtists`, `getRecommendationCandidates`; delete `getMusicRecommendations`)
-- Modify: `src/utils/cache.ts` (`tagTopArtists` type 7 days; `userRecommendations` TTL 1 hour in both `DEFAULT_CACHE_CONFIG` and `createLastfmCache`; `getOrFetch` option `shouldCache?: (value: T) => boolean`; `CacheKeys.tagTopArtists`, `CacheKeys.recommendationCandidates`)
-- Test: `test/utils/cache.test.ts`, `test/clients/cachedLastfm.test.ts`, `test/clients/lastfm.test.ts`
-
-**Interfaces:**
-- Produces:
-  - `LastfmClient.getTagTopArtists(tag: string, limit = 500): Promise<LastfmTagTopArtistsResponse>` (`method: 'tag.getTopArtists'`; response `{ topartists: { artist: Array<LastfmArtist & { '@attr'?: { rank: string } }> } }`).
-  - `CachedLastfmClient.getTagTopArtists(tag: string, limit = 500)`.
-  - `CacheKeys.tagTopArtists(tag, limit) => \`${encodeURIComponent(tag.trim().toLowerCase())}:${limit}\``.
-  - `CacheKeys.recommendationCandidates(username, genre?) => \`v2:${username}:${genre ? encodeURIComponent(genre.trim().toLowerCase()) : 'all'}\``.
-  - `CachedLastfmClient.getRecommendationCandidates(username: string, genre: string | undefined, build: () => Promise<CandidateList>): Promise<CandidateList>` — `getOrFetch('userRecommendations', …, build, { shouldCache: (list) => !list.partial })`. (`CandidateList` is defined in Task 4; import the type.)
-
-- [ ] **Step 1: Write failing tests**
-  - `cache.test.ts`: `CacheKeys.recommendationCandidates('u', 'Post Rock') === CacheKeys.recommendationCandidates('u', ' post rock ')`; key starts with `v2:`; `getOrFetch(…, { shouldCache: () => false })` returns the value and makes no `put`; the `userRecommendations` TTL is `3600` in both configs; replace the old `userRecommendations` key test.
-  - `cachedLastfm.test.ts`: two `getTagTopArtists('Shoegaze')` / `('shoegaze')` calls → raw client called once. `getRecommendationCandidates` with a `build` returning `{ partial: true, … }` → `build` runs again on the next call; with `partial: false` → cached.
-  - `lastfm.test.ts`: `getTagTopArtists('shoegaze', 500)` requests `method=tag.getTopArtists&tag=shoegaze&limit=500`.
-- [ ] **Step 2: Run, expect failures** — `npx vitest run test/utils/cache.test.ts test/clients` — FAIL.
-- [ ] **Step 3: Implement.** Also confirm against the live API (one `curl` with the staging key from `.dev.vars`) the maximum `limit` for `user.getTopArtists` and `tag.getTopArtists`; record the confirmed values as constants in Task 5 (`LIBRARY_PAGE_SIZE`, `TAG_PAGE_SIZE`) and note them in the commit message. Delete `getMusicRecommendations` and its now-unused types; the tool keeps compiling until Task 6 by temporarily returning a `toolError` stub — or do Tasks 3 and 6 removal together if simpler; the build must pass at the end of this task.
-- [ ] **Step 4: Run the full suite and build** — `npx vitest run && npm run build` — PASS.
-- [ ] **Step 5: Commit** `git commit -m "feat(client): tag top artists and a 1-hour recommendation candidate cache"`
-
-### Task 4: Pure scoring
+### Task 3: Pure scoring
 
 **Files:**
 - Create: `src/recommendations/types.ts`, `src/recommendations/scoring.ts`
@@ -154,6 +129,31 @@
 - [ ] **Step 4: Run** — PASS.
 - [ ] **Step 5: Commit** `git commit -m "feat(recommendations): pure candidate scoring, genre and exclude filters"`
 
+### Task 4: Tag lookup and candidate cache plumbing
+
+**Files:**
+- Modify: `src/clients/lastfm.ts` (`getTagTopArtists`, `LastfmTagTopArtistsResponse`)
+- Modify: `src/clients/cachedLastfm.ts` (`getTagTopArtists`, `getRecommendationCandidates`)
+- Modify: `src/utils/cache.ts` (`tagTopArtists` type 7 days; `userRecommendations` TTL 1 hour in both `DEFAULT_CACHE_CONFIG` and `createLastfmCache`; `getOrFetch` option `shouldCache?: (value: T) => boolean`; `CacheKeys.tagTopArtists`, `CacheKeys.recommendationCandidates`)
+- Test: `test/utils/cache.test.ts`, `test/clients/cachedLastfm.test.ts`, `test/clients/lastfm.test.ts`
+
+**Interfaces:**
+- Produces:
+  - `LastfmClient.getTagTopArtists(tag: string, limit = 500): Promise<LastfmTagTopArtistsResponse>` (`method: 'tag.getTopArtists'`; response `{ topartists: { artist: Array<LastfmArtist & { '@attr'?: { rank: string } }> } }`).
+  - `CachedLastfmClient.getTagTopArtists(tag: string, limit = 500)`.
+  - `CacheKeys.tagTopArtists(tag, limit) => \`${encodeURIComponent(tag.trim().toLowerCase())}:${limit}\``.
+  - `CacheKeys.recommendationCandidates(username, genre?) => \`v2:${username}:${genre ? encodeURIComponent(genre.trim().toLowerCase()) : 'all'}\``.
+  - `CachedLastfmClient.getRecommendationCandidates(username: string, genre: string | undefined, build: () => Promise<CandidateList>): Promise<CandidateList>` — `getOrFetch('userRecommendations', …, build, { shouldCache: (list) => !list.partial })`. (`CandidateList` comes from Task 3's `src/recommendations/types.ts`.)
+
+- [ ] **Step 1: Write failing tests**
+  - `cache.test.ts`: `CacheKeys.recommendationCandidates('u', 'Post Rock') === CacheKeys.recommendationCandidates('u', ' post rock ')`; key starts with `v2:`; `getOrFetch(…, { shouldCache: () => false })` returns the value and makes no `put`; the `userRecommendations` TTL is `3600` in both configs; keep the old `userRecommendations` key test until Task 6.
+  - `cachedLastfm.test.ts`: two `getTagTopArtists('Shoegaze')` / `('shoegaze')` calls → raw client called once. `getRecommendationCandidates` with a `build` returning `{ partial: true, … }` → `build` runs again on the next call; with `partial: false` → cached.
+  - `lastfm.test.ts`: `getTagTopArtists('shoegaze', 500)` requests `method=tag.getTopArtists&tag=shoegaze&limit=500`.
+- [ ] **Step 2: Run, expect failures** — `npx vitest run test/utils/cache.test.ts test/clients` — FAIL.
+- [ ] **Step 3: Implement.** Also confirm against the live API (one `curl` with the staging key from `.dev.vars`) the maximum `limit` for `user.getTopArtists` and `tag.getTopArtists`; record the confirmed values as constants in Task 5 (`LIBRARY_PAGE_SIZE`, `TAG_PAGE_SIZE`) and note them in the commit message. Leave the old `getMusicRecommendations` in place; Task 6 removes it.
+- [ ] **Step 4: Run the full suite and build** — `npx vitest run && npm run build` — PASS.
+- [ ] **Step 5: Commit** `git commit -m "feat(client): tag top artists and a 1-hour recommendation candidate cache"`
+
 ### Task 5: Engine: build candidates and read picks
 
 **Files:**
@@ -161,9 +161,9 @@
 - Test: `test/recommendations/engine.test.ts`
 
 **Interfaces:**
-- Consumes: Task 2 `runWithRequestPolicy`, `RECOMMENDATION_POLICY`, `RequestBudgetExceeded`, `isRateLimited`; Task 3 client methods; Task 4 scoring.
+- Consumes: Task 2 `runWithRequestPolicy`, `RECOMMENDATION_POLICY`, `RequestBudgetExceeded`, `isRateLimited`; Task 3 scoring and types; Task 4 client methods.
 - Produces:
-  - `const LIBRARY_PAGE_SIZE` (confirmed in Task 3, expected 1000), `TAG_PAGE_SIZE` (expected 500), `SEED_LIMITS = { '7day': 10, '1month': 10, '12month': 15 }`, `SIMILAR_LIMIT = 30`, `STARTER_LIMIT = 10`.
+  - `const LIBRARY_PAGE_SIZE` (confirmed in Task 4, expected 1000), `TAG_PAGE_SIZE` (expected 500), `SEED_LIMITS = { '7day': 10, '1month': 10, '12month': 15 }`, `SIMILAR_LIMIT = 30`, `STARTER_LIMIT = 10`.
   - `interface Pick { name: string; seeds: SeedRef[]; source: 'similar' | 'tag'; tagRank?: number; album?: string; tracks: string[] }`
   - `interface RecommendationResult { username: string; genre?: string; picks: Pick[]; partial: boolean; genreNotFound: boolean; emptyHistory: boolean; libraryComplete: boolean; libraryPageSize: number }`
   - `findRecommendations(client: CachedLastfmClient, username: string, options: { limit: number; genre?: string; exclude: string[] }): Promise<RecommendationResult>` — runs the whole call under one `runWithRequestPolicy` built from `RECOMMENDATION_POLICY` (deadline = now + `timeoutMs`).
@@ -196,6 +196,7 @@ Flow inside `findRecommendations`:
 **Files:**
 - Create: `src/recommendations/format.ts`
 - Modify: `src/mcp/tools/authenticated.ts:587-640` (the `get_music_recommendations` registration)
+- Modify: `src/clients/cachedLastfm.ts` (delete `getMusicRecommendations`), `src/utils/cache.ts` (delete `CacheKeys.userRecommendations`), `test/utils/cache.test.ts` (drop its key test)
 - Test: `test/recommendations/format.test.ts`, `test/mcp/tools/recommendations-tool.test.ts`
 
 **Interfaces:**
