@@ -268,7 +268,7 @@ export interface LastfmTrackInfoResponse {
 		userplaycount?: string
 		userloved?: string
 		// Last.fm returns `tag` as an array for many tags, a bare object for one,
-		// or omits it entirely. See toArray() in mcp/tools/formatters.ts.
+		// or omits it entirely. See toArray() in utils/toArray.ts.
 		toptags?: {
 			tag?: LastfmTag | LastfmTag[]
 		}
@@ -310,7 +310,7 @@ export interface LastfmAlbumInfoResponse {
 		playcount: string
 		userplaycount?: string
 		// Last.fm returns `track`/`tag` as an array for many, a bare object for
-		// one, or omits it entirely. See toArray() in mcp/tools/formatters.ts.
+		// one, or omits it entirely. See toArray() in utils/toArray.ts.
 		tracks?: {
 			track?: LastfmAlbumTrack | LastfmAlbumTrack[]
 		}

@@ -2,8 +2,8 @@
 // ABOUTME: Runs one tool call under the recommendation request policy, caching candidates per user and genre but never exclude.
 
 import type { CachedLastfmClient } from '../clients/cachedLastfm'
-import { toArray } from '../mcp/tools/formatters'
 import { RECOMMENDATION_POLICY, RequestBudgetExceeded, runWithRequestPolicy, withinDeadline } from '../utils/lastfmRequestPolicy'
+import { toArray } from '../utils/toArray'
 import { applyExclude, applyGenre, normaliseArtist, rankCandidates, selectSeeds } from './scoring'
 import type { Candidate, CandidateList, SeedRef, Window } from './types'
 
