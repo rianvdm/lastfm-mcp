@@ -3,8 +3,17 @@
 
 import { buildNextSteps } from '../utils/breadcrumb'
 import { buildListenToMoreLine } from '../utils/listentomore-link'
-import type { Pick, RecommendationResult } from './engine'
+import { MAX_EXCLUDE, type Pick, type RecommendationResult } from './engine'
+import { normaliseArtist } from './scoring'
 import type { SeedRef, Window } from './types'
+
+/** What the caller asked for that the result doesn't carry, needed to write a follow-up call that continues this one. */
+export interface RecommendationRequest {
+	/** The username the request named; absent when it fell back to the signed-in user. */
+	username?: string
+	/** The names this call excluded, in the order given. */
+	exclude: string[]
+}
 
 /** Seeds cited in one reason line; the rest still count toward the ranking. */
 const MAX_CITED_SEEDS = 3
@@ -24,8 +33,11 @@ const EMPTY_HISTORY =
 
 const ALL_FILTERED = 'Everything that matched is already in your library or excluded. Try a genre, or a shorter exclude list.'
 
-/** Turns a recommendation result into the tool's text: a heading, then the picks or the reason there are none. */
-export function formatRecommendations(result: RecommendationResult): string {
+/**
+ * Turns a recommendation result into the tool's text: a heading, then the picks or the reason there are none.
+ * `request` shapes the "different picks" Next step so it keeps the same user and excludes every earlier pick.
+ */
+export function formatRecommendations(result: RecommendationResult, request: RecommendationRequest = { exclude: [] }): string {
 	const heading = `🎯 **New music for ${result.username}**${result.genre ? ` · ${result.genre}` : ''}`
 
 	if (result.emptyHistory) return `${heading}\n\n${EMPTY_HISTORY}`
@@ -39,7 +51,7 @@ export function formatRecommendations(result: RecommendationResult): string {
 	const sections = [heading, ...result.picks.map((pick, index) => formatPick(pick, index + 1, result.genre, libraryNote))]
 	if (result.partial) sections.push(PARTIAL_NOTE)
 
-	return sections.join('\n\n') + nextSteps(result)
+	return sections.join('\n\n') + nextSteps(result, request)
 }
 
 function formatPick(pick: Pick, number: number, genre: string | undefined, libraryNote: string): string {
@@ -70,15 +82,35 @@ function joinNames(names: string[]): string {
 	return `${names.slice(0, -1).join(', ')} and ${names[names.length - 1]}`
 }
 
-function nextSteps(result: RecommendationResult): string {
-	const names = result.picks.map((pick) => pick.name)
-	const top = JSON.stringify(names[0])
-	// Keep the genre so the follow-up stays in it; only this call's picks are known here
-	const genreArg = result.genre ? `genre=${JSON.stringify(result.genre)}, ` : ''
+function nextSteps(result: RecommendationResult, request: RecommendationRequest): string {
+	const top = JSON.stringify(result.picks[0].name)
+	const exclude = nextExclude(request.exclude, result.picks)
+	// Name the user only if the request did, and keep the genre, so the follow-up continues this call
+	const args = [
+		...(request.username ? [`username=${JSON.stringify(request.username)}`] : []),
+		...(result.genre ? [`genre=${JSON.stringify(result.genre)}`] : []),
+		`exclude=${JSON.stringify(exclude)}`,
+	].join(', ')
 
 	return buildNextSteps([
-		{ tool: 'get_music_recommendations', args: `${genreArg}exclude=${JSON.stringify(names)}`, hint: 'different picks' },
+		{ tool: 'get_music_recommendations', args, hint: 'different picks' },
 		{ tool: 'get_artist_info', args: `artist=${top}`, hint: 'expand the top pick' },
 		{ tool: 'get_similar_artists', args: `artist=${top}`, hint: 'fan out from a pick' },
 	])
+}
+
+/**
+ * The exclude list for the next round: the earlier names, then this call's picks, one entry per normalised name
+ * (its latest spelling, in its latest position), keeping the newest MAX_EXCLUDE so the list always fits the schema.
+ */
+function nextExclude(earlier: string[], picks: Pick[]): string[] {
+	const seen = new Set<string>()
+	const newestFirst: string[] = []
+	for (const name of [...earlier, ...picks.map((pick) => pick.name)].reverse()) {
+		const key = normaliseArtist(name)
+		if (seen.has(key)) continue
+		seen.add(key)
+		newestFirst.push(name)
+	}
+	return newestFirst.slice(0, MAX_EXCLUDE).reverse()
 }

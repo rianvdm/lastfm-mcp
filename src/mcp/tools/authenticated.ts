@@ -4,7 +4,7 @@ import { McpServer } from '@modelcontextprotocol/server'
 import { z } from 'zod'
 
 import { CachedLastfmClient } from '../../clients/cachedLastfm'
-import { findRecommendations } from '../../recommendations/engine'
+import { MAX_EXCLUDE, findRecommendations } from '../../recommendations/engine'
 import { formatRecommendations } from '../../recommendations/format'
 import { LASTFM_READ, LOCAL_READ } from './annotations'
 import { AUTHENTICATED_TOOL_CATALOG, PUBLIC_TOOL_CATALOG, renderToolList } from './catalog'
@@ -617,10 +617,10 @@ Total loved tracks: ${data.lovedtracks['@attr'].total}${nextSteps}`,
 				genre: z.string().trim().optional().describe('Optional Last.fm genre tag to keep picks in, e.g. "shoegaze"'),
 				exclude: z
 					.array(z.string().trim().min(1))
-					.max(50)
+					.max(MAX_EXCLUDE)
 					.optional()
 					.default([])
-					.describe('Artist names to leave out, such as earlier picks (up to 50, case-insensitive)'),
+					.describe(`Artist names to leave out, such as earlier picks (up to ${MAX_EXCLUDE}, case-insensitive)`),
 			}),
 		},
 		async ({ username, limit, genre, exclude }) => {
@@ -632,7 +632,8 @@ Total loved tracks: ${data.lovedtracks['@attr'].total}${nextSteps}`,
 			try {
 				// The schema trims genre; a blank one means no genre filter
 				const result = await findRecommendations(client, username || session.username, { limit, genre: genre || undefined, exclude })
-				return { content: [{ type: 'text', text: formatRecommendations(result) }] }
+				// Next steps names the user only when the request did, so a follow-up never switches whose picks these are
+				return { content: [{ type: 'text', text: formatRecommendations(result, { username: username || undefined, exclude }) }] }
 			} catch (error) {
 				return toolError('get_music_recommendations', error)
 			}

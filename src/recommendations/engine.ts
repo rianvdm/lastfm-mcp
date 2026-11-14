@@ -22,6 +22,9 @@ export const SIMILAR_LIMIT = 30
 /** Top albums and tracks per pick; the get_artist_top_albums and get_artist_top_tracks tool defaults, so they share cache entries. */
 export const STARTER_LIMIT = 10
 
+/** Most artist names one call can exclude; the tool schema's cap, and the cap on the exclude list Next steps hands back. */
+export const MAX_EXCLUDE = 50
+
 /**
  * Genre candidates kept in the cached list: the most picks a call can ask for (15) plus the longest exclude list (50),
  * so a call that excludes 50 genre artists still gets a full 15. The tag list is fetched anyway, so this costs no requests.

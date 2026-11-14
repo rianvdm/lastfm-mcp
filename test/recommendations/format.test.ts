@@ -1,9 +1,9 @@
 // ABOUTME: Tests for the recommendation formatter: heading, reason lines, starters, partial note and empty states.
-// ABOUTME: Checks the exact user-facing copy and that the Next steps block carries this call's picks as exclude.
+// ABOUTME: Checks the exact user-facing copy and that Next steps carries the request's username and the growing exclude list.
 
 import { describe, it, expect } from 'vitest'
 
-import type { Pick, RecommendationResult } from '../../src/recommendations/engine'
+import { MAX_EXCLUDE, type Pick, type RecommendationResult } from '../../src/recommendations/engine'
 import { formatRecommendations } from '../../src/recommendations/format'
 
 const PARTIAL_NOTE =
@@ -174,6 +174,42 @@ describe('formatRecommendations', () => {
 		it('should keep the genre in the different-picks call', () => {
 			const text = formatRecommendations(result({ genre: 'post rock', picks: [pick({ name: 'Mogwai' })] }))
 			expect(text).toContain('- `get_music_recommendations(genre="post rock", exclude=["Mogwai"])` — different picks')
+		})
+
+		it("should add the earlier exclude list ahead of this call's picks", () => {
+			const text = formatRecommendations(result({ picks: [pick({ name: 'C' }), pick({ name: 'D' })] }), { exclude: ['A', 'B'] })
+			expect(text).toContain('- `get_music_recommendations(exclude=["A","B","C","D"])` — different picks')
+		})
+
+		it('should drop repeated names, keeping the latest spelling', () => {
+			const text = formatRecommendations(result({ picks: [pick({ name: 'C' })] }), { exclude: ['A', 'b', ' a ', 'B'] })
+			expect(text).toContain('- `get_music_recommendations(exclude=[" a ","B","C"])` — different picks')
+		})
+
+		it(`should cap the exclude list at ${MAX_EXCLUDE}, dropping the oldest names first`, () => {
+			const earlier = Array.from({ length: 49 }, (_, i) => `Artist ${i + 1}`)
+			const text = formatRecommendations(result({ picks: [pick({ name: 'C' }), pick({ name: 'D' })] }), { exclude: earlier })
+			const args = text.match(/get_music_recommendations\(exclude=(\[.*?\])\)/)
+			const exclude = JSON.parse(args![1]) as string[]
+			expect(exclude).toHaveLength(MAX_EXCLUDE)
+			expect(exclude[0]).toBe('Artist 2')
+			expect(exclude.slice(-2)).toEqual(['C', 'D'])
+		})
+
+		it('should carry a username the request named, and only then', () => {
+			const named = formatRecommendations(result({ username: 'friend', picks: [pick({ name: 'C' })] }), { username: 'friend', exclude: [] })
+			expect(named).toContain('- `get_music_recommendations(username="friend", exclude=["C"])` — different picks')
+
+			const own = formatRecommendations(result({ picks: [pick({ name: 'C' })] }), { exclude: [] })
+			expect(own).toContain('- `get_music_recommendations(exclude=["C"])` — different picks')
+		})
+
+		it('should order username, genre, then exclude', () => {
+			const text = formatRecommendations(result({ genre: 'shoegaze', picks: [pick({ name: 'C' })] }), {
+				username: 'friend',
+				exclude: ['A'],
+			})
+			expect(text).toContain('- `get_music_recommendations(username="friend", genre="shoegaze", exclude=["A","C"])` — different picks')
 		})
 
 		it('should come after the picks and the partial note', () => {

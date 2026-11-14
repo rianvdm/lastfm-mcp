@@ -115,6 +115,16 @@ describe('get_music_recommendations tool', () => {
 		expect(text).toContain('🎯 **New music for friend**')
 	})
 
+	it("should build the next exclude list from the request and this call's picks", async () => {
+		const text = await call({ limit: 1, exclude: ['Mojave 3'] })
+		expect(text).toContain('- `get_music_recommendations(exclude=["Mojave 3","Chapterhouse"])` — different picks')
+	})
+
+	it('should carry an explicit username into Next steps, and leave it out otherwise', async () => {
+		expect(await call({ username: 'friend', limit: 1 })).toContain('get_music_recommendations(username="friend", exclude=')
+		expect(await call({ limit: 1 })).toContain('get_music_recommendations(exclude=["Mojave 3"])')
+	})
+
 	it('should pass a genre through and treat a blank one as unset', async () => {
 		expect(await call({ genre: ' Shoegaze ' })).toContain('🎯 **New music for rj** · Shoegaze')
 		expect(client.getTagTopArtists).toHaveBeenCalledWith('shoegaze', expect.any(Number))
