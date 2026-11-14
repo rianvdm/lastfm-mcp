@@ -708,8 +708,11 @@ describe('Last.fm MCP Server (OAuth Entry Point)', () => {
 				serverInfo: { name: string }
 				transport: { endpoint: string }
 				authentication: { required: boolean }
+				iconUrl: string
 			}
 			expect(result.protocolVersion).toBe('2026-07-28')
+			// The icon is the server's own; Last.fm's API terms bar using its marks without written approval
+			expect(new URL(result.iconUrl).hostname).toBe('lastfm-mcp.com')
 			// Every /mcp request needs an OAuth access token
 			expect(result.authentication.required).toBe(true)
 			expect(result.serverInfo.name).toBe('lastfm-mcp')

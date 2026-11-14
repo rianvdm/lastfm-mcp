@@ -183,7 +183,6 @@ export default {
 		if ((url.pathname === '/.well-known/mcp.json' || url.pathname === '/.well-known/mcp') && request.method === 'GET') {
 			return new Response(
 				JSON.stringify({
-					$schema: 'https://static.modelcontextprotocol.io/schemas/mcp-server-card/v1.json',
 					version: '1.0',
 					protocolVersion: PROTOCOL_VERSION,
 					serverInfo: {
@@ -193,7 +192,7 @@ export default {
 					},
 					description:
 						'Model Context Protocol server for Last.fm listening data access. Provides tools for accessing Last.fm listening history, charts, recommendations, and music data.',
-					iconUrl: 'https://www.last.fm/static/images/lastfm_avatar_twitter.52a5d69a85ac.png',
+					iconUrl: 'https://lastfm-mcp.com/apple-touch-icon.png',
 					documentationUrl: 'https://github.com/rianvdm/lastfm-mcp#readme',
 					transport: {
 						type: 'streamable-http',
