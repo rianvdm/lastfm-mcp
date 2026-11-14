@@ -29,7 +29,10 @@ export interface LastfmTrack {
 		'#text': string
 		size: 'small' | 'medium' | 'large' | 'extralarge'
 	}>
-	nowplaying?: string
+	/** user.getRecentTracks marks the track playing now with `nowplaying: 'true'`; that row has no `date`. */
+	'@attr'?: {
+		nowplaying?: string
+	}
 	loved?: string
 }
 

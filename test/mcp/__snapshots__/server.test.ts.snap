@@ -229,6 +229,7 @@ exports[`createMcpServer registration > advertises the expected tool catalogue 1
     "description": "Get user's recent Last.fm listening history - REQUIRES AUTHENTICATION. Use lastfm_auth_status first to check login status.",
     "name": "get_recent_tracks",
     "properties": [
+      "artist",
       "date",
       "from",
       "limit",

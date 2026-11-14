@@ -4,10 +4,12 @@ import { McpServer } from '@modelcontextprotocol/server'
 import { z } from 'zod'
 
 import { CachedLastfmClient } from '../../clients/cachedLastfm'
+import type { LastfmTrack } from '../../clients/lastfm'
 import { MAX_EXCLUDE, findRecommendations } from '../../recommendations/engine'
 import { formatRecommendations } from '../../recommendations/format'
 import { LASTFM_READ, LOCAL_READ } from './annotations'
 import { isSameArtist, suggestArtistNames } from './artistMatch'
+import { describeArtistScan, isNowPlaying, scanArtistScrobbles } from './artistScan'
 import { AUTHENTICATED_TOOL_CATALOG, PUBLIC_TOOL_CATALOG, renderToolList } from './catalog'
 import { toolError } from './error-handler'
 import { formatArtist, toArray } from './formatters'
@@ -151,7 +153,18 @@ ${renderToolList(AUTHENTICATED_TOOL_CATALOG)}
 			inputSchema: z.object({
 				username: z.string().optional().describe('Last.fm username (defaults to authenticated user)'),
 				limit: z.coerce.number().min(1).max(1000).optional().default(50).describe('Number of tracks to return per page (1-1000)'),
-				page: z.coerce.number().min(1).optional().default(1).describe('Page number for pagination (starts at 1)'),
+				page: z.coerce
+					.number()
+					.min(1)
+					.optional()
+					.default(1)
+					.describe(
+						'Page number for pagination (starts at 1). With artist, selects the 5,000-scrobble scan block: page 2 scans scrobbles 5,001-10,000 of the range.',
+					),
+				artist: z
+					.string()
+					.optional()
+					.describe("Only return this artist's scrobbles (case-insensitive). Scans up to 5,000 scrobbles per call; use page to continue."),
 				date: z
 					.string()
 					.optional()
@@ -169,7 +182,7 @@ ${renderToolList(AUTHENTICATED_TOOL_CATALOG)}
 					),
 			}),
 		},
-		async ({ username, limit, page, date, from, to, timezone }) => {
+		async ({ username, limit, page, artist, date, from, to, timezone }) => {
 			const session = getSession()
 			if (!session) {
 				return { content: [{ type: 'text', text: AUTH_REQUIRED }] }
@@ -192,21 +205,15 @@ ${renderToolList(AUTHENTICATED_TOOL_CATALOG)}
 					timezoneWarning = `⚠️ Unrecognized timezone "${effectiveTimezone}" — falling back to UTC.`
 					effectiveTimezone = 'UTC'
 				}
-				const data = await client.getRecentTracks(effectiveUsername, limit, effectiveFrom, effectiveTo, page)
-
-				const tracks = data.recenttracks.track.slice(0, limit)
-				const trackList = tracks
-					.map((track) => {
-						const nowPlaying = track.nowplaying ? ' 🎵 Now Playing' : ''
-						const date = track.date ? formatTimestamp(parseInt(track.date.uts), effectiveTimezone) : ''
-						const album = track.album?.['#text'] ? ` [${track.album['#text']}]` : ''
-						return `• ${track.artist['#text']} - ${track.name}${album}${nowPlaying}${date ? ` (${date})` : ''}`
-					})
-					.join('\n')
-
-				const currentPage = parseInt(data.recenttracks['@attr'].page)
-				const totalPages = parseInt(data.recenttracks['@attr'].totalPages)
-				const totalTracks = parseInt(data.recenttracks['@attr'].total)
+				const formatTrackList = (tracks: LastfmTrack[]) =>
+					tracks
+						.map((track) => {
+							const nowPlaying = isNowPlaying(track) ? ' 🎵 Now Playing' : ''
+							const date = track.date ? formatTimestamp(parseInt(track.date.uts), effectiveTimezone) : ''
+							const album = track.album?.['#text'] ? ` [${track.album['#text']}]` : ''
+							return `• ${track.artist['#text']} - ${track.name}${album}${nowPlaying}${date ? ` (${date})` : ''}`
+						})
+						.join('\n')
 
 				const nowStr = formatTimestamp(Math.floor(Date.now() / 1000), effectiveTimezone)
 				const rangeStr =
@@ -216,30 +223,62 @@ ${renderToolList(AUTHENTICATED_TOOL_CATALOG)}
 							? `from ${formatTimestamp(effectiveFrom, effectiveTimezone)}`
 							: `most recent (server time: ${nowStr})`
 
-				const topTrack = tracks[0]
-				const topArtist = topTrack ? topTrack.artist['#text'] || (topTrack.artist as unknown as { name: string }).name : null
-				const nextSteps = buildNextSteps([
-					topTrack && topArtist
-						? {
-								tool: 'get_track_info',
-								args: `artist=${JSON.stringify(topArtist)}, track=${JSON.stringify(topTrack.name)}`,
-								hint: 'expand the most recent track',
-							}
-						: {
-								tool: 'get_track_info',
-								args: 'artist="<ARTIST FROM LIST>", track="<TRACK FROM LIST>"',
-								hint: 'expand a track from the feed',
+				const nextStepsFor = (tracks: LastfmTrack[]) => {
+					const topTrack = tracks[0]
+					const topArtist = topTrack ? topTrack.artist['#text'] || (topTrack.artist as unknown as { name: string }).name : null
+					return buildNextSteps([
+						topTrack && topArtist
+							? {
+									tool: 'get_track_info',
+									args: `artist=${JSON.stringify(topArtist)}, track=${JSON.stringify(topTrack.name)}`,
+									hint: 'expand the most recent track',
+								}
+							: {
+									tool: 'get_track_info',
+									args: 'artist="<ARTIST FROM LIST>", track="<TRACK FROM LIST>"',
+									hint: 'expand a track from the feed',
+								},
+						{ tool: 'get_artist_info', args: 'artist="<ARTIST FROM LIST>"', hint: 'expand an artist from the feed' },
+						{ tool: 'get_top_artists', args: 'period="7day"', hint: 'aggregate the recent feed into a 7-day top list' },
+						{ tool: 'get_music_recommendations', args: '', hint: 'new-to-you artists based on your listening, with starter tracks' },
+					])
+				}
+				const warningPrefix = timezoneWarning ? timezoneWarning + '\n\n' : ''
+
+				const artistFilter = artist?.trim()
+				if (artistFilter) {
+					const scan = await scanArtistScrobbles(client, effectiveUsername, artistFilter, { from: effectiveFrom, to: effectiveTo, page })
+					const matchList = scan.matches.length > 0 ? `\n\n${formatTrackList(scan.matches)}` : ''
+					return {
+						content: [
+							{
+								type: 'text',
+								text: `${warningPrefix}🎵 **Scrobbles by ${artistFilter} for ${effectiveUsername}** (times in ${effectiveTimezone})
+📅 **Queried range:** ${rangeStr}
+
+${describeArtistScan(artistFilter, scan, page)}${matchList}${nextStepsFor(scan.matches)}`,
 							},
-					{ tool: 'get_artist_info', args: 'artist="<ARTIST FROM LIST>"', hint: 'expand an artist from the feed' },
-					{ tool: 'get_top_artists', args: 'period="7day"', hint: 'aggregate the recent feed into a 7-day top list' },
-					{ tool: 'get_music_recommendations', args: '', hint: 'new-to-you artists based on your listening, with starter tracks' },
-				])
+						],
+					}
+				}
+
+				const data = await client.getRecentTracks(effectiveUsername, limit, effectiveFrom, effectiveTo, page)
+
+				// Last.fm puts the track playing now on top even for past ranges and later pages; only the plain feed keeps it.
+				const dropNowPlaying = from !== undefined || to !== undefined || date !== undefined || page > 1
+				const tracks = toArray(data.recenttracks.track)
+					.filter((track) => !(dropNowPlaying && isNowPlaying(track)))
+					.slice(0, limit)
+
+				const currentPage = parseInt(data.recenttracks['@attr'].page)
+				const totalPages = parseInt(data.recenttracks['@attr'].totalPages)
+				const totalTracks = parseInt(data.recenttracks['@attr'].total)
 
 				return {
 					content: [
 						{
 							type: 'text',
-							text: `${timezoneWarning ? timezoneWarning + '\n\n' : ''}🎵 **Recent Tracks for ${effectiveUsername}** (times in ${effectiveTimezone})
+							text: `${warningPrefix}🎵 **Recent Tracks for ${effectiveUsername}** (times in ${effectiveTimezone})
 📅 **Queried range:** ${rangeStr}
 
 📊 **Pagination Info:**
@@ -247,10 +286,10 @@ ${renderToolList(AUTHENTICATED_TOOL_CATALOG)}
 • Showing ${tracks.length} tracks out of ${totalTracks} total
 • Per page: ${data.recenttracks['@attr'].perPage}
 
-${trackList}
+${formatTrackList(tracks)}
 
 ${currentPage < totalPages ? `\n💡 **Next page:** Use \`page: ${currentPage + 1}\` to get more tracks` : ''}
-${currentPage > 1 ? `\n⬅️ **Previous page:** Use \`page: ${currentPage - 1}\` to go back` : ''}${nextSteps}`,
+${currentPage > 1 ? `\n⬅️ **Previous page:** Use \`page: ${currentPage - 1}\` to go back` : ''}${nextStepsFor(tracks)}`,
 						},
 					],
 				}
