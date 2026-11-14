@@ -41,10 +41,11 @@ describe('scoring', () => {
 	})
 
 	it('should sum evidence from several seeds', () => {
+		// Weakest seed first, so the evidence order below comes from the sort, not from the input order
 		const seeds: SeedRef[] = [
-			{ name: 'A', window: '7day', rank: 1 },
-			{ name: 'B', window: '1month', rank: 1 },
 			{ name: 'C', window: '12month', rank: 1 },
+			{ name: 'B', window: '1month', rank: 1 },
+			{ name: 'A', window: '7day', rank: 1 },
 		]
 		// X: 3 × 0.5 + 2 × 0.6 = 2.7 from two seeds; Y: 3 × 0.8 = 2.4 from one stronger seed.
 		const similar: Similar = new Map([
