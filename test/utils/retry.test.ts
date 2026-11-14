@@ -1,4 +1,7 @@
+// ABOUTME: Tests for withRetry and fetchWithRetry, the exponential-backoff retry helpers.
+// ABOUTME: Covers retry decisions, Retry-After parsing, and the onAttempt hook that runs before every attempt.
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
+
 import { withRetry, fetchWithRetry } from '../../src/utils/retry'
 
 describe('Retry Utility', () => {
@@ -9,6 +12,7 @@ describe('Retry Utility', () => {
 
 	afterEach(() => {
 		vi.useRealTimers()
+		vi.restoreAllMocks()
 	})
 
 	describe('withRetry', () => {
@@ -99,6 +103,38 @@ describe('Retry Utility', () => {
 			expect(result.attempts).toBe(1)
 			expect(fn).toHaveBeenCalledTimes(1)
 			expect(shouldRetry).toHaveBeenCalledWith(expect.any(Error), 1)
+		})
+
+		it('should call onAttempt before every attempt, retries included', async () => {
+			vi.spyOn(console, 'log').mockImplementation(() => {})
+			const fn = vi
+				.fn()
+				.mockRejectedValueOnce(new Response('Rate limited', { status: 429 }))
+				.mockResolvedValue('success')
+			const onAttempt = vi.fn()
+
+			const promise = withRetry(fn, { maxRetries: 2, initialDelayMs: 1, onAttempt })
+			await vi.advanceTimersByTimeAsync(10)
+			const result = await promise
+
+			expect(result.success).toBe(true)
+			expect(onAttempt.mock.calls).toEqual([[1], [2]])
+			expect(fn).toHaveBeenCalledTimes(2)
+		})
+
+		it('should stop without retrying when onAttempt throws a non-retryable error', async () => {
+			const fn = vi.fn().mockResolvedValue('success')
+			const onAttempt = vi.fn(() => {
+				throw new Error('budget')
+			})
+
+			const result = await withRetry(fn, { maxRetries: 2, initialDelayMs: 1, onAttempt })
+
+			expect(result.success).toBe(false)
+			expect(result.error?.message).toBe('budget')
+			expect(result.attempts).toBe(1)
+			expect(onAttempt).toHaveBeenCalledTimes(1)
+			expect(fn).not.toHaveBeenCalled()
 		})
 	})
 

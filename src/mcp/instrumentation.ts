@@ -1,5 +1,5 @@
 // ABOUTME: Times and classifies every MCP tools/call by wrapping the request handler McpServer installs for it.
-// ABOUTME: Reports one anonymous ToolCallEvent per call (tool, outcome, cache, duration); reporting never changes or fails the call.
+// ABOUTME: Reports one anonymous ToolCallEvent per call (outcome, cache, duration, Last.fm requests); reporting never changes or fails it.
 import type { McpServer } from '@modelcontextprotocol/server'
 
 import type { CacheOutcome, ToolCallEvent, ToolOutcome } from '../analytics/toolEvents'
@@ -19,8 +19,8 @@ type SetRequestHandler = (method: string, ...rest: unknown[]) => void
  *
  * It wraps the `tools/call` handler McpServer installs when the first tool is registered, so call it on a fresh server,
  * before any registerTool; it throws if the handler is already installed. Each call runs inside its own CacheTally, so its
- * cache outcome counts only the lookups it made, even when a batch runs calls concurrently. The event carries a registered
- * tool name or UNKNOWN_TOOL, never the arguments, the error text or the user.
+ * cache outcome and Last.fm request count cover only the lookups it made, even when a batch runs calls concurrently. The
+ * event carries a registered tool name or UNKNOWN_TOOL, never the arguments, the error text or the user.
  */
 export function instrumentTools(server: McpServer, onToolCall: (event: ToolCallEvent) => void): void {
 	const protocolServer = server.server
@@ -51,7 +51,7 @@ function instrumentHandler(
 	return async (request, ctx) => {
 		const requested = request.params?.name
 		const tool = typeof requested === 'string' && registeredNames.has(requested) ? requested : UNKNOWN_TOOL
-		const tally: CacheTally = { hits: 0, misses: 0 }
+		const tally: CacheTally = { hits: 0, misses: 0, requests: 0 }
 		const start = performance.now()
 		// Stays 'error' if the handler throws (an unknown tool, say); the throw propagates unchanged to the SDK.
 		let outcome: ToolOutcome = 'error'
@@ -60,7 +60,13 @@ function instrumentHandler(
 			outcome = classifyResult(tool, result)
 			return result
 		} finally {
-			report(onToolCall, { tool, outcome, cache: cacheOutcome(tally), durationMs: performance.now() - start })
+			report(onToolCall, {
+				tool,
+				outcome,
+				cache: cacheOutcome(tally),
+				durationMs: performance.now() - start,
+				lastfmRequests: tally.requests,
+			})
 		}
 	}
 }

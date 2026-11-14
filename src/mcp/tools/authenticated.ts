@@ -4,6 +4,8 @@ import { McpServer } from '@modelcontextprotocol/server'
 import { z } from 'zod'
 
 import { CachedLastfmClient } from '../../clients/cachedLastfm'
+import { MAX_EXCLUDE, findRecommendations } from '../../recommendations/engine'
+import { formatRecommendations } from '../../recommendations/format'
 import { LASTFM_READ, LOCAL_READ } from './annotations'
 import { AUTHENTICATED_TOOL_CATALOG, PUBLIC_TOOL_CATALOG, renderToolList } from './catalog'
 import { toolError } from './error-handler'
@@ -85,7 +87,7 @@ export function registerAuthenticatedTools(server: McpServer, client: CachedLast
 				{ tool: 'get_recent_tracks', args: '', hint: "see what you've been listening to lately" },
 				{ tool: 'get_top_artists', args: 'period="1month"', hint: 'top artists for a recent window' },
 				{ tool: 'get_listening_stats', args: '', hint: 'shape of your overall scrobble history' },
-				{ tool: 'get_music_recommendations', args: '', hint: 'personalized picks based on your history' },
+				{ tool: 'get_music_recommendations', args: '', hint: 'new-to-you artists based on your listening, with starter tracks' },
 			])
 
 			return {
@@ -204,6 +206,7 @@ ${renderToolList(AUTHENTICATED_TOOL_CATALOG)}
 							},
 					{ tool: 'get_artist_info', args: 'artist="<ARTIST FROM LIST>"', hint: 'expand an artist from the feed' },
 					{ tool: 'get_top_artists', args: 'period="7day"', hint: 'aggregate the recent feed into a 7-day top list' },
+					{ tool: 'get_music_recommendations', args: '', hint: 'new-to-you artists based on your listening, with starter tracks' },
 				])
 
 				return {
@@ -265,6 +268,7 @@ ${currentPage > 1 ? `\n⬅️ **Previous page:** Use \`page: ${currentPage - 1}\
 						: { tool: 'get_artist_info', args: 'artist="<NAME FROM LIST>"', hint: 'expand one of your top artists' },
 					{ tool: 'get_artist_top_tracks', args: 'artist="<NAME FROM LIST>"', hint: 'see canonical tracks for one of them' },
 					{ tool: 'get_top_albums', args: `period="${period}"`, hint: 'pivot to top albums for the same period' },
+					{ tool: 'get_music_recommendations', args: '', hint: 'new-to-you artists based on your listening, with starter tracks' },
 				])
 
 				return {
@@ -473,7 +477,7 @@ Total tracks: ${data.toptracks['@attr'].total}${nextSteps}`,
 						args: 'artist="<ARTIST FROM LIST>", track="<TRACK FROM LIST>"',
 						hint: 'find more like a loved track',
 					},
-					{ tool: 'get_music_recommendations', args: '', hint: 'personalized picks based on your history' },
+					{ tool: 'get_music_recommendations', args: '', hint: 'new-to-you artists based on your listening, with starter tracks' },
 				])
 
 				return {
@@ -601,55 +605,37 @@ Total loved tracks: ${data.lovedtracks['@attr'].total}${nextSteps}`,
 		},
 	)
 
-	// get_music_recommendations - Get personalized recommendations
+	// get_music_recommendations - New-to-the-user artists with reasons and starters
 	server.registerTool(
 		'get_music_recommendations',
 		{
 			title: 'Music recommendations',
 			annotations: LASTFM_READ,
-			description: 'Get personalized music recommendations from Last.fm based on listening history - REQUIRES AUTHENTICATION',
+			description:
+				'Find new music for the signed-in user: artists they don\'t already listen to, ranked by how strongly their recent and long-term listening points to them, each with the reason from their own Last.fm data plus a starter album and tracks. Use this for "what should I listen to?", "recommend something", "find me new music" or "like X but new to me", instead of chaining get_similar_artists calls. Optional genre filter; pass exclude with earlier picks to get different ones. REQUIRES AUTHENTICATION',
 			inputSchema: z.object({
 				username: z.string().optional().describe('Last.fm username (defaults to authenticated user)'),
-				limit: z.coerce.number().min(1).max(50).optional().default(20).describe('Number of recommendations to return (1-50)'),
-				genre: z.string().optional().describe('Optional genre filter for recommendations'),
+				limit: z.coerce.number().int().min(1).max(15).optional().default(8).describe('Number of artists to recommend (1-15)'),
+				genre: z.string().trim().optional().describe('Optional Last.fm genre tag to keep picks in, e.g. "shoegaze"'),
+				exclude: z
+					.array(z.string().trim().min(1))
+					.max(MAX_EXCLUDE)
+					.optional()
+					.default([])
+					.describe(`Artist names to leave out, such as earlier picks (up to ${MAX_EXCLUDE}, case-insensitive)`),
 			}),
 		},
-		async ({ username, limit, genre }) => {
+		async ({ username, limit, genre, exclude }) => {
 			const session = getSession()
 			if (!session) {
 				return { content: [{ type: 'text', text: AUTH_REQUIRED }] }
 			}
 
 			try {
-				const effectiveUsername = username || session.username
-				const recommendations = await client.getMusicRecommendations(effectiveUsername, limit, genre)
-
-				const artistRecs = recommendations.recommendedArtists.slice(0, 8)
-				const artistList = artistRecs.map((rec) => `• ${rec.name} (${rec.reason})`).join('\n')
-
-				const topRec = artistRecs[0]?.name
-				const nextSteps = buildNextSteps([
-					topRec
-						? { tool: 'get_artist_info', args: `artist=${JSON.stringify(topRec)}`, hint: 'expand the top recommendation' }
-						: { tool: 'get_artist_info', args: 'artist="<NAME FROM LIST>"', hint: 'expand a recommendation' },
-					{ tool: 'get_artist_top_tracks', args: 'artist="<NAME FROM LIST>"', hint: 'jump to canonical tracks for one of the picks' },
-					{ tool: 'get_similar_artists', args: 'artist="<NAME FROM LIST>"', hint: 'fan out further from a recommendation' },
-				])
-
-				return {
-					content: [
-						{
-							type: 'text',
-							text: `🎯 **Music Recommendations for ${effectiveUsername}**
-${genre ? `**Genre Filter:** ${genre}\n` : ''}
-**Recommended Artists:**
-
-${artistList}
-
-*Based on your listening history and similar user preferences*${nextSteps}`,
-						},
-					],
-				}
+				// The schema trims genre; a blank one means no genre filter
+				const result = await findRecommendations(client, username || session.username, { limit, genre: genre || undefined, exclude })
+				// Next steps names the user only when the request did, so a follow-up never switches whose picks these are
+				return { content: [{ type: 'text', text: formatRecommendations(result, { username: username || undefined, exclude }) }] }
 			} catch (error) {
 				return toolError('get_music_recommendations', error)
 			}

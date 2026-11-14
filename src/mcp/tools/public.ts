@@ -394,6 +394,7 @@ ${albumList}${nextSteps}`,
 						? { tool: 'get_artist_info', args: `artist=${JSON.stringify(topSimilar)}`, hint: 'expand the closest match' }
 						: { tool: 'get_artist_info', args: 'artist="<NAME FROM LIST>"', hint: 'expand one of the similar artists' },
 					{ tool: 'get_artist_top_tracks', args: 'artist="<NAME FROM LIST>"', hint: 'jump straight to canonical tracks for one of them' },
+					{ tool: 'get_music_recommendations', args: '', hint: 'new-to-you artists based on your listening, with starter tracks' },
 				])
 
 				return {

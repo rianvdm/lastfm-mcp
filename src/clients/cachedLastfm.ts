@@ -16,10 +16,12 @@ import {
 	type LastfmUserInfoResponse,
 	type LastfmSimilarArtistsResponse,
 	type LastfmSimilarTracksResponse,
+	type LastfmTagTopArtistsResponse,
 	type LastfmWeeklyChartListResponse,
 	type LastfmWeeklyArtistChartResponse,
 	type LastfmWeeklyTrackChartResponse,
 } from './lastfm'
+import type { CandidateList } from '../recommendations/types'
 import { SmartCache, CacheKeys, createLastfmCache } from '../utils/cache'
 
 export class CachedLastfmClient {
@@ -41,16 +43,20 @@ export class CachedLastfmClient {
 	}
 
 	/**
-	 * Get user's top artists with caching
+	 * Get user's top artists with caching. `forceRefresh` skips the cached entry and stores the fresh one, so a caller
+	 * that caches what it builds from them (the recommendation candidates) doesn't stack two TTLs.
 	 */
 	async getTopArtists(
 		username: string,
 		period: '7day' | '1month' | '3month' | '6month' | '12month' | 'overall' = 'overall',
 		limit = 50,
+		options: { forceRefresh?: boolean } = {},
 	): Promise<LastfmTopArtistsResponse> {
 		const cacheKey = CacheKeys.userTopArtists(username, period, limit)
 
-		return this.cache.getOrFetch('userTopArtists', cacheKey, () => this.client.getTopArtists(username, period, limit))
+		return this.cache.getOrFetch('userTopArtists', cacheKey, () => this.client.getTopArtists(username, period, limit), {
+			forceRefresh: options.forceRefresh,
+		})
 	}
 
 	/**
@@ -161,6 +167,29 @@ export class CachedLastfmClient {
 	}
 
 	/**
+	 * Get a tag's top artists with caching (long TTL; shared by every user and tag spelling)
+	 */
+	async getTagTopArtists(tag: string, limit = 500): Promise<LastfmTagTopArtistsResponse> {
+		const cacheKey = CacheKeys.tagTopArtists(tag, limit)
+
+		return this.cache.getOrFetch('tagTopArtists', cacheKey, () => this.client.getTagTopArtists(tag, limit))
+	}
+
+	/**
+	 * Get a user's ranked recommendation candidates for a genre, running `build` on a miss.
+	 * A partial list (budget, deadline or rate limiting cut it short) is returned but not cached, so the next call retries.
+	 */
+	async getRecommendationCandidates(
+		username: string,
+		genre: string | undefined,
+		build: () => Promise<CandidateList>,
+	): Promise<CandidateList> {
+		const cacheKey = CacheKeys.recommendationCandidates(username, genre)
+
+		return this.cache.getOrFetch('userRecommendations', cacheKey, build, { shouldCache: (list) => !list.partial })
+	}
+
+	/**
 	 * Generate listening statistics for a user
 	 */
 	async getListeningStats(
@@ -208,76 +237,6 @@ export class CachedLastfmClient {
 				},
 				topArtistsCount: topArtists.topartists.artist.length,
 				topAlbumsCount: topAlbums.topalbums.album.length,
-			}
-		})
-	}
-
-	/**
-	 * Generate music recommendations based on user's listening history
-	 */
-	async getMusicRecommendations(
-		username: string,
-		limit = 20,
-		genre?: string,
-	): Promise<{
-		recommendedArtists: Array<{
-			name: string
-			reason: string
-			similarity: string
-			url: string
-		}>
-		recommendedTracks: Array<{
-			name: string
-			artist: string
-			reason: string
-			similarity: string
-			url: string
-		}>
-	}> {
-		const cacheKey = CacheKeys.userRecommendations(username, limit, genre)
-
-		return this.cache.getOrFetch('userRecommendations', cacheKey, async () => {
-			// Get user's top artists to base recommendations on
-			const topArtists = await this.client.getTopArtists(username, 'overall', 10)
-
-			const recommendedArtists: Array<{
-				name: string
-				reason: string
-				similarity: string
-				url: string
-			}> = []
-
-			const recommendedTracks: Array<{
-				name: string
-				artist: string
-				reason: string
-				similarity: string
-				url: string
-			}> = []
-
-			// Get similar artists for each top artist
-			for (const artist of topArtists.topartists.artist.slice(0, 3)) {
-				try {
-					const similar = await this.client.getSimilarArtists(artist.name, 5)
-
-					for (const similarArtist of similar.similarartists.artist) {
-						if (recommendedArtists.length < limit) {
-							recommendedArtists.push({
-								name: similarArtist.name,
-								reason: `Similar to ${artist.name}`,
-								similarity: similarArtist.match,
-								url: similarArtist.url,
-							})
-						}
-					}
-				} catch (error) {
-					console.warn(`Could not get similar artists for ${artist.name}:`, error)
-				}
-			}
-
-			return {
-				recommendedArtists: recommendedArtists.slice(0, limit),
-				recommendedTracks: recommendedTracks.slice(0, limit),
 			}
 		})
 	}

@@ -115,6 +115,11 @@ describe('SmartCache', () => {
 	})
 
 	describe('TTL and expiration', () => {
+		it('should keep recommendation candidates for 1 hour and tag top artists for 7 days', () => {
+			expect(DEFAULT_CACHE_CONFIG.userRecommendations).toBe(3600)
+			expect(DEFAULT_CACHE_CONFIG.tagTopArtists).toBe(7 * 24 * 60 * 60)
+		})
+
 		it('should respect TTL settings from config', async () => {
 			const testData = { name: 'Test' }
 			await cache.set('userRecentTracks', 'user1', testData)
@@ -297,6 +302,54 @@ describe('SmartCache', () => {
 		})
 	})
 
+	describe('shouldCache option', () => {
+		it('should return a rejected value without writing it to KV', async () => {
+			const fetcher = vi.fn().mockResolvedValue({ partial: true })
+
+			const result = await cache.getOrFetch('userRecommendations', 'u', fetcher, { shouldCache: () => false })
+
+			expect(result).toEqual({ partial: true })
+			expect(mockKV.put).not.toHaveBeenCalled()
+		})
+
+		it('should fetch again after a rejected value', async () => {
+			const fetcher = vi.fn().mockResolvedValue({ partial: true })
+			const options = { shouldCache: (value: { partial: boolean }) => !value.partial }
+
+			await cache.getOrFetch('userRecommendations', 'u', fetcher, options)
+			await cache.getOrFetch('userRecommendations', 'u', fetcher, options)
+
+			expect(fetcher).toHaveBeenCalledTimes(2)
+		})
+
+		it('should cache a value the predicate accepts', async () => {
+			const fetcher = vi.fn().mockResolvedValue({ partial: false })
+			const options = { shouldCache: (value: { partial: boolean }) => !value.partial }
+
+			await cache.getOrFetch('userRecommendations', 'u', fetcher, options)
+			const result = await cache.getOrFetch('userRecommendations', 'u', fetcher, options)
+
+			expect(result).toEqual({ partial: false })
+			expect(fetcher).toHaveBeenCalledTimes(1)
+			expect(mockKV.put).toHaveBeenCalledTimes(1)
+		})
+
+		it('should give a rejected value to every deduplicated waiter', async () => {
+			let resolveFetch: (value: { partial: boolean }) => void = () => {}
+			const fetcher = vi.fn(() => new Promise<{ partial: boolean }>((resolve) => (resolveFetch = resolve)))
+			const options = { shouldCache: () => false }
+
+			const first = cache.getOrFetch('userRecommendations', 'u', fetcher, options)
+			await vi.waitFor(() => expect(fetcher).toHaveBeenCalledTimes(1))
+			const second = cache.getOrFetch('userRecommendations', 'u', fetcher, options)
+			resolveFetch({ partial: true })
+
+			await expect(Promise.all([first, second])).resolves.toEqual([{ partial: true }, { partial: true }])
+			expect(fetcher).toHaveBeenCalledTimes(1)
+			expect(mockKV.put).not.toHaveBeenCalled()
+		})
+	})
+
 	describe('error handling', () => {
 		it('should handle KV storage errors gracefully in get()', async () => {
 			mockKV.get.mockRejectedValue(new Error('KV error'))
@@ -440,6 +493,27 @@ describe('CacheKeys', () => {
 			expect(key3).toContain(':user1')
 		})
 
+		it('should key recommendation candidates by user and normalised genre with a v2 prefix', () => {
+			const key = CacheKeys.recommendationCandidates('u', 'Post Rock')
+
+			expect(key).toBe(CacheKeys.recommendationCandidates('u', ' post rock '))
+			expect(key).toBe('v2:u:tag:post%20rock')
+			expect(CacheKeys.recommendationCandidates('u')).toBe('v2:u:all')
+			expect(CacheKeys.recommendationCandidates('u', '')).toBe('v2:u:all')
+		})
+
+		it('should keep the genre "all" apart from no genre, and treat a blank genre as none', () => {
+			expect(CacheKeys.recommendationCandidates('u', 'all')).not.toBe(CacheKeys.recommendationCandidates('u'))
+			expect(CacheKeys.recommendationCandidates('u', 'all')).toBe('v2:u:tag:all')
+			expect(CacheKeys.recommendationCandidates('u', ' ')).toBe(CacheKeys.recommendationCandidates('u'))
+		})
+
+		it('should key tag top artists by normalised tag and limit', () => {
+			expect(CacheKeys.tagTopArtists('Shoegaze', 500)).toBe(CacheKeys.tagTopArtists(' shoegaze ', 500))
+			expect(CacheKeys.tagTopArtists('Post Rock', 500)).toBe('post%20rock:500')
+			expect(CacheKeys.tagTopArtists('shoegaze', 500)).not.toBe(CacheKeys.tagTopArtists('shoegaze', 1000))
+		})
+
 		it('should generate unique keys for all cache types', () => {
 			const keys = [
 				CacheKeys.userRecentTracks('user1', 50),
@@ -448,7 +522,7 @@ describe('CacheKeys', () => {
 				CacheKeys.userLovedTracks('user1', 50),
 				CacheKeys.userInfo('user1'),
 				CacheKeys.userListeningStats('user1', 'overall'),
-				CacheKeys.userRecommendations('user1', 20, 'all'),
+				CacheKeys.recommendationCandidates('user1'),
 				CacheKeys.trackInfo('artist1', 'track1'),
 				CacheKeys.artistInfo('artist1'),
 				CacheKeys.albumInfo('artist1', 'album1'),
@@ -468,6 +542,20 @@ describe('createLastfmCache', () => {
 		const cache = createLastfmCache(mockKV as unknown as KVNamespace)
 
 		expect(cache).toBeInstanceOf(SmartCache)
+	})
+
+	it('should keep recommendation candidates for 1 hour and tag top artists for 7 days', () => {
+		const cache = createLastfmCache(createMockKV() as unknown as KVNamespace)
+
+		expect(cache['config'].userRecommendations).toBe(3600)
+		expect(cache['config'].tagTopArtists).toBe(7 * 24 * 60 * 60)
+	})
+
+	it('should accept shouldCache without KV storage and still return the value', async () => {
+		const cache = createLastfmCache()
+		const fetcher = vi.fn().mockResolvedValue({ partial: true })
+
+		await expect(cache.getOrFetch('userRecommendations', 'u', fetcher, { shouldCache: () => false })).resolves.toEqual({ partial: true })
 	})
 
 	it('should create mock cache without KV storage', () => {
@@ -505,7 +593,7 @@ describe('cache tally', () => {
 
 	beforeEach(() => {
 		mockKV = createMockKV()
-		tally = { hits: 0, misses: 0 }
+		tally = { hits: 0, misses: 0, requests: 0 }
 		vi.spyOn(console, 'log').mockImplementation(() => {})
 	})
 
@@ -518,10 +606,10 @@ describe('cache tally', () => {
 		const fetcher = vi.fn().mockResolvedValue({ name: 'Test Data' })
 
 		await inTally(() => cache.getOrFetch('trackInfo', 'test-key', fetcher))
-		expect(tally).toEqual({ hits: 0, misses: 1 })
+		expect(tally).toEqual({ hits: 0, misses: 1, requests: 0 })
 
 		await inTally(() => cache.getOrFetch('trackInfo', 'test-key', fetcher))
-		expect(tally).toEqual({ hits: 1, misses: 1 })
+		expect(tally).toEqual({ hits: 1, misses: 1, requests: 0 })
 		expect(fetcher).toHaveBeenCalledTimes(1)
 	})
 
@@ -529,7 +617,7 @@ describe('cache tally', () => {
 		const cache = new SmartCache(mockKV as unknown as KVNamespace)
 		let resolveFetch: (value: { name: string }) => void = () => {}
 		const fetcher = vi.fn(() => new Promise<{ name: string }>((resolve) => (resolveFetch = resolve)))
-		const firstTally: CacheTally = { hits: 0, misses: 0 }
+		const firstTally: CacheTally = { hits: 0, misses: 0, requests: 0 }
 
 		const first = runWithCacheTally(firstTally, () => cache.getOrFetch('trackInfo', 'test-key', fetcher))
 		await vi.waitFor(() => expect(fetcher).toHaveBeenCalledTimes(1))
@@ -538,8 +626,8 @@ describe('cache tally', () => {
 		await Promise.all([first, second])
 
 		expect(fetcher).toHaveBeenCalledTimes(1)
-		expect(firstTally).toEqual({ hits: 0, misses: 1 })
-		expect(tally).toEqual({ hits: 1, misses: 0 })
+		expect(firstTally).toEqual({ hits: 0, misses: 1, requests: 0 })
+		expect(tally).toEqual({ hits: 1, misses: 0, requests: 0 })
 	})
 
 	it('should count a forced refresh as a miss', async () => {
@@ -551,7 +639,7 @@ describe('cache tally', () => {
 			await cache.getOrFetch('trackInfo', 'test-key', fetcher, { forceRefresh: true })
 		})
 
-		expect(tally).toEqual({ hits: 0, misses: 2 })
+		expect(tally).toEqual({ hits: 0, misses: 2, requests: 0 })
 	})
 
 	it('should count a miss when the fetch fails', async () => {
@@ -562,7 +650,7 @@ describe('cache tally', () => {
 			'down',
 		)
 
-		expect(tally).toEqual({ hits: 0, misses: 1 })
+		expect(tally).toEqual({ hits: 0, misses: 1, requests: 0 })
 	})
 
 	it('should leave the tally alone for plain get and set', async () => {
@@ -573,7 +661,7 @@ describe('cache tally', () => {
 			await cache.get('trackInfo', 'test-key')
 		})
 
-		expect(tally).toEqual({ hits: 0, misses: 0 })
+		expect(tally).toEqual({ hits: 0, misses: 0, requests: 0 })
 	})
 
 	it('should count lookups through createLastfmCache', async () => {
@@ -585,7 +673,7 @@ describe('cache tally', () => {
 			await cache.getOrFetch('trackInfo', 'test-key', fetcher)
 		})
 
-		expect(tally).toEqual({ hits: 1, misses: 1 })
+		expect(tally).toEqual({ hits: 1, misses: 1, requests: 0 })
 	})
 
 	it('should count every lookup as a miss without KV storage', async () => {
@@ -597,20 +685,20 @@ describe('cache tally', () => {
 			await cache.getOrFetch('trackInfo', 'test-key', fetcher)
 		})
 
-		expect(tally).toEqual({ hits: 0, misses: 2 })
+		expect(tally).toEqual({ hits: 0, misses: 2, requests: 0 })
 	})
 
 	it('should count only into the tally of the run that made the lookup', async () => {
 		const cache = new SmartCache(mockKV as unknown as KVNamespace)
-		const otherTally: CacheTally = { hits: 0, misses: 0 }
+		const otherTally: CacheTally = { hits: 0, misses: 0, requests: 0 }
 
 		await Promise.all([
 			inTally(() => cache.getOrFetch('trackInfo', 'test-key', vi.fn().mockResolvedValue({ name: 'Test Data' }))),
 			runWithCacheTally(otherTally, async () => 'no lookup'),
 		])
 
-		expect(tally).toEqual({ hits: 0, misses: 1 })
-		expect(otherTally).toEqual({ hits: 0, misses: 0 })
+		expect(tally).toEqual({ hits: 0, misses: 1, requests: 0 })
+		expect(otherTally).toEqual({ hits: 0, misses: 0, requests: 0 })
 	})
 
 	it('should work outside any tally', async () => {

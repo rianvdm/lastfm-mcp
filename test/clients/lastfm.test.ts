@@ -1,10 +1,10 @@
-/**
- * Tests for Last.fm API client
- * Critical tests for core business logic that was previously untested
- */
-
+// ABOUTME: Tests for LastfmClient, the typed Last.fm API client.
+// ABOUTME: Covers request formation, response parsing, error handling, retry options, request counting and the request policy.
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
+
 import { LastfmClient } from '../../src/clients/lastfm'
+import { runWithCacheTally, type CacheTally } from '../../src/utils/cacheTally'
+import { RequestBudgetExceeded, isRateLimited, runWithRequestPolicy, type RequestPolicy } from '../../src/utils/lastfmRequestPolicy'
 import { fetchWithRetry } from '../../src/utils/retry'
 import type {
 	LastfmRecentTracksResponse,
@@ -106,6 +106,7 @@ describe('LastfmClient', () => {
 
 	afterEach(() => {
 		vi.useRealTimers()
+		vi.restoreAllMocks()
 	})
 
 	describe('constructor', () => {
@@ -369,6 +370,21 @@ describe('LastfmClient', () => {
 			expect(url).toContain('limit=20')
 		})
 
+		it('should call getTagTopArtists with correct parameters', async () => {
+			await client.getTagTopArtists('shoegaze', 500)
+
+			const [url] = mockFetchWithRetry.mock.calls[0]
+			expect(url).toContain('method=tag.getTopArtists&tag=shoegaze&limit=500')
+		})
+
+		it('should default getTagTopArtists to 500 artists', async () => {
+			await client.getTagTopArtists('post rock')
+
+			const [url] = mockFetchWithRetry.mock.calls[0]
+			expect(url).toContain('tag=post+rock')
+			expect(url).toContain('limit=500')
+		})
+
 		it('should call getSimilarTracks with correct parameters', async () => {
 			await client.getSimilarTracks('Queen', 'Bohemian Rhapsody', 15)
 
@@ -400,6 +416,190 @@ describe('LastfmClient', () => {
 					jitterFactor: 0.1,
 				}),
 			)
+		})
+
+		it('should count every HTTP attempt into the current tally', async () => {
+			const actual = await vi.importActual<typeof import('../../src/utils/retry')>('../../src/utils/retry')
+			mockFetchWithRetry.mockImplementationOnce(actual.fetchWithRetry)
+			vi.spyOn(console, 'log').mockImplementation(() => {})
+			const fetchSpy = vi
+				.spyOn(globalThis, 'fetch')
+				.mockResolvedValueOnce(new Response('Rate limited', { status: 429 }))
+				.mockResolvedValueOnce(Response.json(mockArtistInfoResponse))
+			const tally: CacheTally = { hits: 0, misses: 0, requests: 0 }
+
+			const promise = runWithCacheTally(tally, () => client.getArtistInfo('Queen'))
+			await vi.advanceTimersByTimeAsync(2000)
+			await promise
+
+			expect(fetchSpy).toHaveBeenCalledTimes(2)
+			expect(tally.requests).toBe(2)
+		})
+	})
+
+	describe('request policy', () => {
+		const policy: RequestPolicy = { maxRequests: 40, deadlineMs: 8000, maxConcurrent: 4, maxRetries: 1, maxRetryDelayMs: 2000 }
+
+		beforeEach(async () => {
+			const actual = await vi.importActual<typeof import('../../src/utils/retry')>('../../src/utils/retry')
+			mockFetchWithRetry.mockImplementation(actual.fetchWithRetry)
+			vi.spyOn(console, 'log').mockImplementation(() => {})
+		})
+
+		afterEach(() => {
+			// restoreAllMocks leaves vi.fn implementations in place; later tests expect the bare mock
+			mockFetchWithRetry.mockReset()
+		})
+
+		it('should retry at most once under a policy', async () => {
+			const fetchSpy = vi.spyOn(globalThis, 'fetch').mockImplementation(async () => new Response('Rate limited', { status: 429 }))
+
+			const promise = runWithRequestPolicy(policy, () => client.getArtistInfo('Queen')).catch((e: unknown) => e)
+			await vi.advanceTimersByTimeAsync(2000)
+			const error = await promise
+
+			expect(fetchSpy).toHaveBeenCalledTimes(2)
+			expect(error).toBeInstanceOf(Error)
+			expect(isRateLimited(error)).toBe(true)
+		})
+
+		it('should keep the default retry options outside a policy', async () => {
+			vi.spyOn(globalThis, 'fetch').mockResolvedValue(Response.json(mockArtistInfoResponse))
+
+			await client.getArtistInfo('Queen')
+
+			expect(mockFetchWithRetry).toHaveBeenCalledWith(
+				expect.any(String),
+				expect.any(Object),
+				expect.objectContaining({ maxRetries: 3, maxDelayMs: 15000 }),
+			)
+		})
+
+		it('should count an attempt the budget accepts and neither send nor count one it refuses', async () => {
+			const fetchSpy = vi.spyOn(globalThis, 'fetch').mockImplementation(async () => Response.json(mockArtistInfoResponse))
+			const tally: CacheTally = { hits: 0, misses: 0, requests: 0 }
+
+			const error = await runWithCacheTally(tally, () =>
+				runWithRequestPolicy({ ...policy, maxRequests: 1 }, async () => {
+					await client.getArtistInfo('Queen')
+					return client.getArtistInfo('Queen').catch((e: unknown) => e)
+				}),
+			)
+
+			expect(error).toBeInstanceOf(RequestBudgetExceeded)
+			expect(fetchSpy).toHaveBeenCalledTimes(1)
+			expect(tally.requests).toBe(1)
+		})
+
+		it('should not send or count a retry the budget refuses', async () => {
+			const fetchSpy = vi.spyOn(globalThis, 'fetch').mockImplementation(async () => new Response('Rate limited', { status: 429 }))
+			const tally: CacheTally = { hits: 0, misses: 0, requests: 0 }
+
+			const promise = runWithCacheTally(tally, () =>
+				runWithRequestPolicy({ ...policy, maxRequests: 1 }, () => client.getArtistInfo('Queen')),
+			).catch((e: unknown) => e)
+			await vi.advanceTimersByTimeAsync(2000)
+			const error = await promise
+
+			expect(error).toBeInstanceOf(RequestBudgetExceeded)
+			expect((error as RequestBudgetExceeded).reason).toBe('budget')
+			expect(fetchSpy).toHaveBeenCalledTimes(1)
+			expect(tally.requests).toBe(1)
+		})
+
+		it('should abort a hung fetch at the deadline and report it as a deadline refusal', async () => {
+			let signal: AbortSignal | null | undefined
+			const fetchSpy = vi.spyOn(globalThis, 'fetch').mockImplementation((_input, init) => {
+				signal = init?.signal
+				// A fetch that only ever ends by being aborted, as a hung Last.fm request would
+				return new Promise<Response>((_resolve, reject) => init?.signal?.addEventListener('abort', () => reject(init.signal?.reason)))
+			})
+
+			const promise = runWithRequestPolicy(policy, () => client.getArtistInfo('Queen')).catch((e: unknown) => e)
+			await vi.advanceTimersByTimeAsync(policy.deadlineMs)
+			const error = await promise
+
+			expect(signal?.aborted).toBe(true)
+			expect(error).toBeInstanceOf(RequestBudgetExceeded)
+			expect((error as RequestBudgetExceeded).reason).toBe('deadline')
+			expect(fetchSpy).toHaveBeenCalledTimes(1)
+		})
+
+		it('should send nothing more once a request fails with HTTP 429 after its retry', async () => {
+			const fetchSpy = vi.spyOn(globalThis, 'fetch').mockImplementation(async () => new Response('Rate limited', { status: 429 }))
+			const tally: CacheTally = { hits: 0, misses: 0, requests: 0 }
+
+			const promise = runWithCacheTally(tally, () =>
+				runWithRequestPolicy({ ...policy, maxConcurrent: 1 }, async () => {
+					const first = client.getArtistInfo('Queen').catch((e: unknown) => e)
+					// Queued behind the first request for the only slot
+					const queued = client.getArtistInfo('Slowdive').catch((e: unknown) => e)
+					const settled = await Promise.all([first, queued])
+					const later = await client.getArtistInfo('Ride').catch((e: unknown) => e)
+					return [...settled, later]
+				}),
+			)
+			// Long enough for every request to fail with its retry if the rate limit didn't stop them
+			await vi.advanceTimersByTimeAsync(policy.deadlineMs)
+			const [first, queued, later] = await promise
+
+			expect(isRateLimited(first)).toBe(true)
+			for (const refused of [queued, later]) {
+				expect(refused).toBeInstanceOf(RequestBudgetExceeded)
+				expect((refused as RequestBudgetExceeded).reason).toBe('rate_limited')
+			}
+			expect(fetchSpy).toHaveBeenCalledTimes(2)
+			expect(tally.requests).toBe(2)
+		})
+
+		it('should send nothing more once Last.fm answers with error 29', async () => {
+			const fetchSpy = vi
+				.spyOn(globalThis, 'fetch')
+				.mockImplementation(async () => Response.json({ error: 29, message: 'Rate limit exceeded' }))
+			const tally: CacheTally = { hits: 0, misses: 0, requests: 0 }
+
+			const [first, queued, later] = await runWithCacheTally(tally, () =>
+				runWithRequestPolicy({ ...policy, maxConcurrent: 1 }, async () => {
+					const first = client.getArtistInfo('Queen').catch((e: unknown) => e)
+					const queued = client.getArtistInfo('Slowdive').catch((e: unknown) => e)
+					const settled = await Promise.all([first, queued])
+					const later = await client.getArtistInfo('Ride').catch((e: unknown) => e)
+					return [...settled, later]
+				}),
+			)
+
+			expect(isRateLimited(first)).toBe(true)
+			expect((first as Error).message).toBe('Last.fm API error 29: Rate limit exceeded')
+			for (const refused of [queued, later]) {
+				expect(refused).toBeInstanceOf(RequestBudgetExceeded)
+				expect((refused as RequestBudgetExceeded).reason).toBe('rate_limited')
+			}
+			expect(fetchSpy).toHaveBeenCalledTimes(1)
+			expect(tally.requests).toBe(1)
+		})
+
+		it('should keep sending after a Last.fm error other than 29', async () => {
+			const fetchSpy = vi
+				.spyOn(globalThis, 'fetch')
+				.mockResolvedValueOnce(Response.json(mockErrorResponse))
+				.mockResolvedValueOnce(Response.json(mockArtistInfoResponse))
+
+			const [first, second] = await runWithRequestPolicy(policy, async () => [
+				await client.getArtistInfo('Nobody').catch((e: unknown) => e),
+				await client.getArtistInfo('Queen'),
+			])
+
+			expect((first as Error).message).toBe('Last.fm API error 6: User not found')
+			expect(second).toEqual(mockArtistInfoResponse)
+			expect(fetchSpy).toHaveBeenCalledTimes(2)
+		})
+
+		it('should send no abort signal outside a policy', async () => {
+			const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValue(Response.json(mockArtistInfoResponse))
+
+			await client.getArtistInfo('Queen')
+
+			expect(fetchSpy.mock.calls[0][1]).not.toHaveProperty('signal')
 		})
 	})
 

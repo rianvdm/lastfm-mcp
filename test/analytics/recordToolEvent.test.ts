@@ -7,7 +7,7 @@ import { recordToolEvent } from '../../src/analytics/recordToolEvent'
 import { SERVER_VERSION } from '../../src/mcp/protocol'
 import type { Env } from '../../src/types/env'
 
-const EVENT: ToolCallEvent = { tool: 'get_top_artists', outcome: 'ok', cache: 'miss', durationMs: 42 }
+const EVENT: ToolCallEvent = { tool: 'get_top_artists', outcome: 'ok', cache: 'miss', durationMs: 42, lastfmRequests: 3 }
 
 /** An env whose OAUTH_KV.get answers with `get` and whose TOOL_EVENTS records writes, unless `toolEvents` overrides it. */
 function fakeEnv(get: (key: string, type: string) => Promise<unknown>, toolEvents: unknown = { writeDataPoint: vi.fn() }) {
@@ -44,7 +44,7 @@ describe('recordToolEvent', () => {
 		expect(writeDataPoint).toHaveBeenCalledWith({
 			indexes: ['get_top_artists'],
 			blobs: ['get_top_artists', 'Claude', 'ok', 'miss', SERVER_VERSION],
-			doubles: [42],
+			doubles: [42, 3],
 		})
 	})
 

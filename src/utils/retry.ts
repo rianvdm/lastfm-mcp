@@ -8,6 +8,11 @@ export interface RetryOptions {
 	backoffMultiplier?: number
 	jitterFactor?: number
 	shouldRetry?: (error: unknown, attempt: number) => boolean
+	/**
+	 * Called before every attempt, the first included, with its 1-based number. A throw counts as that attempt's failure
+	 * and goes through shouldRetry, so a non-retryable error stops the loop without calling `fn`.
+	 */
+	onAttempt?: (attempt: number) => void
 }
 
 export interface RetryResult<T> {
@@ -98,12 +103,14 @@ export async function withRetry<T>(fn: () => Promise<T>, options: RetryOptions =
 		backoffMultiplier = 2,
 		jitterFactor = 0.1,
 		shouldRetry = defaultShouldRetry,
+		onAttempt,
 	} = options
 
 	let lastError: Error | undefined
 
 	for (let attempt = 1; attempt <= maxRetries + 1; attempt++) {
 		try {
+			onAttempt?.(attempt)
 			const data = await fn()
 			return {
 				success: true,

@@ -1,7 +1,9 @@
 // ABOUTME: Last.fm API client for fetching user listening data and public music information.
 // ABOUTME: Wraps all Last.fm API endpoints with typed interfaces and retry-enabled HTTP calls.
 
-import { fetchWithRetry, RetryOptions } from '../utils/retry'
+import { countLastfmRequest } from '../utils/cacheTally'
+import { withPolicy } from '../utils/lastfmRequestPolicy'
+import { fetchWithRetry, type RetryOptions } from '../utils/retry'
 
 // Last.fm API response interfaces
 export interface LastfmTrack {
@@ -266,7 +268,7 @@ export interface LastfmTrackInfoResponse {
 		userplaycount?: string
 		userloved?: string
 		// Last.fm returns `tag` as an array for many tags, a bare object for one,
-		// or omits it entirely. See toArray() in mcp/tools/formatters.ts.
+		// or omits it entirely. See toArray() in utils/toArray.ts.
 		toptags?: {
 			tag?: LastfmTag | LastfmTag[]
 		}
@@ -308,7 +310,7 @@ export interface LastfmAlbumInfoResponse {
 		playcount: string
 		userplaycount?: string
 		// Last.fm returns `track`/`tag` as an array for many, a bare object for
-		// one, or omits it entirely. See toArray() in mcp/tools/formatters.ts.
+		// one, or omits it entirely. See toArray() in utils/toArray.ts.
 		tracks?: {
 			track?: LastfmAlbumTrack | LastfmAlbumTrack[]
 		}
@@ -337,6 +339,18 @@ export interface LastfmSimilarArtistsResponse {
 		'@attr': {
 			artist: string
 		}
+	}
+}
+
+export interface LastfmTagTopArtistsResponse {
+	topartists: {
+		artist: Array<
+			LastfmArtist & {
+				'@attr'?: {
+					rank: string
+				}
+			}
+		>
 	}
 }
 
@@ -433,24 +447,36 @@ export class LastfmClient {
 			...params,
 		})
 
-		const response = await fetchWithRetry(
-			`${this.baseUrl}?${searchParams.toString()}`,
-			{
-				method: 'GET',
-				headers: {
-					'User-Agent': 'lastfm-mcp/1.0.0',
+		// Under a request policy the whole exchange, body included, holds a concurrency slot, the policy's retry limits
+		// replace the client's, and the policy's signal aborts the fetch at the deadline. Outside one, withPolicy passes
+		// no overrides and no signal. Last.fm's own errors are thrown inside the exchange, so the policy sees error 29.
+		return withPolicy(async (policyRetry, signal) => {
+			const retryOptions: RetryOptions = { ...this.lastfmRetryOptions, ...policyRetry }
+			const response = await fetchWithRetry(
+				`${this.baseUrl}?${searchParams.toString()}`,
+				{
+					method: 'GET',
+					headers: {
+						'User-Agent': 'lastfm-mcp/1.0.0',
+					},
+					...(signal && { signal }),
 				},
-			},
-			this.lastfmRetryOptions,
-		)
-
-		const data = (await response.json()) as LastfmApiResponse<T>
-
-		if ('error' in data) {
-			throw new Error(`Last.fm API error ${data.error}: ${data.message}`)
-		}
-
-		return data as T
+				{
+					...retryOptions,
+					// Counts every HTTP attempt, retries included. An onAttempt already in the options (the policy's budget
+					// charge) runs first, so an attempt it refuses by throwing never reaches Last.fm and isn't counted.
+					onAttempt: (attempt) => {
+						retryOptions.onAttempt?.(attempt)
+						countLastfmRequest()
+					},
+				},
+			)
+			const data = (await response.json()) as LastfmApiResponse<T>
+			if ('error' in data) {
+				throw new Error(`Last.fm API error ${data.error}: ${data.message}`)
+			}
+			return data as T
+		})
 	}
 
 	/**
@@ -616,6 +642,17 @@ export class LastfmClient {
 		return this.makeRequest<LastfmSimilarArtistsResponse>({
 			method: 'artist.getSimilar',
 			artist,
+			limit: limit.toString(),
+		})
+	}
+
+	/**
+	 * Get a tag's top artists, most-tagged first; an unknown tag returns an empty list, not an error
+	 */
+	async getTagTopArtists(tag: string, limit = 500): Promise<LastfmTagTopArtistsResponse> {
+		return this.makeRequest<LastfmTagTopArtistsResponse>({
+			method: 'tag.getTopArtists',
+			tag,
 			limit: limit.toString(),
 		})
 	}

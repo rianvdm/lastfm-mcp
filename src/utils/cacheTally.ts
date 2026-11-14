@@ -1,14 +1,16 @@
-// ABOUTME: Per-invocation count of Last.fm cache hits and misses, carried in AsyncLocalStorage (needs nodejs_compat).
-// ABOUTME: Tool-call instrumentation runs each call inside its own tally; SmartCache counts into whichever tally is current.
+// ABOUTME: Per-invocation count of Last.fm cache hits, misses and HTTP requests, in AsyncLocalStorage (needs nodejs_compat).
+// ABOUTME: Each tool call runs inside its own tally; SmartCache and LastfmClient count into whichever tally is current.
 import { AsyncLocalStorage } from 'node:async_hooks'
 
 /**
- * Cache lookups made through SmartCache.getOrFetch during one tool call. A hit is data served from KV or from a
- * deduplicated in-flight request; a miss is a call to Last.fm.
+ * Cache lookups made through SmartCache.getOrFetch during one tool call, and the Last.fm HTTP requests behind them. A hit
+ * is data served from KV or from a deduplicated in-flight request; a miss is a call to Last.fm. `requests` counts every
+ * HTTP attempt LastfmClient makes, retries included, so one miss can cost several requests.
  */
 export interface CacheTally {
 	hits: number
 	misses: number
+	requests: number
 }
 
 const currentTally = new AsyncLocalStorage<CacheTally>()
@@ -31,4 +33,10 @@ export function countCacheHit(): void {
 export function countCacheMiss(): void {
 	const tally = currentTally.getStore()
 	if (tally) tally.misses++
+}
+
+/** Counts one Last.fm HTTP attempt against the current tally; does nothing outside runWithCacheTally. */
+export function countLastfmRequest(): void {
+	const tally = currentTally.getStore()
+	if (tally) tally.requests++
 }
