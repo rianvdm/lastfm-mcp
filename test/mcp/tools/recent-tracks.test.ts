@@ -6,7 +6,7 @@ import type { z } from 'zod'
 import type { CachedLastfmClient } from '../../../src/clients/cachedLastfm'
 import type { LastfmTrack } from '../../../src/clients/lastfm'
 import { registerAuthenticatedTools } from '../../../src/mcp/tools/authenticated'
-import { formatTimestamp } from '../../../src/utils/dateFormat'
+import { formatTimestamp, getDayBoundsUTC } from '../../../src/utils/dateFormat'
 
 type ToolHandler = (args: Record<string, unknown>) => Promise<{ content: Array<{ type: string; text: string }> }>
 
@@ -160,13 +160,50 @@ describe('get_recent_tracks', () => {
 				expect(text).toContain(`\`page: 2, to: ${NOW}\``)
 			})
 
-			it('uses the given to as is and continues with page alone', async () => {
+			it('uses the given to as is and repeats it in the continuation', async () => {
 				getRecentTracks.mockImplementation(rangeStub(18400))
 
 				const text = await textOf({ from: FROM, to: TO, artist: KITES })
 
 				for (const call of getRecentTracks.mock.calls) expect(call[3]).toBe(TO)
-				expect(text).toContain('`page: 2`')
+				expect(text).toContain(`\`page: 2, to: ${TO}\``)
+				expect(text).not.toContain('Range end pinned')
+			})
+
+			it("repeats a date's end of day in the continuation", async () => {
+				getRecentTracks.mockImplementation(rangeStub(18400))
+
+				const text = await textOf({ date: '2013-06-01', artist: KITES })
+
+				expect(text).toContain(`\`page: 2, to: ${getDayBoundsUTC('2013-06-01', 'UTC').to}\``)
+			})
+
+			it('keeps the pinned to through a chain of continuations', async () => {
+				getRecentTracks.mockImplementation(rangeStub(18400))
+				const first = await textOf({ from: FROM, artist: KITES })
+				const pinned = Number(first.match(/`page: 2, to: (\d+)`/)?.[1])
+				expect(pinned).toBe(NOW)
+
+				// Time moves on before the agent follows the hint; the range must not move with it.
+				vi.setSystemTime((NOW + 600) * 1000)
+				getRecentTracks.mockClear()
+				const second = await textOf({ from: FROM, artist: KITES, page: 2, to: pinned })
+
+				for (const call of getRecentTracks.mock.calls) expect(call[3]).toBe(pinned)
+				expect(second).toContain(`\`page: 3, to: ${pinned}\``)
+			})
+
+			it('repeats the given to in the retry after the history changes on a continued block', async () => {
+				const before = rangeStub(18400)
+				const after = rangeStub(18401)
+				getRecentTracks.mockImplementation(async (user, limit, from, to, page) =>
+					(page === 6 ? before : after)(user, limit, from, to, page),
+				)
+
+				const text = await textOf({ from: FROM, to: TO, artist: KITES, page: 2 })
+
+				expect(text).toMatch(/changed during the scan/)
+				expect(text).toContain(`Retry with \`page: 2, to: ${TO}\``)
 			})
 
 			it('makes no completeness claim or definitive negative when the total changes between pages', async () => {

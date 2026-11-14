@@ -278,7 +278,7 @@ ${renderToolList(AUTHENTICATED_TOOL_CATALOG)}
 								text: `${warningPrefix}🎵 **Scrobbles by ${artistFilter} for ${effectiveUsername}** (times in ${effectiveTimezone})
 📅 **Queried range:** ${rangeStr}${pinnedLine}
 
-${describeArtistScan(artistFilter, scan, page, pinnedTo)}${matchList}${nextStepsFor(scan.matches)}`,
+${describeArtistScan(artistFilter, scan, page, effectiveTo)}${matchList}${nextStepsFor(scan.matches)}`,
 							},
 						],
 					}

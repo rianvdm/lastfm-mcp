@@ -94,12 +94,13 @@ const count = (n: number) => n.toLocaleString('en-US')
 
 /**
  * The header lines for an artist scan: what was scanned, whether that covers the range, and what was found.
- * Only a complete scan from block 1 may say the artist has no scrobbles in the range. `pinnedTo` is the range end the
- * server chose for an open range; every follow-up `page` must repeat it so later blocks scan the same scrobbles.
+ * Only a complete scan from block 1 may say the artist has no scrobbles in the range. `rangeEnd` is the scan's `to`,
+ * whether the caller gave it (directly or through a date) or the server pinned it; every continuation and retry repeats
+ * it, so each later block scans the same scrobbles however many hops the scan takes.
  */
-export function describeArtistScan(artist: string, scan: ArtistScanResult, page: number, pinnedTo?: number): string {
+export function describeArtistScan(artist: string, scan: ArtistScanResult, page: number, rangeEnd?: number): string {
 	const total = count(scan.totalInRange)
-	const blockArgs = (block: number) => `\`page: ${block}${pinnedTo === undefined ? '' : `, to: ${pinnedTo}`}\``
+	const blockArgs = (block: number) => `\`page: ${block}${rangeEnd === undefined ? '' : `, to: ${rangeEnd}`}\``
 
 	if (scan.scannedFrom === 0) {
 		if (page === 1) return `🔎 No scrobbles by ${artist} in this range (it has no scrobbles).`
