@@ -53,7 +53,7 @@ describe('ListenToMore link in public tool results', () => {
 				handlers.set(name, handler)
 			},
 		}
-		registerPublicTools(server as never, client as unknown as CachedLastfmClient)
+		registerPublicTools(server as never, client as unknown as CachedLastfmClient, () => null)
 		client.getAlbumInfo.mockResolvedValue(albumInfo())
 		client.getArtistInfo.mockResolvedValue(artistInfo())
 		client.getTrackInfo.mockResolvedValue({

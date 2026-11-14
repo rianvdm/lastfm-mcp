@@ -8,13 +8,15 @@ import { buildNextSteps } from '../../utils/breadcrumb'
 import { buildListenToMoreLine } from '../../utils/listentomore-link'
 import { PROTOCOL_VERSION, SERVER_VERSION } from '../protocol'
 import { LASTFM_READ, LOCAL_READ } from './annotations'
+import type { AuthSession } from './authenticated'
 import { toolError } from './error-handler'
 import { formatArtist, toArray } from './formatters'
 
 /**
  * Register all public (non-authenticated) tools with the MCP server.
+ * The artist, album, and track lookups fall back to the signed-in user's username when none is given.
  */
-export function registerPublicTools(server: McpServer, client: CachedLastfmClient): void {
+export function registerPublicTools(server: McpServer, client: CachedLastfmClient, getSession: () => AuthSession | null): void {
 	// ping - Test server connectivity
 	server.registerTool(
 		'ping',
@@ -88,10 +90,11 @@ To get started, connect this server in your MCP client. It opens the Last.fm sig
 			inputSchema: z.object({
 				artist: z.string().describe('Artist name'),
 				track: z.string().describe('Track name'),
-				username: z.string().optional().describe('Last.fm username (optional, for user-specific data)'),
+				username: z.string().optional().describe('Last.fm username for personal play counts (optional; defaults to the signed-in user)'),
 			}),
 		},
-		async ({ artist, track, username }) => {
+		async ({ artist, track, username: requestedUsername }) => {
+			const username = requestedUsername || getSession()?.username
 			try {
 				const data = await client.getTrackInfo(artist, track, username)
 
@@ -153,10 +156,11 @@ ${!username ? '*Note: Sign in to see your personal listening stats for this trac
 			description: 'Get detailed Last.fm information about any artist (biography, tags, similar artists, top tracks)',
 			inputSchema: z.object({
 				artist: z.string().describe('Artist name'),
-				username: z.string().optional().describe('Last.fm username (optional, for user-specific data)'),
+				username: z.string().optional().describe('Last.fm username for personal play counts (optional; defaults to the signed-in user)'),
 			}),
 		},
-		async ({ artist, username }) => {
+		async ({ artist, username: requestedUsername }) => {
+			const username = requestedUsername || getSession()?.username
 			try {
 				const data = await client.getArtistInfo(artist, username)
 
@@ -218,10 +222,11 @@ ${!username ? '*Note: Sign in to see your personal listening stats for this arti
 			inputSchema: z.object({
 				artist: z.string().describe('Artist name'),
 				album: z.string().describe('Album name'),
-				username: z.string().optional().describe('Last.fm username (optional, for user-specific data)'),
+				username: z.string().optional().describe('Last.fm username for personal play counts (optional; defaults to the signed-in user)'),
 			}),
 		},
-		async ({ artist, album, username }) => {
+		async ({ artist, album, username: requestedUsername }) => {
+			const username = requestedUsername || getSession()?.username
 			try {
 				const data = await client.getAlbumInfo(artist, album, username)
 

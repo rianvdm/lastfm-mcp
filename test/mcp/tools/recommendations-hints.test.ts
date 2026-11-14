@@ -40,7 +40,7 @@ describe('get_music_recommendations next-step hint', () => {
 		}
 		const client = stubClient() as unknown as CachedLastfmClient
 		registerAuthenticatedTools(server as never, client, () => ({ username: 'rj', sessionKey: 'key' }))
-		registerPublicTools(server as never, client)
+		registerPublicTools(server as never, client, () => ({ username: 'rj', sessionKey: 'key' }))
 	})
 
 	/** Calls a handler with arguments parsed by the tool's own schema, as the SDK does. */

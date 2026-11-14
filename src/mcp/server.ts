@@ -83,7 +83,7 @@ export function createMcpServer(env: Env, options: CreateMcpServerOptions = {}):
 	const getSession = () => context.session
 
 	// Register public tools (no auth required)
-	registerPublicTools(server, cachedClient)
+	registerPublicTools(server, cachedClient, getSession)
 
 	// Register authenticated tools (they explain how to sign in when there is no session)
 	registerAuthenticatedTools(server, cachedClient, getSession)
