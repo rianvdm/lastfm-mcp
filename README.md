@@ -68,16 +68,16 @@ Access is read-only: the server can read your listening history and profile, but
 
 ### Your listening data
 
-| Tool                        | Description                          |
-| --------------------------- | ------------------------------------ |
-| `get_recent_tracks`         | Recent listening history (paginated) |
-| `get_top_artists`           | Top artists by time period           |
-| `get_top_albums`            | Top albums by time period            |
-| `get_top_tracks`            | Top tracks by time period            |
-| `get_loved_tracks`          | Loved/favorited tracks               |
-| `get_user_info`             | Last.fm profile information          |
-| `get_listening_stats`       | Listening statistics                 |
-| `get_music_recommendations` | Personalized recommendations         |
+| Tool                        | Description                                                          |
+| --------------------------- | -------------------------------------------------------------------- |
+| `get_recent_tracks`         | Recent listening history (paginated)                                 |
+| `get_top_artists`           | Top artists by time period                                           |
+| `get_top_albums`            | Top albums by time period                                            |
+| `get_top_tracks`            | Top tracks by time period                                            |
+| `get_loved_tracks`          | Loved/favorited tracks                                               |
+| `get_user_info`             | Last.fm profile information                                          |
+| `get_listening_stats`       | Listening statistics                                                 |
+| `get_music_recommendations` | New-to-you artists, with the reason for each pick and starter tracks |
 
 ### Your listening history over time
 

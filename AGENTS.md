@@ -2,7 +2,7 @@
 
 Guidance for coding agents (Claude Code, Codex) working in this repository.
 
-Cloudflare Worker implementing a Model Context Protocol (MCP) server that connects AI assistants to Last.fm listening data. Runs on workerd with a Rate Limiting binding (`REGISTRATION_RATE_LIMITER`) and three KV namespaces: `OAUTH_KV` (OAuth clients, grants and tokens), `MCP_SESSIONS` (the Last.fm response cache; the name predates OAuth) and `MCP_RL` (per-IP rate limits). The `TOOL_EVENTS` Analytics Engine binding receives one anonymous data point per tool call, in the `lastfm_mcp_tool_events_staging` dataset on staging and `lastfm_mcp_tool_events` in production.
+Cloudflare Worker implementing a Model Context Protocol (MCP) server that connects AI assistants to Last.fm listening data. Runs on workerd with a Rate Limiting binding (`REGISTRATION_RATE_LIMITER`) and three KV namespaces: `OAUTH_KV` (OAuth clients, grants and tokens), `MCP_SESSIONS` (the Last.fm response cache; the name predates OAuth) and `MCP_RL` (per-IP rate limits). The `TOOL_EVENTS` Analytics Engine binding receives one anonymous data point per tool call (its layout, including `double2` for the Last.fm HTTP requests the call made, is in `src/analytics/toolEvents.ts`), in the `lastfm_mcp_tool_events_staging` dataset on staging and `lastfm_mcp_tool_events` in production.
 
 ## Build / Test / Lint Commands
 
@@ -179,8 +179,9 @@ src/
   auth/                 # OAuth handler (consent, Last.fm sign-in, callback), consent page, /mcp resource rewrite
   clients/              # Last.fm API client + caching decorator
   mcp/                  # MCP SDK server, tools (public + authenticated), prompts, resources
+  recommendations/      # get_music_recommendations: pure scoring, the engine (cached candidates, starters, partial results), output formatting
   types/                # Shared types: Env
-  utils/                # Cache, rate limiting, retry, https redirect, security, date formatting, mood mapping, breadcrumbs
+  utils/                # Cache, rate limiting, retry, per-call Last.fm request policy, https redirect, security, date formatting, mood mapping, breadcrumbs
 ```
 
 Single Worker entry point configured in `wrangler.toml`: `main = "src/index-oauth.ts"`. The `[env.production]` block points to the same entry — it only renames the deployed Worker.
@@ -211,3 +212,7 @@ Every MCP request needs an OAuth bearer token: unauthenticated `POST /mcp` retur
 - Errors on `/authorize` render on this origin and are never redirected to the client's `redirect_uri`: registration is open, so redirecting would make the server an open redirector.
 - Two per-IP budgets, both failing open: `/mcp` gets 60 requests a minute from a KV counter in `MCP_RL` (`src/utils/rateLimit.ts`), and `POST /oauth/register` gets 5 a minute from the `REGISTRATION_RATE_LIMITER` Rate Limiting binding (`src/utils/registrationRateLimit.ts`). The binding's limit and period live in `wrangler.toml`, once per environment. Its counts are approximate and per Cloudflare location, so it slows a flood without capping it (on staging it admitted 59 of 100 concurrent registrations from one IP); the `[OAUTH] client registered` log line is what makes abuse visible.
 - Grants expire 30 days after sign-in (the library's refresh-token default), so a `grant_not_found` or `invalid_grant` after about a month is expected.
+
+## Recommendations
+
+`get_music_recommendations` runs inside one request policy (`src/utils/lastfmRequestPolicy.ts`): at most 40 Last.fm HTTP requests including retries, 4 in flight, one retry, and a hard 8-second deadline that also limits how long the call waits on cache reads and writes. The first persistent rate limit (HTTP 429 after its retry, or Last.fm error 29) stops queued and later requests; requests already in flight may finish. Other tools never run under a policy. The ranked candidate list is cached per user and genre for an hour under a `v2:` key and never includes `exclude`; a partial list is never cached. Design and rationale: [the recommendations design](docs/superpowers/specs/2026-11-14-music-recommendations-rebuild-design.md).
