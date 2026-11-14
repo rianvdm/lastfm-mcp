@@ -497,9 +497,15 @@ describe('CacheKeys', () => {
 			const key = CacheKeys.recommendationCandidates('u', 'Post Rock')
 
 			expect(key).toBe(CacheKeys.recommendationCandidates('u', ' post rock '))
-			expect(key).toBe('v2:u:post%20rock')
+			expect(key).toBe('v2:u:tag:post%20rock')
 			expect(CacheKeys.recommendationCandidates('u')).toBe('v2:u:all')
 			expect(CacheKeys.recommendationCandidates('u', '')).toBe('v2:u:all')
+		})
+
+		it('should keep the genre "all" apart from no genre, and treat a blank genre as none', () => {
+			expect(CacheKeys.recommendationCandidates('u', 'all')).not.toBe(CacheKeys.recommendationCandidates('u'))
+			expect(CacheKeys.recommendationCandidates('u', 'all')).toBe('v2:u:tag:all')
+			expect(CacheKeys.recommendationCandidates('u', ' ')).toBe(CacheKeys.recommendationCandidates('u'))
 		})
 
 		it('should key tag top artists by normalised tag and limit', () => {

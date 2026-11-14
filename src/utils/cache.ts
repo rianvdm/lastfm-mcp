@@ -349,9 +349,12 @@ export const CacheKeys = {
 
 	userRecommendations: (username: string, limit?: number, genre?: string) => `${username}:${limit || 20}:${genre || 'all'}`,
 
-	// Ranked recommendation candidates per user and genre; the v2 prefix keeps them apart from the old recommendations shape
-	recommendationCandidates: (username: string, genre?: string) =>
-		`v2:${username}:${genre ? encodeURIComponent(genre.trim().toLowerCase()) : 'all'}`,
+	// Ranked recommendation candidates per user and genre; the v2 prefix keeps them apart from the old recommendations shape.
+	// A supplied genre sits under `tag:` so the genre "all" can't share the no-genre entry; blank counts as no genre.
+	recommendationCandidates: (username: string, genre?: string) => {
+		const tag = genre?.trim().toLowerCase()
+		return tag ? `v2:${username}:tag:${encodeURIComponent(tag)}` : `v2:${username}:all`
+	},
 
 	// Static music data keys
 	trackInfo: (artist: string, track: string, username?: string) =>

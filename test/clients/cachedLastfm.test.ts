@@ -90,5 +90,19 @@ describe('CachedLastfmClient', () => {
 
 			expect(build).toHaveBeenCalledTimes(2)
 		})
+
+		it('should keep the genre "all" apart from no genre in shared KV', async () => {
+			const kv = memoryKV()
+			const client = new CachedLastfmClient({} as LastfmClient, kv)
+			const buildAll = vi.fn().mockResolvedValue(list(false))
+			const buildTag = vi.fn().mockResolvedValue({ ...list(false), genreNotFound: true })
+
+			await client.getRecommendationCandidates('u', undefined, buildAll)
+			await expect(client.getRecommendationCandidates('u', 'all', buildTag)).resolves.toMatchObject({ genreNotFound: true })
+			await expect(client.getRecommendationCandidates('u', undefined, buildAll)).resolves.toMatchObject({ genreNotFound: false })
+
+			expect(buildAll).toHaveBeenCalledTimes(1)
+			expect(buildTag).toHaveBeenCalledTimes(1)
+		})
 	})
 })
