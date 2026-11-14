@@ -47,7 +47,7 @@ export function registerPrompts(server: McpServer): void {
 						role: 'user',
 						content: {
 							type: 'text',
-							text: `Find new music for me${genre ? ` in ${genre}` : ''}. Call get_music_recommendations${genre ? ` with genre="${genre}"` : ''}. Present each pick with its reason and starter tracks, keeping the reasons grounded in my listening data. If I reject a pick, call the tool again with it in exclude.`,
+							text: `Find new music for me${genre ? ` in ${genre}` : ''}. Call get_music_recommendations${genre ? ` with genre=${JSON.stringify(genre)}` : ''}. Present each pick with its reason and starter tracks, keeping the reasons grounded in my listening data. If I reject a pick, call the tool again with it in exclude.`,
 						},
 					},
 				],

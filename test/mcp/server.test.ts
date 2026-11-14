@@ -153,6 +153,8 @@ describe('pointing agents at get_music_recommendations', () => {
 		expect(await promptText({ genre: 'shoegaze' })).toBe(
 			'Find new music for me in shoegaze. Call get_music_recommendations with genre="shoegaze". Present each pick with its reason and starter tracks, keeping the reasons grounded in my listening data. If I reject a pick, call the tool again with it in exclude.',
 		)
+		// A quote in the genre is escaped, so the argument the agent copies stays one valid string
+		expect(await promptText({ genre: '90s "alt" rock' })).toContain('Call get_music_recommendations with genre="90s \\"alt\\" rock".')
 	})
 })
 
