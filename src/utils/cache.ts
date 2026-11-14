@@ -22,7 +22,7 @@ export interface CacheConfig {
 	userLovedTracks: number // 30 minutes
 	userInfo: number // 6 hours
 	userListeningStats: number // 1 hour
-	userRecommendations: number // 24 hours
+	userRecommendations: number // 1 hour
 
 	// Temporal data (changes rarely - historical data)
 	userWeeklyChartList: number // 24 hours
@@ -37,6 +37,7 @@ export interface CacheConfig {
 	artistTopAlbums: number // 24 hours
 	similarArtists: number // 7 days
 	similarTracks: number // 7 days
+	tagTopArtists: number // 7 days
 }
 
 export const DEFAULT_CACHE_CONFIG: CacheConfig = {
@@ -48,7 +49,7 @@ export const DEFAULT_CACHE_CONFIG: CacheConfig = {
 	userLovedTracks: 30 * 60, // 30 minutes in seconds
 	userInfo: 6 * 60 * 60, // 6 hours in seconds
 	userListeningStats: 60 * 60, // 1 hour in seconds
-	userRecommendations: 24 * 60 * 60, // 24 hours in seconds
+	userRecommendations: 60 * 60, // 1 hour in seconds
 
 	// Temporal data (changes rarely - historical data)
 	userWeeklyChartList: 24 * 60 * 60, // 24 hours in seconds
@@ -63,6 +64,7 @@ export const DEFAULT_CACHE_CONFIG: CacheConfig = {
 	artistTopAlbums: 24 * 60 * 60, // 24 hours in seconds
 	similarArtists: 7 * 24 * 60 * 60, // 7 days in seconds
 	similarTracks: 7 * 24 * 60 * 60, // 7 days in seconds
+	tagTopArtists: 7 * 24 * 60 * 60, // 7 days in seconds
 }
 
 export interface CacheEntry<T> {
@@ -70,6 +72,15 @@ export interface CacheEntry<T> {
 	timestamp: number
 	expiresAt: number
 	version: string // For cache versioning/invalidation
+}
+
+export interface GetOrFetchOptions<T> {
+	/** Skip the cache read and fetch fresh data. */
+	forceRefresh?: boolean
+	/** Treat a cached entry older than this many seconds as a miss. */
+	maxAge?: number
+	/** Return false to hand the fetched value back without writing it to KV, e.g. for an incomplete result. */
+	shouldCache?: (value: T) => boolean
 }
 
 export interface PendingRequest {
@@ -165,15 +176,7 @@ export class SmartCache {
 	/**
 	 * Get data with automatic caching and request deduplication
 	 */
-	async getOrFetch<T>(
-		type: keyof CacheConfig,
-		identifier: string,
-		fetcher: () => Promise<T>,
-		options?: {
-			forceRefresh?: boolean
-			maxAge?: number // Override default TTL
-		},
-	): Promise<T> {
+	async getOrFetch<T>(type: keyof CacheConfig, identifier: string, fetcher: () => Promise<T>, options?: GetOrFetchOptions<T>): Promise<T> {
 		const dedupeKey = this.getDedupeKey(type, identifier)
 
 		// Check if there's already a pending request for this data
@@ -211,7 +214,7 @@ export class SmartCache {
 
 		// Create new request and add to pending requests
 		countCacheMiss()
-		const promise = this.fetchAndCache(type, identifier, fetcher)
+		const promise = this.fetchAndCache(type, identifier, fetcher, options?.shouldCache)
 		this.pendingRequests.set(dedupeKey, {
 			promise,
 			timestamp: Date.now(),
@@ -233,13 +236,20 @@ export class SmartCache {
 	/**
 	 * Fetch data and cache it
 	 */
-	private async fetchAndCache<T>(type: keyof CacheConfig, identifier: string, fetcher: () => Promise<T>): Promise<T> {
+	private async fetchAndCache<T>(
+		type: keyof CacheConfig,
+		identifier: string,
+		fetcher: () => Promise<T>,
+		shouldCache?: (value: T) => boolean,
+	): Promise<T> {
 		try {
 			console.log(`Fetching fresh data for ${type}:${identifier}`)
 			const data = await fetcher()
 
-			// Cache the fresh data
-			await this.set(type, identifier, data)
+			// Cache the fresh data unless the caller marked it unfit to keep; every waiter still gets it
+			if (!shouldCache || shouldCache(data)) {
+				await this.set(type, identifier, data)
+			}
 
 			return data
 		} catch (error) {
@@ -339,6 +349,10 @@ export const CacheKeys = {
 
 	userRecommendations: (username: string, limit?: number, genre?: string) => `${username}:${limit || 20}:${genre || 'all'}`,
 
+	// Ranked recommendation candidates per user and genre; the v2 prefix keeps them apart from the old recommendations shape
+	recommendationCandidates: (username: string, genre?: string) =>
+		`v2:${username}:${genre ? encodeURIComponent(genre.trim().toLowerCase()) : 'all'}`,
+
 	// Static music data keys
 	trackInfo: (artist: string, track: string, username?: string) =>
 		`${encodeURIComponent(artist)}:${encodeURIComponent(track)}:${username || 'global'}`,
@@ -356,6 +370,9 @@ export const CacheKeys = {
 
 	similarTracks: (artist: string, track: string, limit?: number) =>
 		`${encodeURIComponent(artist)}:${encodeURIComponent(track)}:${limit || 30}`,
+
+	// Last.fm tags are case-insensitive, so every spelling of a tag shares one entry
+	tagTopArtists: (tag: string, limit: number) => `${encodeURIComponent(tag.trim().toLowerCase())}:${limit}`,
 
 	// Temporal data keys
 	userWeeklyChartList: (username: string) => username,
@@ -379,8 +396,8 @@ export function createLastfmCache(kv?: KVNamespace): SmartCache {
 			async set(): Promise<void> {
 				return
 			},
-			async getOrFetch<T>(_type: keyof CacheConfig, _key: string, fetcher: () => Promise<T>): Promise<T> {
-				// Without KV every lookup goes to Last.fm
+			async getOrFetch<T>(_type: keyof CacheConfig, _key: string, fetcher: () => Promise<T>, _options?: GetOrFetchOptions<T>): Promise<T> {
+				// Without KV every lookup goes to Last.fm and nothing is stored, so the options have nothing to do
 				countCacheMiss()
 				return fetcher()
 			},
@@ -408,7 +425,7 @@ export function createLastfmCache(kv?: KVNamespace): SmartCache {
 		userLovedTracks: 30 * 60, // Loved tracks change occasionally
 		userInfo: 6 * 60 * 60, // User profiles rarely change
 		userListeningStats: 60 * 60, // Stats can be cached for an hour
-		userRecommendations: 24 * 60 * 60, // Recommendations can be cached longer
+		userRecommendations: 60 * 60, // Candidate lists follow the user's listening, so keep them an hour
 
 		// Temporal data is historical and changes very rarely
 		userWeeklyChartList: 24 * 60 * 60, // Chart list rarely changes
@@ -423,5 +440,6 @@ export function createLastfmCache(kv?: KVNamespace): SmartCache {
 		artistTopAlbums: 24 * 60 * 60, // Artist top albums change slowly
 		similarArtists: 7 * 24 * 60 * 60, // Similar artists rarely change
 		similarTracks: 7 * 24 * 60 * 60, // Similar tracks rarely change
+		tagTopArtists: 7 * 24 * 60 * 60, // A tag's top artists shift slowly and are shared by all users
 	})
 }

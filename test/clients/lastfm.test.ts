@@ -370,6 +370,21 @@ describe('LastfmClient', () => {
 			expect(url).toContain('limit=20')
 		})
 
+		it('should call getTagTopArtists with correct parameters', async () => {
+			await client.getTagTopArtists('shoegaze', 500)
+
+			const [url] = mockFetchWithRetry.mock.calls[0]
+			expect(url).toContain('method=tag.getTopArtists&tag=shoegaze&limit=500')
+		})
+
+		it('should default getTagTopArtists to 500 artists', async () => {
+			await client.getTagTopArtists('post rock')
+
+			const [url] = mockFetchWithRetry.mock.calls[0]
+			expect(url).toContain('tag=post+rock')
+			expect(url).toContain('limit=500')
+		})
+
 		it('should call getSimilarTracks with correct parameters', async () => {
 			await client.getSimilarTracks('Queen', 'Bohemian Rhapsody', 15)
 

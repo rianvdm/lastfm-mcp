@@ -342,6 +342,18 @@ export interface LastfmSimilarArtistsResponse {
 	}
 }
 
+export interface LastfmTagTopArtistsResponse {
+	topartists: {
+		artist: Array<
+			LastfmArtist & {
+				'@attr'?: {
+					rank: string
+				}
+			}
+		>
+	}
+}
+
 export interface LastfmSimilarTracksResponse {
 	similartracks: {
 		track: Array<
@@ -632,6 +644,17 @@ export class LastfmClient {
 		return this.makeRequest<LastfmSimilarArtistsResponse>({
 			method: 'artist.getSimilar',
 			artist,
+			limit: limit.toString(),
+		})
+	}
+
+	/**
+	 * Get a tag's top artists, most-tagged first; an unknown tag returns an empty list, not an error
+	 */
+	async getTagTopArtists(tag: string, limit = 500): Promise<LastfmTagTopArtistsResponse> {
+		return this.makeRequest<LastfmTagTopArtistsResponse>({
+			method: 'tag.getTopArtists',
+			tag,
 			limit: limit.toString(),
 		})
 	}

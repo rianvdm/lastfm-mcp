@@ -16,10 +16,12 @@ import {
 	type LastfmUserInfoResponse,
 	type LastfmSimilarArtistsResponse,
 	type LastfmSimilarTracksResponse,
+	type LastfmTagTopArtistsResponse,
 	type LastfmWeeklyChartListResponse,
 	type LastfmWeeklyArtistChartResponse,
 	type LastfmWeeklyTrackChartResponse,
 } from './lastfm'
+import type { CandidateList } from '../recommendations/types'
 import { SmartCache, CacheKeys, createLastfmCache } from '../utils/cache'
 
 export class CachedLastfmClient {
@@ -158,6 +160,29 @@ export class CachedLastfmClient {
 		const cacheKey = CacheKeys.similarTracks(artist, track, limit)
 
 		return this.cache.getOrFetch('similarTracks', cacheKey, () => this.client.getSimilarTracks(artist, track, limit))
+	}
+
+	/**
+	 * Get a tag's top artists with caching (long TTL; shared by every user and tag spelling)
+	 */
+	async getTagTopArtists(tag: string, limit = 500): Promise<LastfmTagTopArtistsResponse> {
+		const cacheKey = CacheKeys.tagTopArtists(tag, limit)
+
+		return this.cache.getOrFetch('tagTopArtists', cacheKey, () => this.client.getTagTopArtists(tag, limit))
+	}
+
+	/**
+	 * Get a user's ranked recommendation candidates for a genre, running `build` on a miss.
+	 * A partial list (budget, deadline or rate limiting cut it short) is returned but not cached, so the next call retries.
+	 */
+	async getRecommendationCandidates(
+		username: string,
+		genre: string | undefined,
+		build: () => Promise<CandidateList>,
+	): Promise<CandidateList> {
+		const cacheKey = CacheKeys.recommendationCandidates(username, genre)
+
+		return this.cache.getOrFetch('userRecommendations', cacheKey, build, { shouldCache: (list) => !list.partial })
 	}
 
 	/**

@@ -115,6 +115,11 @@ describe('SmartCache', () => {
 	})
 
 	describe('TTL and expiration', () => {
+		it('should keep recommendation candidates for 1 hour and tag top artists for 7 days', () => {
+			expect(DEFAULT_CACHE_CONFIG.userRecommendations).toBe(3600)
+			expect(DEFAULT_CACHE_CONFIG.tagTopArtists).toBe(7 * 24 * 60 * 60)
+		})
+
 		it('should respect TTL settings from config', async () => {
 			const testData = { name: 'Test' }
 			await cache.set('userRecentTracks', 'user1', testData)
@@ -297,6 +302,54 @@ describe('SmartCache', () => {
 		})
 	})
 
+	describe('shouldCache option', () => {
+		it('should return a rejected value without writing it to KV', async () => {
+			const fetcher = vi.fn().mockResolvedValue({ partial: true })
+
+			const result = await cache.getOrFetch('userRecommendations', 'u', fetcher, { shouldCache: () => false })
+
+			expect(result).toEqual({ partial: true })
+			expect(mockKV.put).not.toHaveBeenCalled()
+		})
+
+		it('should fetch again after a rejected value', async () => {
+			const fetcher = vi.fn().mockResolvedValue({ partial: true })
+			const options = { shouldCache: (value: { partial: boolean }) => !value.partial }
+
+			await cache.getOrFetch('userRecommendations', 'u', fetcher, options)
+			await cache.getOrFetch('userRecommendations', 'u', fetcher, options)
+
+			expect(fetcher).toHaveBeenCalledTimes(2)
+		})
+
+		it('should cache a value the predicate accepts', async () => {
+			const fetcher = vi.fn().mockResolvedValue({ partial: false })
+			const options = { shouldCache: (value: { partial: boolean }) => !value.partial }
+
+			await cache.getOrFetch('userRecommendations', 'u', fetcher, options)
+			const result = await cache.getOrFetch('userRecommendations', 'u', fetcher, options)
+
+			expect(result).toEqual({ partial: false })
+			expect(fetcher).toHaveBeenCalledTimes(1)
+			expect(mockKV.put).toHaveBeenCalledTimes(1)
+		})
+
+		it('should give a rejected value to every deduplicated waiter', async () => {
+			let resolveFetch: (value: { partial: boolean }) => void = () => {}
+			const fetcher = vi.fn(() => new Promise<{ partial: boolean }>((resolve) => (resolveFetch = resolve)))
+			const options = { shouldCache: () => false }
+
+			const first = cache.getOrFetch('userRecommendations', 'u', fetcher, options)
+			await vi.waitFor(() => expect(fetcher).toHaveBeenCalledTimes(1))
+			const second = cache.getOrFetch('userRecommendations', 'u', fetcher, options)
+			resolveFetch({ partial: true })
+
+			await expect(Promise.all([first, second])).resolves.toEqual([{ partial: true }, { partial: true }])
+			expect(fetcher).toHaveBeenCalledTimes(1)
+			expect(mockKV.put).not.toHaveBeenCalled()
+		})
+	})
+
 	describe('error handling', () => {
 		it('should handle KV storage errors gracefully in get()', async () => {
 			mockKV.get.mockRejectedValue(new Error('KV error'))
@@ -440,6 +493,21 @@ describe('CacheKeys', () => {
 			expect(key3).toContain(':user1')
 		})
 
+		it('should key recommendation candidates by user and normalised genre with a v2 prefix', () => {
+			const key = CacheKeys.recommendationCandidates('u', 'Post Rock')
+
+			expect(key).toBe(CacheKeys.recommendationCandidates('u', ' post rock '))
+			expect(key).toBe('v2:u:post%20rock')
+			expect(CacheKeys.recommendationCandidates('u')).toBe('v2:u:all')
+			expect(CacheKeys.recommendationCandidates('u', '')).toBe('v2:u:all')
+		})
+
+		it('should key tag top artists by normalised tag and limit', () => {
+			expect(CacheKeys.tagTopArtists('Shoegaze', 500)).toBe(CacheKeys.tagTopArtists(' shoegaze ', 500))
+			expect(CacheKeys.tagTopArtists('Post Rock', 500)).toBe('post%20rock:500')
+			expect(CacheKeys.tagTopArtists('shoegaze', 500)).not.toBe(CacheKeys.tagTopArtists('shoegaze', 1000))
+		})
+
 		it('should generate unique keys for all cache types', () => {
 			const keys = [
 				CacheKeys.userRecentTracks('user1', 50),
@@ -468,6 +536,20 @@ describe('createLastfmCache', () => {
 		const cache = createLastfmCache(mockKV as unknown as KVNamespace)
 
 		expect(cache).toBeInstanceOf(SmartCache)
+	})
+
+	it('should keep recommendation candidates for 1 hour and tag top artists for 7 days', () => {
+		const cache = createLastfmCache(createMockKV() as unknown as KVNamespace)
+
+		expect(cache['config'].userRecommendations).toBe(3600)
+		expect(cache['config'].tagTopArtists).toBe(7 * 24 * 60 * 60)
+	})
+
+	it('should accept shouldCache without KV storage and still return the value', async () => {
+		const cache = createLastfmCache()
+		const fetcher = vi.fn().mockResolvedValue({ partial: true })
+
+		await expect(cache.getOrFetch('userRecommendations', 'u', fetcher, { shouldCache: () => false })).resolves.toEqual({ partial: true })
 	})
 
 	it('should create mock cache without KV storage', () => {
