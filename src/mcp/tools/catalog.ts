@@ -42,7 +42,7 @@ export const AUTHENTICATED_TOOL_CATALOG: ToolListEntry[] = [
 	{ name: 'get_similar_artists', summary: 'Find similar artists' },
 	{ name: 'get_similar_tracks', summary: 'Find similar tracks' },
 	{ name: 'get_listening_stats', summary: 'Get listening statistics' },
-	{ name: 'get_music_recommendations', summary: 'Get personalized recommendations' },
+	{ name: 'get_music_recommendations', summary: 'Find new-to-you artists with reasons and starter tracks' },
 	{ name: 'get_weekly_chart_list', summary: 'Get available historical time periods' },
 	{ name: 'get_weekly_artist_chart', summary: 'Get artist listening data for specific periods' },
 	{ name: 'get_weekly_track_chart', summary: 'Get track listening data for specific periods' },

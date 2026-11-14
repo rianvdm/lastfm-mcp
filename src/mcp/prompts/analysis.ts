@@ -38,20 +38,16 @@ export function registerPrompts(server: McpServer): void {
 		'music_discovery',
 		{
 			description: 'Discover new music based on listening history',
-			argsSchema: z.object({
-				username: z.string().describe('Last.fm username for personalized recommendations'),
-				genre: z.string().optional().describe('Optional genre preference for recommendations'),
-			}),
+			argsSchema: z.object({ genre: z.string().optional().describe('Optional genre, as a Last.fm tag') }),
 		},
-		async ({ username, genre }) => {
-			const genreText = genre ? ` focusing on ${genre} music` : ''
+		async ({ genre }) => {
 			return {
 				messages: [
 					{
 						role: 'user',
 						content: {
 							type: 'text',
-							text: `Help discover new music for Last.fm user "${username}"${genreText}. Analyze their listening history, top artists, and loved tracks to understand their musical preferences. Use similar artists and tracks data to recommend new music they might enjoy. Provide explanations for why each recommendation would suit their taste based on their listening patterns.`,
+							text: `Find new music for me${genre ? ` in ${genre}` : ''}. Call get_music_recommendations${genre ? ` with genre="${genre}"` : ''}. Present each pick with its reason and starter tracks, keeping the reasons grounded in my listening data. If I reject a pick, call the tool again with it in exclude.`,
 						},
 					},
 				],

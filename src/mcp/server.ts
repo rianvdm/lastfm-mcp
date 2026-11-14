@@ -58,7 +58,7 @@ export function createMcpServer(env: Env, options: CreateMcpServerOptions = {}):
 				'- Artist questions: `get_artist_info` → `get_artist_top_tracks` / `get_artist_top_albums` / `get_similar_artists`.',
 				'- Album / track lookups: `get_album_info` / `get_track_info` → `get_similar_tracks` for "more like this".',
 				"- The user's listening history (auth required): `get_recent_tracks` for the live feed; `get_top_artists` / `get_top_albums` / `get_top_tracks` for period summaries; `get_loved_tracks` for favorites; `get_listening_stats` for shape.",
-				'- Personalized picks (auth required): `get_music_recommendations`.',
+				'- "What should I listen to?" / new music (auth required): `get_music_recommendations` returns new-to-the-user artists with reasons and starter tracks; use it instead of chaining `get_similar_artists`.',
 				'- Historical week-by-week: `get_weekly_chart_list` first to discover periods → `get_weekly_artist_chart` / `get_weekly_track_chart` with a specific `from`/`to`.',
 				'- Profile and diagnostics: `get_user_info`, `lastfm_auth_status`, `server_info`, `ping`.',
 				'',

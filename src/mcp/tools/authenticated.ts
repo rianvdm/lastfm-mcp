@@ -87,7 +87,7 @@ export function registerAuthenticatedTools(server: McpServer, client: CachedLast
 				{ tool: 'get_recent_tracks', args: '', hint: "see what you've been listening to lately" },
 				{ tool: 'get_top_artists', args: 'period="1month"', hint: 'top artists for a recent window' },
 				{ tool: 'get_listening_stats', args: '', hint: 'shape of your overall scrobble history' },
-				{ tool: 'get_music_recommendations', args: '', hint: 'personalized picks based on your history' },
+				{ tool: 'get_music_recommendations', args: '', hint: 'new-to-you artists based on your listening, with starter tracks' },
 			])
 
 			return {
@@ -206,6 +206,7 @@ ${renderToolList(AUTHENTICATED_TOOL_CATALOG)}
 							},
 					{ tool: 'get_artist_info', args: 'artist="<ARTIST FROM LIST>"', hint: 'expand an artist from the feed' },
 					{ tool: 'get_top_artists', args: 'period="7day"', hint: 'aggregate the recent feed into a 7-day top list' },
+					{ tool: 'get_music_recommendations', args: '', hint: 'new-to-you artists based on your listening, with starter tracks' },
 				])
 
 				return {
@@ -267,6 +268,7 @@ ${currentPage > 1 ? `\n⬅️ **Previous page:** Use \`page: ${currentPage - 1}\
 						: { tool: 'get_artist_info', args: 'artist="<NAME FROM LIST>"', hint: 'expand one of your top artists' },
 					{ tool: 'get_artist_top_tracks', args: 'artist="<NAME FROM LIST>"', hint: 'see canonical tracks for one of them' },
 					{ tool: 'get_top_albums', args: `period="${period}"`, hint: 'pivot to top albums for the same period' },
+					{ tool: 'get_music_recommendations', args: '', hint: 'new-to-you artists based on your listening, with starter tracks' },
 				])
 
 				return {
@@ -475,7 +477,7 @@ Total tracks: ${data.toptracks['@attr'].total}${nextSteps}`,
 						args: 'artist="<ARTIST FROM LIST>", track="<TRACK FROM LIST>"',
 						hint: 'find more like a loved track',
 					},
-					{ tool: 'get_music_recommendations', args: '', hint: 'personalized picks based on your history' },
+					{ tool: 'get_music_recommendations', args: '', hint: 'new-to-you artists based on your listening, with starter tracks' },
 				])
 
 				return {

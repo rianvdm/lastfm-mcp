@@ -1,5 +1,5 @@
 // ABOUTME: Registration smoke test for the MCP server built by createMcpServer.
-// ABOUTME: Snapshots the advertised tools, prompts, and resources, and checks sign-in guidance names only OAuth.
+// ABOUTME: Snapshots the advertised tools, prompts, and resources, and checks the instructions, discovery prompt, and OAuth-only sign-in guidance.
 import { env } from 'cloudflare:test'
 import { Client, InMemoryTransport } from '@modelcontextprotocol/client'
 import { describe, it, expect, beforeAll } from 'vitest'
@@ -121,6 +121,38 @@ describe('createMcpServer registration', () => {
 			expect(resource.mimeType).toBe('application/json')
 		}
 		expect(catalogue).toMatchSnapshot()
+	})
+})
+
+describe('pointing agents at get_music_recommendations', () => {
+	let client: Client
+
+	beforeAll(async () => {
+		client = await connectClient()
+	})
+
+	it('names get_music_recommendations in the server instructions', () => {
+		expect(client.getInstructions()).toContain('`get_music_recommendations` returns new-to-the-user artists')
+	})
+
+	it('music_discovery advertises only an optional genre', async () => {
+		const { prompts } = await client.listPrompts()
+		const prompt = prompts.find((p) => p.name === 'music_discovery')
+		expect(prompt?.arguments).toEqual([{ name: 'genre', description: 'Optional genre, as a Last.fm tag', required: false }])
+	})
+
+	it('music_discovery tells the agent to call get_music_recommendations', async () => {
+		const promptText = async (args: Record<string, string>) => {
+			const { messages } = await client.getPrompt({ name: 'music_discovery', arguments: args })
+			return (messages[0].content as { type: string; text: string }).text
+		}
+
+		expect(await promptText({})).toBe(
+			'Find new music for me. Call get_music_recommendations. Present each pick with its reason and starter tracks, keeping the reasons grounded in my listening data. If I reject a pick, call the tool again with it in exclude.',
+		)
+		expect(await promptText({ genre: 'shoegaze' })).toBe(
+			'Find new music for me in shoegaze. Call get_music_recommendations with genre="shoegaze". Present each pick with its reason and starter tracks, keeping the reasons grounded in my listening data. If I reject a pick, call the tool again with it in exclude.',
+		)
 	})
 })
 

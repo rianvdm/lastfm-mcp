@@ -111,7 +111,7 @@ lastfm://track/{artist}/{track}/similar  # Similar tracks
 | Prompt               | Description                               | Arguments                |
 | -------------------- | ----------------------------------------- | ------------------------ |
 | `listening_insights` | Analyze listening habits and patterns     | `username`, `period?`    |
-| `music_discovery`    | Discover music based on listening history | `username`, `genre?`     |
+| `music_discovery`    | Discover music based on listening history | `genre?`                 |
 | `track_analysis`     | Detailed analysis of a track              | `artist`, `track`        |
 | `album_analysis`     | Detailed analysis of an album             | `artist`, `album`        |
 | `artist_analysis`    | Detailed analysis of an artist            | `artist`                 |

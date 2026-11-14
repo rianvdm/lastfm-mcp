@@ -57,10 +57,6 @@ exports[`createMcpServer registration > advertises the expected prompt catalogue
   {
     "arguments": [
       {
-        "name": "username",
-        "required": true,
-      },
-      {
         "name": "genre",
         "required": false,
       },
