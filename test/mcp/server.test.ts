@@ -52,6 +52,23 @@ describe('createMcpServer registration', () => {
 		expect(catalogue).toMatchSnapshot()
 	})
 
+	// Clients use these hints to decide whether a call needs the user's confirmation, and directories
+	// (Claude's connectors directory, ChatGPT) require them. Every tool only reads, so a tool that
+	// ships without them is a bug.
+	it('marks every tool read-only, with a title', async () => {
+		const { tools } = await client.listTools()
+		const localOnly = ['ping', 'server_info', 'lastfm_auth_status']
+
+		for (const tool of tools) {
+			expect(tool.title, `${tool.name} has no title`).toBeTruthy()
+			expect(tool.annotations, `${tool.name} has no annotations`).toEqual({
+				readOnlyHint: true,
+				destructiveHint: false,
+				openWorldHint: !localOnly.includes(tool.name),
+			})
+		}
+	})
+
 	it('advertises the expected prompt catalogue', async () => {
 		const { prompts } = await client.listPrompts()
 		const catalogue = prompts

@@ -4,6 +4,7 @@ import { McpServer } from '@modelcontextprotocol/server'
 import { z } from 'zod'
 
 import { CachedLastfmClient } from '../../clients/cachedLastfm'
+import { LASTFM_READ, LOCAL_READ } from './annotations'
 import { AUTHENTICATED_TOOL_CATALOG, PUBLIC_TOOL_CATALOG, renderToolList } from './catalog'
 import { toolError } from './error-handler'
 import { formatArtist } from './formatters'
@@ -66,6 +67,8 @@ export function registerAuthenticatedTools(server: McpServer, client: CachedLast
 	server.registerTool(
 		'lastfm_auth_status',
 		{
+			title: 'Last.fm sign-in status',
+			annotations: LOCAL_READ,
 			description: 'Check if user is authenticated with Last.fm - Use this to verify login status before accessing personal music data',
 			inputSchema: z.object({}),
 		},
@@ -113,6 +116,8 @@ ${renderToolList(AUTHENTICATED_TOOL_CATALOG)}
 	server.registerTool(
 		'get_recent_tracks',
 		{
+			title: 'Recently played tracks',
+			annotations: LASTFM_READ,
 			description:
 				"Get user's recent Last.fm listening history - REQUIRES AUTHENTICATION. Use lastfm_auth_status first to check login status.",
 			inputSchema: z.object({
@@ -230,6 +235,8 @@ ${currentPage > 1 ? `\n⬅️ **Previous page:** Use \`page: ${currentPage - 1}\
 	server.registerTool(
 		'get_top_artists',
 		{
+			title: "User's top artists",
+			annotations: LASTFM_READ,
 			description:
 				"Get user's most listened to artists from Last.fm - REQUIRES AUTHENTICATION. Specify time period like '7day', '1month', '6month', 'overall'.",
 			inputSchema: z.object({
@@ -282,6 +289,8 @@ Total artists: ${data.topartists['@attr'].total}${nextSteps}`,
 	server.registerTool(
 		'get_top_albums',
 		{
+			title: "User's top albums",
+			annotations: LASTFM_READ,
 			description:
 				"Get user's most listened to albums from Last.fm - REQUIRES AUTHENTICATION. Specify time period like '7day', '1month', '6month', 'overall'.",
 			inputSchema: z.object({
@@ -346,6 +355,8 @@ Total albums: ${data.topalbums['@attr'].total}${nextSteps}`,
 	server.registerTool(
 		'get_top_tracks',
 		{
+			title: "User's top tracks",
+			annotations: LASTFM_READ,
 			description:
 				"Get user's most listened to tracks from Last.fm - REQUIRES AUTHENTICATION. Specify time period like '7day', '1month', '6month', 'overall'.",
 			inputSchema: z.object({
@@ -416,6 +427,8 @@ Total tracks: ${data.toptracks['@attr'].total}${nextSteps}`,
 	server.registerTool(
 		'get_loved_tracks',
 		{
+			title: 'Loved tracks',
+			annotations: LASTFM_READ,
 			description:
 				"Get user's loved/favorite tracks from Last.fm - REQUIRES AUTHENTICATION. Shows tracks the user has marked as favorites.",
 			inputSchema: z.object({
@@ -485,6 +498,8 @@ Total loved tracks: ${data.lovedtracks['@attr'].total}${nextSteps}`,
 	server.registerTool(
 		'get_user_info',
 		{
+			title: 'Last.fm profile',
+			annotations: LASTFM_READ,
 			description: 'Get Last.fm user profile information and listening statistics - REQUIRES AUTHENTICATION for private profiles',
 			inputSchema: z.object({
 				username: z.string().optional().describe('Last.fm username (defaults to authenticated user)'),
@@ -538,6 +553,8 @@ Total loved tracks: ${data.lovedtracks['@attr'].total}${nextSteps}`,
 	server.registerTool(
 		'get_listening_stats',
 		{
+			title: 'Listening stats',
+			annotations: LASTFM_READ,
 			description:
 				'Get comprehensive Last.fm listening statistics and analytics - REQUIRES AUTHENTICATION. Shows detailed insights about music habits.',
 			inputSchema: z.object({
@@ -588,6 +605,8 @@ Total loved tracks: ${data.lovedtracks['@attr'].total}${nextSteps}`,
 	server.registerTool(
 		'get_music_recommendations',
 		{
+			title: 'Music recommendations',
+			annotations: LASTFM_READ,
 			description: 'Get personalized music recommendations from Last.fm based on listening history - REQUIRES AUTHENTICATION',
 			inputSchema: z.object({
 				username: z.string().optional().describe('Last.fm username (defaults to authenticated user)'),
@@ -641,6 +660,8 @@ ${artistList}
 	server.registerTool(
 		'get_weekly_chart_list',
 		{
+			title: 'Weekly chart periods',
+			annotations: LASTFM_READ,
 			description:
 				'Get available weekly chart date ranges for user\'s listening history - REQUIRES AUTHENTICATION. Use this to find historical time periods for temporal queries like "when did I start listening to X".',
 			inputSchema: z.object({
@@ -707,6 +728,8 @@ ${chartList}
 	server.registerTool(
 		'get_weekly_artist_chart',
 		{
+			title: 'Weekly artist chart',
+			annotations: LASTFM_READ,
 			description:
 				'Get artist listening data for a specific time period - REQUIRES AUTHENTICATION. Perfect for temporal queries like "what artists was I into in 2023".',
 			inputSchema: z.object({
@@ -766,6 +789,8 @@ ${artists.length > 30 ? '\n📝 **Note:** Showing top 30 artists only' : ''}${ne
 	server.registerTool(
 		'get_weekly_track_chart',
 		{
+			title: 'Weekly track chart',
+			annotations: LASTFM_READ,
 			description:
 				'Get track listening data for a specific time period - REQUIRES AUTHENTICATION. Perfect for temporal queries like "what songs was I obsessed with in summer 2023".',
 			inputSchema: z.object({

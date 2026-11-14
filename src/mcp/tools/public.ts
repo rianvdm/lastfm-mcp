@@ -7,6 +7,7 @@ import { CachedLastfmClient } from '../../clients/cachedLastfm'
 import { buildNextSteps } from '../../utils/breadcrumb'
 import { buildListenToMoreLine } from '../../utils/listentomore-link'
 import { PROTOCOL_VERSION, SERVER_VERSION } from '../protocol'
+import { LASTFM_READ, LOCAL_READ } from './annotations'
 import { toolError } from './error-handler'
 import { formatArtist, toArray } from './formatters'
 
@@ -18,6 +19,8 @@ export function registerPublicTools(server: McpServer, client: CachedLastfmClien
 	server.registerTool(
 		'ping',
 		{
+			title: 'Ping',
+			annotations: LOCAL_READ,
 			description: 'Test Last.fm MCP server connectivity - Use this to verify the server is working',
 			inputSchema: z.object({
 				message: z.string().optional().describe('Optional message to echo back'),
@@ -44,6 +47,8 @@ export function registerPublicTools(server: McpServer, client: CachedLastfmClien
 	server.registerTool(
 		'server_info',
 		{
+			title: 'Server info',
+			annotations: LOCAL_READ,
 			description: 'Get Last.fm MCP server information and available capabilities',
 			inputSchema: z.object({}),
 		},
@@ -77,6 +82,8 @@ To get started, connect this server in your MCP client. It opens the Last.fm sig
 	server.registerTool(
 		'get_track_info',
 		{
+			title: 'Track info',
+			annotations: LASTFM_READ,
 			description:
 				'Get detailed Last.fm information about any track (artist, album, play count, tags, similar tracks) - No authentication required',
 			inputSchema: z.object({
@@ -142,6 +149,8 @@ ${!username ? '*Note: Sign in to see your personal listening stats for this trac
 	server.registerTool(
 		'get_artist_info',
 		{
+			title: 'Artist info',
+			annotations: LASTFM_READ,
 			description:
 				'Get detailed Last.fm information about any artist (biography, tags, similar artists, top tracks) - No authentication required',
 			inputSchema: z.object({
@@ -205,6 +214,8 @@ ${!username ? '*Note: Sign in to see your personal listening stats for this arti
 	server.registerTool(
 		'get_album_info',
 		{
+			title: 'Album info',
+			annotations: LASTFM_READ,
 			description: 'Get detailed Last.fm information about any album (track listing, tags, play counts) - No authentication required',
 			inputSchema: z.object({
 				artist: z.string().describe('Artist name'),
@@ -272,6 +283,8 @@ ${!username ? '*Note: Sign in to see your personal listening stats for this albu
 	server.registerTool(
 		'get_artist_top_tracks',
 		{
+			title: "Artist's top tracks",
+			annotations: LASTFM_READ,
 			description:
 				"Get an artist's globally most-played tracks on Last.fm (not user-specific) - No authentication required. Useful for finding canonical / signature songs by an artist.",
 			inputSchema: z.object({
@@ -315,6 +328,8 @@ ${trackList}${nextSteps}`,
 	server.registerTool(
 		'get_artist_top_albums',
 		{
+			title: "Artist's top albums",
+			annotations: LASTFM_READ,
 			description:
 				"Get an artist's globally most-played albums on Last.fm (not user-specific) - No authentication required. Useful for finding the canonical record by an artist.",
 			inputSchema: z.object({
@@ -360,6 +375,8 @@ ${albumList}${nextSteps}`,
 	server.registerTool(
 		'get_similar_artists',
 		{
+			title: 'Similar artists',
+			annotations: LASTFM_READ,
 			description: 'Find artists similar to any artist using Last.fm data - No authentication required',
 			inputSchema: z.object({
 				artist: z.string().describe('Artist name'),
@@ -401,6 +418,8 @@ ${artistList}${nextSteps}`,
 	server.registerTool(
 		'get_similar_tracks',
 		{
+			title: 'Similar tracks',
+			annotations: LASTFM_READ,
 			description: 'Find tracks similar to any track using Last.fm data - No authentication required',
 			inputSchema: z.object({
 				artist: z.string().describe('Artist name'),
