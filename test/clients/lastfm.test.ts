@@ -1,9 +1,10 @@
 // ABOUTME: Tests for LastfmClient, the typed Last.fm API client.
-// ABOUTME: Covers request formation, response parsing, error handling, retry options and per-attempt request counting.
+// ABOUTME: Covers request formation, response parsing, error handling, retry options, request counting and the request policy.
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 
 import { LastfmClient } from '../../src/clients/lastfm'
 import { runWithCacheTally, type CacheTally } from '../../src/utils/cacheTally'
+import { RequestBudgetExceeded, isRateLimited, runWithRequestPolicy, type RequestPolicy } from '../../src/utils/lastfmRequestPolicy'
 import { fetchWithRetry } from '../../src/utils/retry'
 import type {
 	LastfmRecentTracksResponse,
@@ -418,6 +419,77 @@ describe('LastfmClient', () => {
 
 			expect(fetchSpy).toHaveBeenCalledTimes(2)
 			expect(tally.requests).toBe(2)
+		})
+	})
+
+	describe('request policy', () => {
+		const policy: RequestPolicy = { maxRequests: 40, deadlineMs: 8000, maxConcurrent: 4, maxRetries: 1, maxRetryDelayMs: 2000 }
+
+		beforeEach(async () => {
+			const actual = await vi.importActual<typeof import('../../src/utils/retry')>('../../src/utils/retry')
+			mockFetchWithRetry.mockImplementation(actual.fetchWithRetry)
+			vi.spyOn(console, 'log').mockImplementation(() => {})
+		})
+
+		afterEach(() => {
+			// restoreAllMocks leaves vi.fn implementations in place; later tests expect the bare mock
+			mockFetchWithRetry.mockReset()
+		})
+
+		it('should retry at most once under a policy', async () => {
+			const fetchSpy = vi.spyOn(globalThis, 'fetch').mockImplementation(async () => new Response('Rate limited', { status: 429 }))
+
+			const promise = runWithRequestPolicy(policy, () => client.getArtistInfo('Queen')).catch((e: unknown) => e)
+			await vi.advanceTimersByTimeAsync(2000)
+			const error = await promise
+
+			expect(fetchSpy).toHaveBeenCalledTimes(2)
+			expect(error).toBeInstanceOf(Error)
+			expect(isRateLimited(error)).toBe(true)
+		})
+
+		it('should keep the default retry options outside a policy', async () => {
+			vi.spyOn(globalThis, 'fetch').mockResolvedValue(Response.json(mockArtistInfoResponse))
+
+			await client.getArtistInfo('Queen')
+
+			expect(mockFetchWithRetry).toHaveBeenCalledWith(
+				expect.any(String),
+				expect.any(Object),
+				expect.objectContaining({ maxRetries: 3, maxDelayMs: 15000 }),
+			)
+		})
+
+		it('should count an attempt the budget accepts and neither send nor count one it refuses', async () => {
+			const fetchSpy = vi.spyOn(globalThis, 'fetch').mockImplementation(async () => Response.json(mockArtistInfoResponse))
+			const tally: CacheTally = { hits: 0, misses: 0, requests: 0 }
+
+			const error = await runWithCacheTally(tally, () =>
+				runWithRequestPolicy({ ...policy, maxRequests: 1 }, async () => {
+					await client.getArtistInfo('Queen')
+					return client.getArtistInfo('Queen').catch((e: unknown) => e)
+				}),
+			)
+
+			expect(error).toBeInstanceOf(RequestBudgetExceeded)
+			expect(fetchSpy).toHaveBeenCalledTimes(1)
+			expect(tally.requests).toBe(1)
+		})
+
+		it('should not send or count a retry the budget refuses', async () => {
+			const fetchSpy = vi.spyOn(globalThis, 'fetch').mockImplementation(async () => new Response('Rate limited', { status: 429 }))
+			const tally: CacheTally = { hits: 0, misses: 0, requests: 0 }
+
+			const promise = runWithCacheTally(tally, () =>
+				runWithRequestPolicy({ ...policy, maxRequests: 1 }, () => client.getArtistInfo('Queen')),
+			).catch((e: unknown) => e)
+			await vi.advanceTimersByTimeAsync(2000)
+			const error = await promise
+
+			expect(error).toBeInstanceOf(RequestBudgetExceeded)
+			expect((error as RequestBudgetExceeded).reason).toBe('budget')
+			expect(fetchSpy).toHaveBeenCalledTimes(1)
+			expect(tally.requests).toBe(1)
 		})
 	})
 

@@ -2,6 +2,7 @@
 // ABOUTME: Wraps all Last.fm API endpoints with typed interfaces and retry-enabled HTTP calls.
 
 import { countLastfmRequest } from '../utils/cacheTally'
+import { withPolicy } from '../utils/lastfmRequestPolicy'
 import { fetchWithRetry, type RetryOptions } from '../utils/retry'
 
 // Last.fm API response interfaces
@@ -434,27 +435,30 @@ export class LastfmClient {
 			...params,
 		})
 
-		const retryOptions = this.lastfmRetryOptions
-		const response = await fetchWithRetry(
-			`${this.baseUrl}?${searchParams.toString()}`,
-			{
-				method: 'GET',
-				headers: {
-					'User-Agent': 'lastfm-mcp/1.0.0',
+		// Under a request policy the whole exchange, body included, holds a concurrency slot, and the policy's retry limits
+		// replace the client's. Outside one, withPolicy passes no overrides.
+		const data = await withPolicy(async (policyRetry) => {
+			const retryOptions: RetryOptions = { ...this.lastfmRetryOptions, ...policyRetry }
+			const response = await fetchWithRetry(
+				`${this.baseUrl}?${searchParams.toString()}`,
+				{
+					method: 'GET',
+					headers: {
+						'User-Agent': 'lastfm-mcp/1.0.0',
+					},
 				},
-			},
-			{
-				...retryOptions,
-				// Counts every HTTP attempt, retries included. An onAttempt already in the options runs first, so an attempt
-				// it refuses by throwing never reaches Last.fm and isn't counted.
-				onAttempt: (attempt) => {
-					retryOptions.onAttempt?.(attempt)
-					countLastfmRequest()
+				{
+					...retryOptions,
+					// Counts every HTTP attempt, retries included. An onAttempt already in the options (the policy's budget
+					// charge) runs first, so an attempt it refuses by throwing never reaches Last.fm and isn't counted.
+					onAttempt: (attempt) => {
+						retryOptions.onAttempt?.(attempt)
+						countLastfmRequest()
+					},
 				},
-			},
-		)
-
-		const data = (await response.json()) as LastfmApiResponse<T>
+			)
+			return (await response.json()) as LastfmApiResponse<T>
+		})
 
 		if ('error' in data) {
 			throw new Error(`Last.fm API error ${data.error}: ${data.message}`)
