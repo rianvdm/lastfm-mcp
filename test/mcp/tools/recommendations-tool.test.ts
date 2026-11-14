@@ -102,7 +102,7 @@ describe('get_music_recommendations tool', () => {
 
 	it("should recommend for the session's user and honour limit and exclude", async () => {
 		const text = await call({ limit: 1, exclude: ['mojave 3'] })
-		expect(client.getTopArtists).toHaveBeenCalledWith('rj', '7day', expect.any(Number))
+		expect(client.getTopArtists).toHaveBeenCalledWith('rj', '7day', expect.any(Number), { forceRefresh: true })
 		expect(text.startsWith('🎯 **New music for rj**\n')).toBe(true)
 		expect(text).toContain('**1. Chapterhouse**')
 		expect(text).not.toContain('**1. Mojave 3**')
@@ -111,7 +111,7 @@ describe('get_music_recommendations tool', () => {
 
 	it('should recommend for another user when a username is given', async () => {
 		const text = await call({ username: 'friend' })
-		expect(client.getTopArtists).toHaveBeenCalledWith('friend', '7day', expect.any(Number))
+		expect(client.getTopArtists).toHaveBeenCalledWith('friend', '7day', expect.any(Number), { forceRefresh: true })
 		expect(text).toContain('🎯 **New music for friend**')
 	})
 

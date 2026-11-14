@@ -1,5 +1,5 @@
 // ABOUTME: Tests for CachedLastfmClient, the caching decorator around LastfmClient.
-// ABOUTME: Checks tally counting, shared tag top-artist lookups, and that partial recommendation candidate lists are not cached.
+// ABOUTME: Checks tally counting, forced top-artist refreshes, shared tag lookups, and that partial candidate lists are not cached.
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 
 import { CachedLastfmClient } from '../../src/clients/cachedLastfm'
@@ -44,6 +44,24 @@ describe('CachedLastfmClient', () => {
 
 			expect(getArtistInfo).toHaveBeenCalledTimes(1)
 			expect(tally).toEqual({ hits: 1, misses: 1, requests: 0 })
+		})
+	})
+
+	describe('getTopArtists', () => {
+		it('should skip the cached entry with forceRefresh and store the fresh one', async () => {
+			const getTopArtists = vi
+				.fn()
+				.mockResolvedValueOnce({ topartists: { artist: [{ name: 'Slowdive' }] } })
+				.mockResolvedValueOnce({ topartists: { artist: [{ name: 'Ride' }] } })
+			const client = new CachedLastfmClient({ getTopArtists } as unknown as LastfmClient, memoryKV())
+
+			await client.getTopArtists('u', '7day', 10)
+			const fresh = await client.getTopArtists('u', '7day', 10, { forceRefresh: true })
+			const cached = await client.getTopArtists('u', '7day', 10)
+
+			expect(getTopArtists).toHaveBeenCalledTimes(2)
+			expect(fresh).toEqual({ topartists: { artist: [{ name: 'Ride' }] } })
+			expect(cached).toEqual(fresh)
 		})
 	})
 

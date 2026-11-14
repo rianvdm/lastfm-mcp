@@ -114,10 +114,10 @@ describe('findRecommendations', () => {
 		})
 		expect(result.picks[1].seeds.map((seed) => seed.name)).toEqual(['Slowdive', 'Ride'])
 
-		expect(getTopArtists).toHaveBeenCalledWith('rj', '7day', SEED_LIMITS['7day'])
-		expect(getTopArtists).toHaveBeenCalledWith('rj', '1month', SEED_LIMITS['1month'])
-		expect(getTopArtists).toHaveBeenCalledWith('rj', '12month', SEED_LIMITS['12month'])
-		expect(getTopArtists).toHaveBeenCalledWith('rj', 'overall', LIBRARY_PAGE_SIZE)
+		expect(getTopArtists).toHaveBeenCalledWith('rj', '7day', SEED_LIMITS['7day'], { forceRefresh: true })
+		expect(getTopArtists).toHaveBeenCalledWith('rj', '1month', SEED_LIMITS['1month'], { forceRefresh: true })
+		expect(getTopArtists).toHaveBeenCalledWith('rj', '12month', SEED_LIMITS['12month'], { forceRefresh: true })
+		expect(getTopArtists).toHaveBeenCalledWith('rj', 'overall', LIBRARY_PAGE_SIZE, { forceRefresh: true })
 		expect(getSimilarArtists).toHaveBeenCalledWith('Slowdive', SIMILAR_LIMIT)
 		expect(getArtistTopAlbums).toHaveBeenCalledWith('Mojave 3', STARTER_LIMIT)
 		expect(getArtistTopTracks).toHaveBeenCalledWith('Mojave 3', STARTER_LIMIT)
@@ -572,6 +572,34 @@ describe('findRecommendations through CachedLastfmClient and LastfmClient', () =
 				['Chapterhouse', 'Chapterhouse LP1', []],
 				['Mojave 3', 'Mojave 3 LP1', []],
 			])
+		})
+	})
+
+	describe('freshness', () => {
+		it('should build from top artists fetched for this build, never from an older cached window', async () => {
+			vi.useFakeTimers()
+			vi.spyOn(console, 'log').mockImplementation(() => {})
+			let thisWeek = ['Slowdive']
+			const { requests } = fakeLastfm((method, params) => {
+				if (method === 'user.gettopartists') return { body: topArtists(params.get('period') === '7day' ? thisWeek : []) }
+				if (method === 'artist.getsimilar') return { body: similarTo(params.get('artist') ?? '', [`${params.get('artist')} Similar`]) }
+				return undefined
+			})
+			const { kv } = stallingKV()
+			const client = new CachedLastfmClient(new LastfmClient('key'), kv)
+
+			// Another tool caches this week's top artists with the same page size the engine asks for
+			await client.getTopArtists('rj', '7day', SEED_LIMITS['7day'])
+			vi.advanceTimersByTime(50 * 60 * 1000)
+			thisWeek = ['Ride']
+			requests.length = 0
+
+			const result = await findRecommendations(client, 'rj', { limit: 8, exclude: [] })
+
+			expect(requests.filter((request) => request.startsWith('user.gettopartists'))).toHaveLength(4)
+			expect(result.picks.map((pick) => pick.name)).toEqual(['Ride Similar'])
+			// The fresh window replaced the old entry, so other tools get it too
+			await expect(client.getTopArtists('rj', '7day', SEED_LIMITS['7day'])).resolves.toEqual(topArtists(['Ride']))
 		})
 	})
 })

@@ -138,9 +138,14 @@ function isNotFound(error: unknown): boolean {
 	return error instanceof Error && /^Last\.fm API error 6\b/.test(error.message)
 }
 
-/** Builds the ranked candidates for one user and lowercased tag; never sees `exclude` or `limit`. */
+/**
+ * Builds the ranked candidates for one user and lowercased tag; never sees `exclude` or `limit`. The top-artist windows
+ * are fetched fresh, not read from their own hour-long cache, so a cached list is never more than an hour behind.
+ */
 async function buildCandidates(client: CachedLastfmClient, username: string, tag: string | undefined): Promise<CandidateList> {
-	const windowResults = await Promise.allSettled(WINDOWS.map((window) => client.getTopArtists(username, window, WINDOW_PAGE_SIZES[window])))
+	const windowResults = await Promise.allSettled(
+		WINDOWS.map((window) => client.getTopArtists(username, window, WINDOW_PAGE_SIZES[window], { forceRefresh: true })),
+	)
 	const failures = windowResults.filter((result): result is PromiseRejectedResult => result.status === 'rejected')
 	if (failures.length === windowResults.length) throw failures[0].reason
 

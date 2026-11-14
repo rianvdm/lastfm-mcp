@@ -43,16 +43,20 @@ export class CachedLastfmClient {
 	}
 
 	/**
-	 * Get user's top artists with caching
+	 * Get user's top artists with caching. `forceRefresh` skips the cached entry and stores the fresh one, so a caller
+	 * that caches what it builds from them (the recommendation candidates) doesn't stack two TTLs.
 	 */
 	async getTopArtists(
 		username: string,
 		period: '7day' | '1month' | '3month' | '6month' | '12month' | 'overall' = 'overall',
 		limit = 50,
+		options: { forceRefresh?: boolean } = {},
 	): Promise<LastfmTopArtistsResponse> {
 		const cacheKey = CacheKeys.userTopArtists(username, period, limit)
 
-		return this.cache.getOrFetch('userTopArtists', cacheKey, () => this.client.getTopArtists(username, period, limit))
+		return this.cache.getOrFetch('userTopArtists', cacheKey, () => this.client.getTopArtists(username, period, limit), {
+			forceRefresh: options.forceRefresh,
+		})
 	}
 
 	/**
