@@ -13,7 +13,7 @@ import { describeArtistScan, isNowPlaying, scanArtistScrobbles } from './artistS
 import { AUTHENTICATED_TOOL_CATALOG, PUBLIC_TOOL_CATALOG, renderToolList } from './catalog'
 import { toolError } from './error-handler'
 import { formatArtist, toArray } from './formatters'
-import { buildNextSteps } from '../../utils/breadcrumb'
+import { buildNextSteps, lookupUsername } from '../../utils/breadcrumb'
 import { formatTimestamp, getDayBoundsUTC } from '../../utils/dateFormat'
 
 /**
@@ -47,6 +47,9 @@ const CHART_LIMIT_SCHEMA = z.coerce
 
 const formatCount = (n: number) => n.toLocaleString('en-US')
 const formatPlays = (playcount: string) => `${playcount} ${playcount === '1' ? 'play' : 'plays'}`
+
+/** The `, artist="…"` suffix that carries a chart's artist filter into a sibling chart call; empty without one. */
+const artistArg = (artistFilter: string | undefined) => (artistFilter ? `, artist=${JSON.stringify(artistFilter)}` : '')
 
 /** Message for an artist filter with no exact match, with up to 5 near-miss chart artists. */
 function formatArtistNotFound(query: string, suggestions: string[]): string {
@@ -233,22 +236,25 @@ ${renderToolList(AUTHENTICATED_TOOL_CATALOG)}
 				const nextStepsFor = (tracks: LastfmTrack[]) => {
 					const topTrack = tracks[0]
 					const topArtist = topTrack ? topTrack.artist['#text'] || (topTrack.artist as unknown as { name: string }).name : null
-					return buildNextSteps([
-						topTrack && topArtist
-							? {
-									tool: 'get_track_info',
-									args: `artist=${JSON.stringify(topArtist)}, track=${JSON.stringify(topTrack.name)}`,
-									hint: 'expand the most recent track',
-								}
-							: {
-									tool: 'get_track_info',
-									args: 'artist="<ARTIST FROM LIST>", track="<TRACK FROM LIST>"',
-									hint: 'expand a track from the feed',
-								},
-						{ tool: 'get_artist_info', args: 'artist="<ARTIST FROM LIST>"', hint: 'expand an artist from the feed' },
-						{ tool: 'get_top_artists', args: 'period="7day"', hint: 'aggregate the recent feed into a 7-day top list' },
-						{ tool: 'get_music_recommendations', args: '', hint: 'new-to-you artists based on your listening, with starter tracks' },
-					])
+					return buildNextSteps(
+						[
+							topTrack && topArtist
+								? {
+										tool: 'get_track_info',
+										args: `artist=${JSON.stringify(topArtist)}, track=${JSON.stringify(topTrack.name)}`,
+										hint: 'expand the most recent track',
+									}
+								: {
+										tool: 'get_track_info',
+										args: 'artist="<ARTIST FROM LIST>", track="<TRACK FROM LIST>"',
+										hint: 'expand a track from the feed',
+									},
+							{ tool: 'get_artist_info', args: 'artist="<ARTIST FROM LIST>"', hint: 'expand an artist from the feed' },
+							{ tool: 'get_top_artists', args: 'period="7day"', hint: 'aggregate the recent feed into a 7-day top list' },
+							{ tool: 'get_music_recommendations', args: '', hint: 'new-to-you artists based on your listening, with starter tracks' },
+						],
+						{ lookupUsername: lookupUsername(username, session.username) },
+					)
 				}
 				const warningPrefix = timezoneWarning ? timezoneWarning + '\n\n' : ''
 
@@ -337,14 +343,17 @@ ${currentPage > 1 ? `\n⬅️ **Previous page:** Use \`page: ${currentPage - 1}\
 				const artistList = artists.map((artist, index) => `${index + 1}. ${artist.name} (${artist.playcount} plays)`).join('\n')
 
 				const topArtistName = artists[0]?.name
-				const nextSteps = buildNextSteps([
-					topArtistName
-						? { tool: 'get_artist_info', args: `artist=${JSON.stringify(topArtistName)}`, hint: 'expand your top artist' }
-						: { tool: 'get_artist_info', args: 'artist="<NAME FROM LIST>"', hint: 'expand one of your top artists' },
-					{ tool: 'get_artist_top_tracks', args: 'artist="<NAME FROM LIST>"', hint: 'see canonical tracks for one of them' },
-					{ tool: 'get_top_albums', args: `period="${period}"`, hint: 'pivot to top albums for the same period' },
-					{ tool: 'get_music_recommendations', args: '', hint: 'new-to-you artists based on your listening, with starter tracks' },
-				])
+				const nextSteps = buildNextSteps(
+					[
+						topArtistName
+							? { tool: 'get_artist_info', args: `artist=${JSON.stringify(topArtistName)}`, hint: 'expand your top artist' }
+							: { tool: 'get_artist_info', args: 'artist="<NAME FROM LIST>"', hint: 'expand one of your top artists' },
+						{ tool: 'get_artist_top_tracks', args: 'artist="<NAME FROM LIST>"', hint: 'see canonical tracks for one of them' },
+						{ tool: 'get_top_albums', args: `period="${period}"`, hint: 'pivot to top albums for the same period' },
+						{ tool: 'get_music_recommendations', args: '', hint: 'new-to-you artists based on your listening, with starter tracks' },
+					],
+					{ lookupUsername: lookupUsername(username, session.username) },
+				)
 
 				return {
 					content: [
@@ -396,21 +405,24 @@ Total artists: ${data.topartists['@attr'].total}${nextSteps}`,
 					.join('\n')
 
 				const topAlbum = albums[0]
-				const nextSteps = buildNextSteps([
-					topAlbum
-						? {
-								tool: 'get_album_info',
-								args: `artist=${JSON.stringify(formatArtist(topAlbum.artist))}, album=${JSON.stringify(topAlbum.name)}`,
-								hint: 'expand your top album',
-							}
-						: {
-								tool: 'get_album_info',
-								args: 'artist="<ARTIST FROM LIST>", album="<ALBUM FROM LIST>"',
-								hint: 'expand one of your top albums',
-							},
-					{ tool: 'get_top_tracks', args: `period="${period}"`, hint: 'pivot to top tracks for the same period' },
-					{ tool: 'get_top_artists', args: `period="${period}"`, hint: 'pivot to top artists for the same period' },
-				])
+				const nextSteps = buildNextSteps(
+					[
+						topAlbum
+							? {
+									tool: 'get_album_info',
+									args: `artist=${JSON.stringify(formatArtist(topAlbum.artist))}, album=${JSON.stringify(topAlbum.name)}`,
+									hint: 'expand your top album',
+								}
+							: {
+									tool: 'get_album_info',
+									args: 'artist="<ARTIST FROM LIST>", album="<ALBUM FROM LIST>"',
+									hint: 'expand one of your top albums',
+								},
+						{ tool: 'get_top_tracks', args: `period="${period}"`, hint: 'pivot to top tracks for the same period' },
+						{ tool: 'get_top_artists', args: `period="${period}"`, hint: 'pivot to top artists for the same period' },
+					],
+					{ lookupUsername: lookupUsername(username, session.username) },
+				)
 
 				return {
 					content: [
@@ -464,25 +476,28 @@ Total albums: ${data.topalbums['@attr'].total}${nextSteps}`,
 
 				const topTrack = tracks[0]
 				const topTrackArtist = topTrack ? topTrack.artist['#text'] || (topTrack.artist as unknown as { name: string }).name : null
-				const nextSteps = buildNextSteps([
-					topTrack && topTrackArtist
-						? {
-								tool: 'get_track_info',
-								args: `artist=${JSON.stringify(topTrackArtist)}, track=${JSON.stringify(topTrack.name)}`,
-								hint: 'expand your top track',
-							}
-						: {
-								tool: 'get_track_info',
-								args: 'artist="<ARTIST FROM LIST>", track="<TRACK FROM LIST>"',
-								hint: 'expand one of your top tracks',
-							},
-					{
-						tool: 'get_similar_tracks',
-						args: 'artist="<ARTIST FROM LIST>", track="<TRACK FROM LIST>"',
-						hint: 'find more like one of your favorites',
-					},
-					{ tool: 'get_top_albums', args: `period="${period}"`, hint: 'pivot to top albums for the same period' },
-				])
+				const nextSteps = buildNextSteps(
+					[
+						topTrack && topTrackArtist
+							? {
+									tool: 'get_track_info',
+									args: `artist=${JSON.stringify(topTrackArtist)}, track=${JSON.stringify(topTrack.name)}`,
+									hint: 'expand your top track',
+								}
+							: {
+									tool: 'get_track_info',
+									args: 'artist="<ARTIST FROM LIST>", track="<TRACK FROM LIST>"',
+									hint: 'expand one of your top tracks',
+								},
+						{
+							tool: 'get_similar_tracks',
+							args: 'artist="<ARTIST FROM LIST>", track="<TRACK FROM LIST>"',
+							hint: 'find more like one of your favorites',
+						},
+						{ tool: 'get_top_albums', args: `period="${period}"`, hint: 'pivot to top albums for the same period' },
+					],
+					{ lookupUsername: lookupUsername(username, session.username) },
+				)
 
 				return {
 					content: [
@@ -535,25 +550,28 @@ Total tracks: ${data.toptracks['@attr'].total}${nextSteps}`,
 
 				const topLoved = tracks[0]
 				const topLovedArtist = topLoved ? topLoved.artist['#text'] || (topLoved.artist as unknown as { name: string }).name : null
-				const nextSteps = buildNextSteps([
-					topLoved && topLovedArtist
-						? {
-								tool: 'get_track_info',
-								args: `artist=${JSON.stringify(topLovedArtist)}, track=${JSON.stringify(topLoved.name)}`,
-								hint: 'expand your most-recently-loved track',
-							}
-						: {
-								tool: 'get_track_info',
-								args: 'artist="<ARTIST FROM LIST>", track="<TRACK FROM LIST>"',
-								hint: 'expand one of your loved tracks',
-							},
-					{
-						tool: 'get_similar_tracks',
-						args: 'artist="<ARTIST FROM LIST>", track="<TRACK FROM LIST>"',
-						hint: 'find more like a loved track',
-					},
-					{ tool: 'get_music_recommendations', args: '', hint: 'new-to-you artists based on your listening, with starter tracks' },
-				])
+				const nextSteps = buildNextSteps(
+					[
+						topLoved && topLovedArtist
+							? {
+									tool: 'get_track_info',
+									args: `artist=${JSON.stringify(topLovedArtist)}, track=${JSON.stringify(topLoved.name)}`,
+									hint: 'expand your most-recently-loved track',
+								}
+							: {
+									tool: 'get_track_info',
+									args: 'artist="<ARTIST FROM LIST>", track="<TRACK FROM LIST>"',
+									hint: 'expand one of your loved tracks',
+								},
+						{
+							tool: 'get_similar_tracks',
+							args: 'artist="<ARTIST FROM LIST>", track="<TRACK FROM LIST>"',
+							hint: 'find more like a loved track',
+						},
+						{ tool: 'get_music_recommendations', args: '', hint: 'new-to-you artists based on your listening, with starter tracks' },
+					],
+					{ lookupUsername: lookupUsername(username, session.username) },
+				)
 
 				return {
 					content: [
@@ -709,8 +727,9 @@ Total loved tracks: ${data.lovedtracks['@attr'].total}${nextSteps}`,
 			try {
 				// The schema trims genre; a blank one means no genre filter
 				const result = await findRecommendations(client, username || session.username, { limit, genre: genre || undefined, exclude })
-				// Next steps names the user only when the request did, so a follow-up never switches whose picks these are
-				return { content: [{ type: 'text', text: formatRecommendations(result, { username: username || undefined, exclude }) }] }
+				// Next steps names the user only when the request did, so a follow-up never switches whose picks or plays these are
+				const request = { username: username || undefined, lookupUsername: lookupUsername(username, session.username), exclude }
+				return { content: [{ type: 'text', text: formatRecommendations(result, request) }] }
 			} catch (error) {
 				return toolError('get_music_recommendations', error)
 			}
@@ -816,6 +835,8 @@ ${chartList}
 
 				let artistList: string
 				let summary: string
+				// The artist the Next steps expand: the first match when filtered, the chart leader otherwise
+				let focusArtist = artists[0]?.name
 				if (artistFilter) {
 					const matches = artists.flatMap((a, index) => (isSameArtist(a.name, artistFilter) ? [{ artist: a, position: index + 1 }] : []))
 					artistList =
@@ -833,6 +854,7 @@ ${chartList}
 									),
 								)
 					summary = `📊 **Total artists in this period:** ${artists.length}`
+					focusArtist = matches[0]?.artist.name
 				} else {
 					artistList = artists
 						.slice(0, limit)
@@ -841,14 +863,24 @@ ${chartList}
 					summary = `📊 **Total artists in this period:** ${artists.length}\n${artists.length > limit ? `\n📝 **Note:** Showing top ${limit} artists only` : ''}`
 				}
 
-				const topWeekArtist = artists[0]?.name
-				const nextSteps = buildNextSteps([
-					{ tool: 'get_weekly_track_chart', args: `from=${from}, to=${to}`, hint: 'see top tracks for the same week' },
-					topWeekArtist
-						? { tool: 'get_artist_info', args: `artist=${JSON.stringify(topWeekArtist)}`, hint: 'expand the top artist from this week' }
-						: { tool: 'get_artist_info', args: 'artist="<NAME FROM LIST>"', hint: 'expand one of the artists from this week' },
-					{ tool: 'get_weekly_chart_list', args: '', hint: 'pick a different week to explore' },
-				])
+				const nextSteps = buildNextSteps(
+					[
+						{
+							tool: 'get_weekly_track_chart',
+							args: `from=${from}, to=${to}${artistArg(artistFilter)}`,
+							hint: artistFilter ? "see this artist's tracks for the same period" : 'see top tracks for the same week',
+						},
+						focusArtist
+							? {
+									tool: 'get_artist_info',
+									args: `artist=${JSON.stringify(focusArtist)}`,
+									hint: artistFilter ? 'expand this artist' : 'expand the top artist from this week',
+								}
+							: { tool: 'get_artist_info', args: 'artist="<NAME FROM LIST>"', hint: 'expand one of the artists from this week' },
+						{ tool: 'get_weekly_chart_list', args: '', hint: 'pick a different week to explore' },
+					],
+					{ lookupUsername: lookupUsername(username, session.username) },
+				)
 
 				return {
 					content: [
@@ -900,6 +932,8 @@ ${summary}${nextSteps}`,
 
 				let trackList: string
 				let summary: string
+				// The track the Next steps expand: the first match when filtered, the chart leader otherwise
+				let focusTrack = tracks[0]
 				if (artistFilter) {
 					const matches = tracks.flatMap((t, index) =>
 						isSameArtist(t.artist['#text'], artistFilter) ? [{ track: t, position: index + 1 }] : [],
@@ -920,6 +954,7 @@ ${summary}${nextSteps}`,
 									),
 								)
 					summary = `📊 **Total tracks in this period:** ${tracks.length}`
+					focusTrack = matches[0]?.track
 				} else {
 					trackList = tracks
 						.slice(0, limit)
@@ -928,22 +963,28 @@ ${summary}${nextSteps}`,
 					summary = `📊 **Total tracks in this period:** ${tracks.length}\n${tracks.length > limit ? `\n📝 **Note:** Showing top ${limit} tracks only` : ''}`
 				}
 
-				const topWeekTrack = tracks[0]
-				const nextSteps = buildNextSteps([
-					{ tool: 'get_weekly_artist_chart', args: `from=${from}, to=${to}`, hint: 'see top artists for the same week' },
-					topWeekTrack
-						? {
-								tool: 'get_track_info',
-								args: `artist=${JSON.stringify(topWeekTrack.artist['#text'])}, track=${JSON.stringify(topWeekTrack.name)}`,
-								hint: 'expand the top track from this week',
-							}
-						: {
-								tool: 'get_track_info',
-								args: 'artist="<ARTIST FROM LIST>", track="<TRACK FROM LIST>"',
-								hint: 'expand a track from this week',
-							},
-					{ tool: 'get_weekly_chart_list', args: '', hint: 'pick a different week to explore' },
-				])
+				const nextSteps = buildNextSteps(
+					[
+						{
+							tool: 'get_weekly_artist_chart',
+							args: `from=${from}, to=${to}${artistArg(artistFilter)}`,
+							hint: artistFilter ? "see this artist's chart position for the same period" : 'see top artists for the same week',
+						},
+						focusTrack
+							? {
+									tool: 'get_track_info',
+									args: `artist=${JSON.stringify(focusTrack.artist['#text'])}, track=${JSON.stringify(focusTrack.name)}`,
+									hint: artistFilter ? "expand this artist's top track from this period" : 'expand the top track from this week',
+								}
+							: {
+									tool: 'get_track_info',
+									args: 'artist="<ARTIST FROM LIST>", track="<TRACK FROM LIST>"',
+									hint: 'expand a track from this week',
+								},
+						{ tool: 'get_weekly_chart_list', args: '', hint: 'pick a different week to explore' },
+					],
+					{ lookupUsername: lookupUsername(username, session.username) },
+				)
 
 				return {
 					content: [

@@ -73,7 +73,7 @@ describe('public lookups default to the signed-in user', () => {
 		const { client, textOf } = setup(signedIn)
 		const text = await textOf(name, args)
 		expect((callOf(client) as unknown[]).at(-1)).toBe('rj')
-		expect(text).toContain('Your plays: 42')
+		expect(text).toContain('Plays by rj: 42')
 		expect(text).not.toContain(SIGN_IN_NOTE)
 	})
 
@@ -87,7 +87,7 @@ describe('public lookups default to the signed-in user', () => {
 		const { client, textOf } = setup(() => null)
 		const text = await textOf(name, args)
 		expect((callOf(client) as unknown[]).at(-1)).toBeUndefined()
-		expect(text).not.toContain('Your plays')
+		expect(text).not.toContain('Plays by')
 		expect(text).toContain(SIGN_IN_NOTE)
 	})
 

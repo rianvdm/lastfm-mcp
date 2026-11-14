@@ -219,6 +219,15 @@ describe('formatRecommendations', () => {
 			expect(own).toContain('- `get_music_recommendations(exclude=["C"])` — different picks')
 		})
 
+		it("should keep another user's name on the artist lookup, so it shows their plays", () => {
+			const request = { username: 'friend', lookupUsername: 'friend', exclude: [] }
+			const named = formatRecommendations(result({ username: 'friend', picks: [pick({ name: 'C' })] }), request)
+			expect(named).toContain('- `get_artist_info(artist="C", username="friend")` — expand the top pick')
+
+			const own = formatRecommendations(result({ picks: [pick({ name: 'C' })] }), { exclude: [] })
+			expect(own).toContain('- `get_artist_info(artist="C")` — expand the top pick')
+		})
+
 		it('should order username, genre, then exclude', () => {
 			const text = formatRecommendations(result({ genre: 'shoegaze', picks: [pick({ name: 'C' })] }), {
 				username: 'friend',

@@ -11,6 +11,8 @@ import type { SeedRef, Window } from './types'
 export interface RecommendationRequest {
 	/** The username the request named; absent when it fell back to the signed-in user. */
 	username?: string
+	/** The username lookup Next steps carry, from `lookupUsername`; absent when the request was for the signed-in user. */
+	lookupUsername?: string
 	/** The names this call excluded, in the order given. */
 	exclude: string[]
 }
@@ -100,11 +102,14 @@ function nextSteps(result: RecommendationResult, request: RecommendationRequest)
 		`exclude=${JSON.stringify(exclude)}`,
 	].join(', ')
 
-	return buildNextSteps([
-		{ tool: 'get_music_recommendations', args, hint: 'different picks' },
-		{ tool: 'get_artist_info', args: `artist=${top}`, hint: 'expand the top pick' },
-		{ tool: 'get_similar_artists', args: `artist=${top}`, hint: 'fan out from a pick' },
-	])
+	return buildNextSteps(
+		[
+			{ tool: 'get_music_recommendations', args, hint: 'different picks' },
+			{ tool: 'get_artist_info', args: `artist=${top}`, hint: 'expand the top pick' },
+			{ tool: 'get_similar_artists', args: `artist=${top}`, hint: 'fan out from a pick' },
+		],
+		{ lookupUsername: request.lookupUsername },
+	)
 }
 
 /**

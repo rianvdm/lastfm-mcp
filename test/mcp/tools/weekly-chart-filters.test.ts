@@ -58,6 +58,7 @@ describe('weekly chart artist and limit filters', () => {
 	}
 
 	const numberedRows = (text: string) => text.split('\n').filter((line) => /^\d+\. /.test(line))
+	const nextSteps = (text: string) => text.split('**Next steps:**')[1] ?? ''
 
 	describe('get_weekly_artist_chart', () => {
 		it('shows the top 30 by default with a note', async () => {
@@ -78,6 +79,13 @@ describe('weekly chart artist and limit filters', () => {
 			expect(text).toContain('The Paper Kites (1 play)')
 			expect(text).not.toContain('Artist 1 ')
 			expect(numberedRows(text)).toHaveLength(0)
+		})
+
+		it('suggests expanding the matched artist and keeps the filter on the track chart step', async () => {
+			const steps = nextSteps(await textOf('get_weekly_artist_chart', { artist: 'the paper kites' }))
+			expect(steps).toContain('- `get_artist_info(artist="The Paper Kites")`')
+			expect(steps).not.toContain('Artist 1')
+			expect(steps).toContain(`- \`get_weekly_track_chart(from=${FROM}, to=${TO}, artist="the paper kites")\``)
 		})
 
 		it('says the artist is absent and suggests near matches', async () => {
@@ -112,13 +120,20 @@ describe('weekly chart artist and limit filters', () => {
 
 	describe('get_weekly_track_chart', () => {
 		it("lists every track by the artist with its chart position and no other artist's", async () => {
-			const text = await textOf('get_weekly_track_chart', { artist: 'slowdive' })
+			const text = await textOf('get_weekly_track_chart', { artist: 'slowdive', limit: 1 })
 			expect(text).toContain('#1 ')
 			expect(text).toContain('Alison')
 			expect(text).toContain('#3 ')
 			expect(text).toContain('When the Sun Hits')
 			expect(text).not.toContain('Holocene')
 			expect(text).not.toContain('Wasteland')
+		})
+
+		it('suggests expanding the first matched track and keeps the filter on the artist chart step', async () => {
+			const steps = nextSteps(await textOf('get_weekly_track_chart', { artist: 'bon iver' }))
+			expect(steps).toContain('- `get_track_info(artist="Bon Iver", track="Holocene")`')
+			expect(steps).not.toContain('Alison')
+			expect(steps).toContain(`- \`get_weekly_artist_chart(from=${FROM}, to=${TO}, artist="bon iver")\``)
 		})
 
 		it('suggests chart artists when there is no exact match', async () => {

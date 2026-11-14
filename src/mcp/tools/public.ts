@@ -4,7 +4,7 @@ import { McpServer } from '@modelcontextprotocol/server'
 import { z } from 'zod'
 
 import { CachedLastfmClient } from '../../clients/cachedLastfm'
-import { buildNextSteps } from '../../utils/breadcrumb'
+import { buildNextSteps, lookupUsername } from '../../utils/breadcrumb'
 import { buildListenToMoreLine } from '../../utils/listentomore-link'
 import { PROTOCOL_VERSION, SERVER_VERSION } from '../protocol'
 import { LASTFM_READ, LOCAL_READ } from './annotations'
@@ -94,7 +94,8 @@ To get started, connect this server in your MCP client. It opens the Last.fm sig
 			}),
 		},
 		async ({ artist, track, username: requestedUsername }) => {
-			const username = requestedUsername || getSession()?.username
+			const signedInUsername = getSession()?.username
+			const username = requestedUsername || signedInUsername
 			try {
 				const data = await client.getTrackInfo(artist, track, username)
 
@@ -104,19 +105,22 @@ To get started, connect this server in your MCP client. It opens the Last.fm sig
 						.map((tag) => tag.name)
 						.join(', ') || 'None'
 
-				const userStats = username && data.track.userplaycount ? `• Your plays: ${data.track.userplaycount}` : ''
+				const userStats = username && data.track.userplaycount ? `• Plays by ${username}: ${data.track.userplaycount}` : ''
 				const loved = data.track.userloved === '1' ? ' ❤️' : ''
 
 				const trackArtist = data.track.artist['#text'] || (data.track.artist as unknown as { name: string }).name
-				const nextSteps = buildNextSteps([
-					{ tool: 'get_similar_tracks', args: `artist="${trackArtist}", track="${data.track.name}"`, hint: 'find more like this track' },
-					{ tool: 'get_artist_info', args: `artist="${trackArtist}"`, hint: 'pull bio, tags, and similar artists' },
-					{
-						tool: 'get_album_info',
-						args: `artist="${trackArtist}", album="${data.track.album?.['#text'] || ''}"`,
-						hint: 'pull tracklist and album-level stats',
-					},
-				])
+				const nextSteps = buildNextSteps(
+					[
+						{ tool: 'get_similar_tracks', args: `artist="${trackArtist}", track="${data.track.name}"`, hint: 'find more like this track' },
+						{ tool: 'get_artist_info', args: `artist="${trackArtist}"`, hint: 'pull bio, tags, and similar artists' },
+						{
+							tool: 'get_album_info',
+							args: `artist="${trackArtist}", album="${data.track.album?.['#text'] || ''}"`,
+							hint: 'pull tracklist and album-level stats',
+						},
+					],
+					{ lookupUsername: lookupUsername(requestedUsername, signedInUsername) },
+				)
 
 				return {
 					content: [
@@ -174,7 +178,7 @@ ${!username ? '*Note: Sign in to see your personal listening stats for this trac
 						.slice(0, 5)
 						.map((a) => a.name)
 						.join(', ') || 'None'
-				const userStats = username && data.artist.stats.userplaycount ? `• Your plays: ${data.artist.stats.userplaycount}` : ''
+				const userStats = username && data.artist.stats.userplaycount ? `• Plays by ${username}: ${data.artist.stats.userplaycount}` : ''
 
 				const nextSteps = buildNextSteps([
 					{ tool: 'get_artist_top_tracks', args: `artist="${data.artist.name}"`, hint: "see this artist's most-played tracks" },
@@ -226,7 +230,8 @@ ${!username ? '*Note: Sign in to see your personal listening stats for this arti
 			}),
 		},
 		async ({ artist, album, username: requestedUsername }) => {
-			const username = requestedUsername || getSession()?.username
+			const signedInUsername = getSession()?.username
+			const username = requestedUsername || signedInUsername
 			try {
 				const data = await client.getAlbumInfo(artist, album, username)
 
@@ -240,14 +245,21 @@ ${!username ? '*Note: Sign in to see your personal listening stats for this arti
 						.slice(0, 10)
 						.map((track, i) => `${i + 1}. ${track.name}`)
 						.join('\n') || 'Track listing not available'
-				const userStats = username && data.album.userplaycount ? `• Your plays: ${data.album.userplaycount}` : ''
+				const userStats = username && data.album.userplaycount ? `• Plays by ${username}: ${data.album.userplaycount}` : ''
 
 				const albumArtist = formatArtist(data.album.artist)
-				const nextSteps = buildNextSteps([
-					{ tool: 'get_artist_info', args: `artist="${albumArtist}"`, hint: 'pull bio, tags, and similar artists' },
-					{ tool: 'get_artist_top_albums', args: `artist="${albumArtist}"`, hint: 'see what else is canonical from this artist' },
-					{ tool: 'get_track_info', args: `artist="${albumArtist}", track="<TRACK NAME>"`, hint: 'expand a track from the listing above' },
-				])
+				const nextSteps = buildNextSteps(
+					[
+						{ tool: 'get_artist_info', args: `artist="${albumArtist}"`, hint: 'pull bio, tags, and similar artists' },
+						{ tool: 'get_artist_top_albums', args: `artist="${albumArtist}"`, hint: 'see what else is canonical from this artist' },
+						{
+							tool: 'get_track_info',
+							args: `artist="${albumArtist}", track="<TRACK NAME>"`,
+							hint: 'expand a track from the listing above',
+						},
+					],
+					{ lookupUsername: lookupUsername(requestedUsername, signedInUsername) },
+				)
 
 				return {
 					content: [
