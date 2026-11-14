@@ -179,31 +179,89 @@ describe('lastfmRequestPolicy', () => {
 			expect((error as RequestBudgetExceeded).reason).toBe('deadline')
 			expect(send).toHaveBeenCalledTimes(1)
 		})
+	})
 
-		it('should reject a queued send that gets its slot after the deadline', async () => {
+	describe('hard deadline', () => {
+		it('should cancel an in-flight request at the deadline and release its slot', async () => {
 			vi.useFakeTimers()
-			const started = deferred()
-			const gate = deferred()
-			const late = vi.fn(oneAttempt)
+			let received: AbortSignal | undefined
 
-			const [first, second] = await runWithRequestPolicy({ ...POLICY, deadlineMs: 1000, maxConcurrent: 1 }, async () => {
-				const holder = withPolicy(async (retry) => {
+			const promise = runWithRequestPolicy({ ...POLICY, deadlineMs: 1000 }, () =>
+				withPolicy((retry, signal) => {
 					retry.onAttempt?.(1)
-					started.resolve()
+					received = signal
+					return new Promise<never>(() => {})
+				}),
+			).catch((e: unknown) => e)
+			await vi.advanceTimersByTimeAsync(1000)
+			const error = await promise
+
+			expect(error).toBeInstanceOf(RequestBudgetExceeded)
+			expect((error as RequestBudgetExceeded).reason).toBe('deadline')
+			expect(received?.aborted).toBe(true)
+			expect(vi.getTimerCount()).toBe(0)
+		})
+
+		it('should reject a queued send at the deadline without any slot freeing', async () => {
+			vi.useFakeTimers()
+			const queuedSend = vi.fn(oneAttempt)
+			const neverResolves = (retry: Partial<RetryOptions>) => {
+				retry.onAttempt?.(1)
+				return new Promise<never>(() => {})
+			}
+
+			const promise = runWithRequestPolicy({ ...POLICY, deadlineMs: 1000, maxConcurrent: 4 }, () =>
+				Promise.all([
+					...Array.from({ length: 4 }, () => withPolicy(neverResolves).catch((e: unknown) => e)),
+					withPolicy(queuedSend).catch((e: unknown) => e),
+				]),
+			)
+			await vi.advanceTimersByTimeAsync(1000)
+			const errors = await promise
+
+			expect(queuedSend).not.toHaveBeenCalled()
+			for (const error of errors) {
+				expect(error).toBeInstanceOf(RequestBudgetExceeded)
+				expect((error as RequestBudgetExceeded).reason).toBe('deadline')
+			}
+			expect(vi.getTimerCount()).toBe(0)
+		})
+
+		it('should keep the deadline timer until a request the call left in flight releases its slot', async () => {
+			vi.useFakeTimers()
+			const gate = deferred()
+			let orphan: Promise<unknown> | undefined
+
+			await runWithRequestPolicy({ ...POLICY, deadlineMs: 1000 }, async () => {
+				orphan = withPolicy(async (retry) => {
+					retry.onAttempt?.(1)
 					await gate.promise
-					return 'first'
 				})
-				const queued = withPolicy(late).catch((e: unknown) => e)
-				await started.promise
-				vi.advanceTimersByTime(1000)
-				gate.resolve()
-				return Promise.all([holder, queued])
 			})
 
-			expect(first).toBe('first')
-			expect(second).toBeInstanceOf(RequestBudgetExceeded)
-			expect((second as RequestBudgetExceeded).reason).toBe('deadline')
-			expect(late).not.toHaveBeenCalled()
+			expect(vi.getTimerCount()).toBe(1)
+			gate.resolve()
+			await orphan
+			expect(vi.getTimerCount()).toBe(0)
+		})
+
+		it('should clear the deadline timer when the call finishes early', async () => {
+			vi.useFakeTimers()
+
+			await runWithRequestPolicy({ ...POLICY, deadlineMs: 1000 }, () => withPolicy(oneAttempt))
+
+			expect(vi.getTimerCount()).toBe(0)
+		})
+
+		it('should give a send no signal outside a policy', async () => {
+			let received: AbortSignal | undefined = new AbortController().signal
+
+			await withPolicy((_retry, signal) => {
+				received = signal
+				return Promise.resolve()
+			})
+
+			expect(received).toBeUndefined()
 		})
 	})
 

@@ -435,9 +435,10 @@ export class LastfmClient {
 			...params,
 		})
 
-		// Under a request policy the whole exchange, body included, holds a concurrency slot, and the policy's retry limits
-		// replace the client's. Outside one, withPolicy passes no overrides.
-		const data = await withPolicy(async (policyRetry) => {
+		// Under a request policy the whole exchange, body included, holds a concurrency slot, the policy's retry limits
+		// replace the client's, and the policy's signal aborts the fetch at the deadline. Outside one, withPolicy passes
+		// no overrides and no signal.
+		const data = await withPolicy(async (policyRetry, signal) => {
 			const retryOptions: RetryOptions = { ...this.lastfmRetryOptions, ...policyRetry }
 			const response = await fetchWithRetry(
 				`${this.baseUrl}?${searchParams.toString()}`,
@@ -446,6 +447,7 @@ export class LastfmClient {
 					headers: {
 						'User-Agent': 'lastfm-mcp/1.0.0',
 					},
+					...(signal && { signal }),
 				},
 				{
 					...retryOptions,

@@ -491,6 +491,32 @@ describe('LastfmClient', () => {
 			expect(fetchSpy).toHaveBeenCalledTimes(1)
 			expect(tally.requests).toBe(1)
 		})
+
+		it('should abort a hung fetch at the deadline and report it as a deadline refusal', async () => {
+			let signal: AbortSignal | null | undefined
+			const fetchSpy = vi.spyOn(globalThis, 'fetch').mockImplementation((_input, init) => {
+				signal = init?.signal
+				// A fetch that only ever ends by being aborted, as a hung Last.fm request would
+				return new Promise<Response>((_resolve, reject) => init?.signal?.addEventListener('abort', () => reject(init.signal?.reason)))
+			})
+
+			const promise = runWithRequestPolicy(policy, () => client.getArtistInfo('Queen')).catch((e: unknown) => e)
+			await vi.advanceTimersByTimeAsync(policy.deadlineMs)
+			const error = await promise
+
+			expect(signal?.aborted).toBe(true)
+			expect(error).toBeInstanceOf(RequestBudgetExceeded)
+			expect((error as RequestBudgetExceeded).reason).toBe('deadline')
+			expect(fetchSpy).toHaveBeenCalledTimes(1)
+		})
+
+		it('should send no abort signal outside a policy', async () => {
+			const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValue(Response.json(mockArtistInfoResponse))
+
+			await client.getArtistInfo('Queen')
+
+			expect(fetchSpy.mock.calls[0][1]).not.toHaveProperty('signal')
+		})
 	})
 
 	describe('parameter validation', () => {
