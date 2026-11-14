@@ -52,7 +52,7 @@ export interface RecommendationResult {
 	/** The genre as asked for, trimmed; absent when none was given. */
 	genre?: string
 	picks: Pick[]
-	/** True when the budget, deadline or rate limiting cut the candidates or the starters short. */
+	/** True when a lookup was cut short or failed for a reason other than Last.fm's error 6, so the picks or starters may be incomplete. */
 	partial: boolean
 	genreNotFound: boolean
 	emptyHistory: boolean
@@ -73,7 +73,8 @@ export interface RecommendationOptions {
  * Finds up to `limit` artists new to `username`. The whole call runs under one RECOMMENDATION_POLICY, so its Last.fm
  * requests share one budget and deadline. Candidates come from the per-user, per-genre cache or are built on a miss;
  * `exclude` and `limit` apply after, and each pick then gets a starter album and tracks. Throws only if every
- * top-artist window lookup fails; anything cut short by the budget, deadline or a rate limit comes back as `partial`.
+ * top-artist window lookup fails; a lookup cut short by the budget, deadline or a rate limit, or a similar-artist or
+ * starter lookup failing with anything but Last.fm's error 6, comes back as `partial`.
  */
 export async function findRecommendations(
 	client: CachedLastfmClient,
@@ -94,7 +95,7 @@ export async function findRecommendations(
 			username,
 			...(genre && { genre }),
 			picks: chosen.map((candidate, index) => toPick(candidate, starters[index])),
-			partial: list.partial || starters.some((starter) => starter.cutShort),
+			partial: list.partial || starters.some((starter) => starter.incomplete),
 			genreNotFound: list.genreNotFound,
 			emptyHistory: list.emptyHistory,
 			libraryComplete: list.libraryComplete,
@@ -142,9 +143,9 @@ async function buildCandidates(client: CachedLastfmClient, username: string, tag
 	const similar = new Map<string, Array<{ name: string; match: number }>>()
 	similarResults.forEach((result, index) => {
 		if (result.status === 'rejected') {
-			// Running out of budget or time makes the list partial; any other failure, such as error 6 for an artist
-			// Last.fm no longer knows, just loses that seed
-			if (isCutShort(result.reason)) partial = true
+			// Error 6 (an artist Last.fm no longer knows) just loses that seed. Anything else, a 5xx or network failure
+			// included, makes the list partial, so a transient failure never leaves a thinner list cached for an hour.
+			if (!isNotFound(result.reason)) partial = true
 			return
 		}
 		const entries = toArray(result.value.similarartists?.artist).map((artist) => ({ name: artist.name, match: Number(artist.match) }))
@@ -181,11 +182,11 @@ async function settle<T>(promise: Promise<T>): Promise<PromiseSettledResult<T>> 
 interface Starters {
 	album?: string
 	tracks: string[]
-	/** True when the budget, deadline or a rate limit stopped either lookup. */
-	cutShort: boolean
+	/** True when either lookup failed with anything but error 6, so the starters may be missing for a passing reason. */
+	incomplete: boolean
 }
 
-/** Looks up one album and two tracks for `artist`; a failed or empty lookup just leaves them out. */
+/** Looks up one album and two tracks for `artist`; a failed or empty lookup just leaves them out. Only error 6 isn't `incomplete`. */
 async function fetchStarters(client: CachedLastfmClient, artist: string): Promise<Starters> {
 	const [albums, tracks] = await Promise.allSettled([
 		client.getArtistTopAlbums(artist, STARTER_LIMIT),
@@ -201,7 +202,7 @@ async function fetchStarters(client: CachedLastfmClient, artist: string): Promis
 						.slice(0, 2)
 						.map((track) => track.name)
 				: [],
-		cutShort: [albums, tracks].some((result) => result.status === 'rejected' && isCutShort(result.reason)),
+		incomplete: [albums, tracks].some((result) => result.status === 'rejected' && !isNotFound(result.reason)),
 	}
 }
 

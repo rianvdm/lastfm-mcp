@@ -188,6 +188,29 @@ describe('findRecommendations', () => {
 		expect(result.picks.map((pick) => pick.name)).toEqual(['Mojave 3', 'Chapterhouse'])
 	})
 
+	it('should mark partial when a similar lookup fails with a server error', async () => {
+		const { client } = stubClient({ ...BASE, similar: { ...BASE.similar, Ride: new Error('HTTP 500: Internal Server Error') } })
+
+		const result = await findRecommendations(client, 'rj', { limit: 8, exclude: [] })
+
+		expect(result.partial).toBe(true)
+		expect(result.picks.map((pick) => pick.name)).toEqual(['Mojave 3', 'Chapterhouse'])
+	})
+
+	it('should mark partial when a starter lookup fails with a server error', async () => {
+		const { client } = stubClient({
+			...BASE,
+			tracks: async () => {
+				throw new Error('HTTP 500: Internal Server Error')
+			},
+		})
+
+		const result = await findRecommendations(client, 'rj', { limit: 1, exclude: [] })
+
+		expect(result.partial).toBe(true)
+		expect(result.picks[0]).toMatchObject({ name: 'Mojave 3', album: 'Mojave 3 LP1', tracks: [] })
+	})
+
 	it('should return picks without starters when the budget runs out', async () => {
 		const spent = async () => {
 			throw new RequestBudgetExceeded('budget')
