@@ -50,7 +50,8 @@ export const FAQ_ITEMS: FaqItem[] = [
 	},
 ]
 
-function escapeHtml(text: string): string {
+/** Escapes `&`, `<` and `>` so text renders literally inside HTML. */
+export function escapeHtml(text: string): string {
 	return text.replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;')
 }
 
