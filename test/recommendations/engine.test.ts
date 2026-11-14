@@ -1,9 +1,10 @@
 // ABOUTME: Tests for the recommendation engine with a stubbed CachedLastfmClient: seeds, fan-out, genre, exclude and starters.
 // ABOUTME: Covers partial results on rate limits and spent budgets, empty history, unknown tags and the exclude-free candidate cache.
 
-import { describe, it, expect, vi } from 'vitest'
+import { describe, it, expect, vi, afterEach } from 'vitest'
 
-import type { CachedLastfmClient } from '../../src/clients/cachedLastfm'
+import { CachedLastfmClient } from '../../src/clients/cachedLastfm'
+import { LastfmClient } from '../../src/clients/lastfm'
 import type { CandidateList } from '../../src/recommendations/types'
 import {
 	LIBRARY_PAGE_SIZE,
@@ -404,5 +405,92 @@ describe('findRecommendations', () => {
 		expect(JSON.stringify(list)).not.toContain('MOJAVE')
 		expect(list.candidates.map((candidate: { name: string }) => candidate.name)).toContain('Mojave 3')
 		expect(result.picks.map((pick) => pick.name)).toEqual(['Chapterhouse', 'Swervedriver'])
+	})
+})
+
+/** How the fake Last.fm answers one request: a JSON body, after `delayMs` of fake time when set. */
+interface FakeAnswer {
+	body: unknown
+	delayMs?: number
+}
+
+/**
+ * Replaces fetch with a fake Last.fm that answers by lowercased method and artist, user or tag, and records each request as
+ * "method artist". An unrouted request answers with an empty but well-formed body for its method.
+ */
+function fakeLastfm(route: (method: string, params: URLSearchParams) => FakeAnswer | undefined) {
+	const requests: string[] = []
+	const fetchSpy = vi.spyOn(globalThis, 'fetch').mockImplementation(async (input) => {
+		const params = new URL(String(input)).searchParams
+		const method = (params.get('method') ?? '').toLowerCase()
+		requests.push(`${method} ${params.get('artist') ?? params.get('period') ?? params.get('tag') ?? ''}`.trim())
+		const answer = route(method, params) ?? { body: emptyBody(method, params) }
+		if (answer.delayMs) await new Promise((resolve) => setTimeout(resolve, answer.delayMs))
+		return Response.json(answer.body)
+	})
+	return { requests, fetchSpy }
+}
+
+function emptyBody(method: string, params: URLSearchParams): unknown {
+	const artist = params.get('artist') ?? ''
+	switch (method) {
+		case 'user.gettopartists':
+			return topArtists([])
+		case 'artist.getsimilar':
+			return { similarartists: { artist: [], '@attr': { artist } } }
+		case 'artist.gettopalbums':
+			return albumsFor(artist)
+		case 'artist.gettoptracks':
+			return tracksFor(artist)
+		default:
+			return {}
+	}
+}
+
+function similarTo(artist: string, names: string[]) {
+	return { similarartists: { artist: names.map((name) => ({ name, match: '0.5', url: '' })), '@attr': { artist } } }
+}
+
+describe('findRecommendations through CachedLastfmClient and LastfmClient', () => {
+	afterEach(() => {
+		vi.useRealTimers()
+		vi.restoreAllMocks()
+	})
+
+	it('should stop fetching, skip starters and keep the picks found when Last.fm answers error 29 mid fan-out', async () => {
+		vi.useFakeTimers()
+		vi.spyOn(console, 'log').mockImplementation(() => {})
+		vi.spyOn(console, 'error').mockImplementation(() => {})
+		const seeds = ['A', 'B', 'C', 'D', 'E', 'F']
+		const { requests } = fakeLastfm((method, params) => {
+			const artist = params.get('artist') ?? ''
+			if (method === 'user.gettopartists') return { body: topArtists(params.get('period') === '7day' ? seeds : []) }
+			if (method !== 'artist.getsimilar') return undefined
+			if (artist === 'A') return { body: { error: 29, message: 'Rate limit exceeded' } }
+			// B, C and D are still in flight when A's rate limit comes back
+			return { body: similarTo(artist, [`${artist} Similar`]), delayMs: 10 }
+		})
+		const client = new CachedLastfmClient(new LastfmClient('key'))
+
+		const promise = findRecommendations(client, 'rj', { limit: 8, exclude: [] })
+		await vi.advanceTimersByTimeAsync(RECOMMENDATION_POLICY.timeoutMs)
+		const result = await promise
+
+		expect(requests).toEqual([
+			'user.gettopartists 7day',
+			'user.gettopartists 1month',
+			'user.gettopartists 12month',
+			'user.gettopartists overall',
+			'artist.getsimilar A',
+			'artist.getsimilar B',
+			'artist.getsimilar C',
+			'artist.getsimilar D',
+		])
+		expect(result.partial).toBe(true)
+		expect(result.picks.map((pick) => [pick.name, pick.album, pick.tracks])).toEqual([
+			['B Similar', undefined, []],
+			['C Similar', undefined, []],
+			['D Similar', undefined, []],
+		])
 	})
 })

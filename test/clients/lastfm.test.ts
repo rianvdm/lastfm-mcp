@@ -525,6 +525,75 @@ describe('LastfmClient', () => {
 			expect(fetchSpy).toHaveBeenCalledTimes(1)
 		})
 
+		it('should send nothing more once a request fails with HTTP 429 after its retry', async () => {
+			const fetchSpy = vi.spyOn(globalThis, 'fetch').mockImplementation(async () => new Response('Rate limited', { status: 429 }))
+			const tally: CacheTally = { hits: 0, misses: 0, requests: 0 }
+
+			const promise = runWithCacheTally(tally, () =>
+				runWithRequestPolicy({ ...policy, maxConcurrent: 1 }, async () => {
+					const first = client.getArtistInfo('Queen').catch((e: unknown) => e)
+					// Queued behind the first request for the only slot
+					const queued = client.getArtistInfo('Slowdive').catch((e: unknown) => e)
+					const settled = await Promise.all([first, queued])
+					const later = await client.getArtistInfo('Ride').catch((e: unknown) => e)
+					return [...settled, later]
+				}),
+			)
+			// Long enough for every request to fail with its retry if the rate limit didn't stop them
+			await vi.advanceTimersByTimeAsync(policy.deadlineMs)
+			const [first, queued, later] = await promise
+
+			expect(isRateLimited(first)).toBe(true)
+			for (const refused of [queued, later]) {
+				expect(refused).toBeInstanceOf(RequestBudgetExceeded)
+				expect((refused as RequestBudgetExceeded).reason).toBe('rate_limited')
+			}
+			expect(fetchSpy).toHaveBeenCalledTimes(2)
+			expect(tally.requests).toBe(2)
+		})
+
+		it('should send nothing more once Last.fm answers with error 29', async () => {
+			const fetchSpy = vi
+				.spyOn(globalThis, 'fetch')
+				.mockImplementation(async () => Response.json({ error: 29, message: 'Rate limit exceeded' }))
+			const tally: CacheTally = { hits: 0, misses: 0, requests: 0 }
+
+			const [first, queued, later] = await runWithCacheTally(tally, () =>
+				runWithRequestPolicy({ ...policy, maxConcurrent: 1 }, async () => {
+					const first = client.getArtistInfo('Queen').catch((e: unknown) => e)
+					const queued = client.getArtistInfo('Slowdive').catch((e: unknown) => e)
+					const settled = await Promise.all([first, queued])
+					const later = await client.getArtistInfo('Ride').catch((e: unknown) => e)
+					return [...settled, later]
+				}),
+			)
+
+			expect(isRateLimited(first)).toBe(true)
+			expect((first as Error).message).toBe('Last.fm API error 29: Rate limit exceeded')
+			for (const refused of [queued, later]) {
+				expect(refused).toBeInstanceOf(RequestBudgetExceeded)
+				expect((refused as RequestBudgetExceeded).reason).toBe('rate_limited')
+			}
+			expect(fetchSpy).toHaveBeenCalledTimes(1)
+			expect(tally.requests).toBe(1)
+		})
+
+		it('should keep sending after a Last.fm error other than 29', async () => {
+			const fetchSpy = vi
+				.spyOn(globalThis, 'fetch')
+				.mockResolvedValueOnce(Response.json(mockErrorResponse))
+				.mockResolvedValueOnce(Response.json(mockArtistInfoResponse))
+
+			const [first, second] = await runWithRequestPolicy(policy, async () => [
+				await client.getArtistInfo('Nobody').catch((e: unknown) => e),
+				await client.getArtistInfo('Queen'),
+			])
+
+			expect((first as Error).message).toBe('Last.fm API error 6: User not found')
+			expect(second).toEqual(mockArtistInfoResponse)
+			expect(fetchSpy).toHaveBeenCalledTimes(2)
+		})
+
 		it('should send no abort signal outside a policy', async () => {
 			const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValue(Response.json(mockArtistInfoResponse))
 

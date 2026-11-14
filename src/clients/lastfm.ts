@@ -449,8 +449,8 @@ export class LastfmClient {
 
 		// Under a request policy the whole exchange, body included, holds a concurrency slot, the policy's retry limits
 		// replace the client's, and the policy's signal aborts the fetch at the deadline. Outside one, withPolicy passes
-		// no overrides and no signal.
-		const data = await withPolicy(async (policyRetry, signal) => {
+		// no overrides and no signal. Last.fm's own errors are thrown inside the exchange, so the policy sees error 29.
+		return withPolicy(async (policyRetry, signal) => {
 			const retryOptions: RetryOptions = { ...this.lastfmRetryOptions, ...policyRetry }
 			const response = await fetchWithRetry(
 				`${this.baseUrl}?${searchParams.toString()}`,
@@ -471,14 +471,12 @@ export class LastfmClient {
 					},
 				},
 			)
-			return (await response.json()) as LastfmApiResponse<T>
+			const data = (await response.json()) as LastfmApiResponse<T>
+			if ('error' in data) {
+				throw new Error(`Last.fm API error ${data.error}: ${data.message}`)
+			}
+			return data as T
 		})
-
-		if ('error' in data) {
-			throw new Error(`Last.fm API error ${data.error}: ${data.message}`)
-		}
-
-		return data as T
 	}
 
 	/**

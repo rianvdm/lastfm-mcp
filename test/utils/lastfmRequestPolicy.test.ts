@@ -164,6 +164,67 @@ describe('lastfmRequestPolicy', () => {
 		})
 	})
 
+	describe('rate limiting', () => {
+		it('should refuse queued and later sends once a send fails rate-limited, and refuse an in-flight retry', async () => {
+			const policy = { ...POLICY, maxConcurrent: 2 }
+			const queuedSend = vi.fn(oneAttempt)
+			const laterSend = vi.fn(oneAttempt)
+			const gate = deferred()
+			let retryError: unknown
+
+			const results = await runWithRequestPolicy(policy, async () => {
+				const limited = withPolicy((retry) => {
+					retry.onAttempt?.(1)
+					return Promise.reject(new Error('Last.fm API error 29: Rate limit exceeded'))
+				}).catch((e: unknown) => e)
+				// In flight beside the rate-limited send; its retry comes after the rate limit
+				const retrying = withPolicy(async (retry) => {
+					retry.onAttempt?.(1)
+					await gate.promise
+					try {
+						retry.onAttempt?.(2)
+					} catch (error) {
+						retryError = error
+						throw error
+					}
+				}).catch((e: unknown) => e)
+				const queued = withPolicy(queuedSend).catch((e: unknown) => e)
+				const first = await limited
+				gate.resolve()
+				const settled = await Promise.all([retrying, queued])
+				const later = await withPolicy(laterSend).catch((e: unknown) => e)
+				return { first, settled, later }
+			})
+
+			expect(isRateLimited(results.first)).toBe(true)
+			for (const refused of [...results.settled, results.later, retryError]) {
+				expect(refused).toBeInstanceOf(RequestBudgetExceeded)
+				expect((refused as RequestBudgetExceeded).reason).toBe('rate_limited')
+			}
+			expect(queuedSend).not.toHaveBeenCalled()
+			expect(laterSend).not.toHaveBeenCalled()
+		})
+
+		it('should keep sending after a failure that is not a rate limit', async () => {
+			const send = vi.fn(oneAttempt)
+
+			const result = await runWithRequestPolicy(POLICY, async () => {
+				await withPolicy(() => Promise.reject(new Error('HTTP 500: Internal Server Error'))).catch(() => {})
+				return withPolicy(send)
+			})
+
+			expect(result).toBe('ok')
+			expect(send).toHaveBeenCalledTimes(1)
+		})
+
+		it('should word the refusal so fetchWithRetry never retries it', () => {
+			const message = new RequestBudgetExceeded('rate_limited').message.toLowerCase()
+
+			for (const word of ['timeout', 'rate limit', '429', 'network', 'fetch failed']) expect(message).not.toContain(word)
+			expect(isRateLimited(new RequestBudgetExceeded('rate_limited'))).toBe(false)
+		})
+	})
+
 	describe('deadline', () => {
 		it('should throw with reason deadline after deadlineMs', async () => {
 			vi.useFakeTimers()

@@ -27,13 +27,22 @@ export const RECOMMENDATION_POLICY: Omit<RequestPolicy, 'deadlineMs'> & { timeou
 	maxRetryDelayMs: 2000,
 }
 
+/** Why a policy refused a request: budget spent, deadline passed, or Last.fm rate-limited an earlier request. */
+export type RefusalReason = 'budget' | 'deadline' | 'rate_limited'
+
+const REFUSAL_MESSAGES: Record<RefusalReason, string> = {
+	budget: 'Last.fm request budget spent for this call',
+	deadline: 'Last.fm request deadline passed for this call',
+	rate_limited: 'Last.fm asked this call to back off, so it sends nothing more',
+}
+
 /**
- * Thrown in place of a Last.fm request the current policy refuses. The message avoids the words fetchWithRetry treats as
+ * Thrown in place of a Last.fm request the current policy refuses. The messages avoid the words fetchWithRetry treats as
  * transient ("timeout", "rate limit", "429", "network"), so a refused attempt is never retried.
  */
 export class RequestBudgetExceeded extends Error {
-	constructor(public readonly reason: 'budget' | 'deadline') {
-		super(reason === 'budget' ? 'Last.fm request budget spent for this call' : 'Last.fm request deadline passed for this call')
+	constructor(public readonly reason: RefusalReason) {
+		super(REFUSAL_MESSAGES[reason])
 		this.name = 'RequestBudgetExceeded'
 	}
 }
@@ -65,14 +74,17 @@ interface PolicyState {
 	timer: ReturnType<typeof setTimeout> | undefined
 	/** True once the function given to runWithRequestPolicy has settled. */
 	finished: boolean
+	/** True once a request failed rate-limited; every request after that is refused. */
+	rateLimited: boolean
 }
 
 const currentPolicy = new AsyncLocalStorage<PolicyState>()
 
 /**
  * Runs `fn` with `policy` governing every Last.fm request it makes, including after awaits. The deadline starts now and
- * is hard: when it passes, requests in flight are aborted and queued ones refused, all with reason 'deadline'.
- * Concurrent calls each get their own budget, deadline and slots.
+ * is hard: when it passes, requests in flight are aborted and queued ones refused, all with reason 'deadline'. Once a
+ * request fails rate-limited (see isRateLimited), queued and later requests, and retries, are refused with reason
+ * 'rate_limited' without being sent. Concurrent calls each get their own budget, deadline and slots.
  */
 export function runWithRequestPolicy<T>(policy: RequestPolicy, fn: () => Promise<T>): Promise<T> {
 	const state: PolicyState = {
@@ -84,6 +96,7 @@ export function runWithRequestPolicy<T>(policy: RequestPolicy, fn: () => Promise
 		controller: new AbortController(),
 		timer: undefined,
 		finished: false,
+		rateLimited: false,
 	}
 	state.timer = setTimeout(() => expire(state), policy.deadlineMs)
 	return currentPolicy.run(state, async () => {
@@ -103,6 +116,12 @@ function expire(state: PolicyState): void {
 	for (const waiter of state.waiters.splice(0)) waiter.reject(new RequestBudgetExceeded('deadline'))
 }
 
+/** Last.fm rate-limited a request: refuses every queued request now and every later one, retries included. */
+function stopForRateLimit(state: PolicyState): void {
+	state.rateLimited = true
+	for (const waiter of state.waiters.splice(0)) waiter.reject(new RequestBudgetExceeded('rate_limited'))
+}
+
 /** Stops the deadline timer once nothing it could cancel is left, so it doesn't outlive the call. */
 function clearTimerIfIdle(state: PolicyState): void {
 	if (state.finished && state.inFlight === 0 && state.waiters.length === 0 && state.timer !== undefined) {
@@ -111,9 +130,10 @@ function clearTimerIfIdle(state: PolicyState): void {
 	}
 }
 
-/** Throws if the call has passed its deadline or spent its budget, without charging anything. */
+/** Throws if the call has passed its deadline, been rate-limited or spent its budget, without charging anything. */
 function assertWithinLimits(state: PolicyState): void {
 	if (state.controller.signal.aborted || Date.now() >= state.deadline) throw new RequestBudgetExceeded('deadline')
+	if (state.rateLimited) throw new RequestBudgetExceeded('rate_limited')
 	if (state.used >= state.policy.maxRequests) throw new RequestBudgetExceeded('budget')
 }
 
@@ -154,7 +174,8 @@ async function untilAborted<T>(signal: AbortSignal, work: Promise<T>): Promise<T
  * no signal, so the client's own retry options apply unchanged. Inside one it waits for a concurrency slot, refuses
  * with RequestBudgetExceeded once the budget or deadline is spent, and hands `send` retry overrides whose `onAttempt`
  * charges every attempt, retries included, against the budget. `send` also gets the policy's abort signal to pass to
- * fetch; at the deadline withPolicy rejects with reason 'deadline' whether or not `send` honours it.
+ * fetch; at the deadline withPolicy rejects with reason 'deadline' whether or not `send` honours it. `send` must
+ * reject with its final error, Last.fm's error 29 included, so a rate limit stops the call before the slot passes on.
  */
 export async function withPolicy<T>(send: (retry: Partial<RetryOptions>, signal?: AbortSignal) => Promise<T>): Promise<T> {
 	const state = currentPolicy.getStore()
@@ -178,6 +199,10 @@ export async function withPolicy<T>(send: (retry: Partial<RetryOptions>, signal?
 			signal,
 		)
 		return await untilAborted(signal, work)
+	} catch (error) {
+		// Stop before the slot is released, so no queued request wakes into it
+		if (isRateLimited(error)) stopForRateLimit(state)
+		throw error
 	} finally {
 		releaseSlot(state)
 	}
