@@ -2,8 +2,9 @@
 // ABOUTME: Checks the copy, setup snippets, share and search metadata, the FAQ, no-JavaScript readability, and the hero insights.
 import { describe, it, expect } from 'vitest'
 
+import { SERVER_VERSION } from '../../src/mcp/protocol'
 import { FAQ_ITEMS } from '../../src/pages/faq'
-import { buildLandingPage } from '../../src/pages/landing'
+import { LATEST_RELEASE, buildLandingPage } from '../../src/pages/landing'
 import { runWave, type InsightEvent, type WaveHarness } from './wave-harness'
 
 const ORIGIN = 'https://staging.example'
@@ -77,6 +78,23 @@ describe('buildLandingPage', () => {
 		)
 		expect(html).toContain('<a class="button" href="#setup">Set it up</a>')
 		expect(html).not.toMatch(/first heard|two minutes/)
+	})
+
+	describe('the latest release line', () => {
+		it('names the version the server reports, so a release PR has to update the blurb too', () => {
+			expect(LATEST_RELEASE.version).toBe(SERVER_VERSION)
+			expect(LATEST_RELEASE.blurb.trim()).not.toBe('')
+		})
+
+		it('links that release on GitHub from the hero, after the free, open source, read-only aside', () => {
+			const ctaRow = buildLandingPage(ORIGIN).match(/<div class="cta-row">([\s\S]*?)<\/div>/)?.[1] ?? ''
+			const link =
+				`<a class="release-link" href="https://github.com/rianvdm/lastfm-mcp/releases/tag/v${SERVER_VERSION}">` +
+				`In ${SERVER_VERSION}: ${LATEST_RELEASE.blurb}</a>`
+
+			expect(ctaRow).toContain(link)
+			expect(ctaRow.indexOf(link)).toBeGreaterThan(ctaRow.indexOf('Free, open source, read-only'))
+		})
 	})
 
 	it('points every copyable address at the origin it was served from', () => {
