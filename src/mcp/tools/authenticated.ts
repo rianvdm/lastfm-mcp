@@ -152,10 +152,16 @@ ${renderToolList(AUTHENTICATED_TOOL_CATALOG)}
 			title: 'Recently played tracks',
 			annotations: LASTFM_READ,
 			description:
-				"Get user's recent Last.fm listening history - REQUIRES AUTHENTICATION. Use lastfm_auth_status first to check login status.",
+				"Get user's recent Last.fm listening history - REQUIRES AUTHENTICATION. Use lastfm_auth_status first to check login status. Set `artist` to list every scrobble by one artist in a from/to or date range: each call scans up to 5,000 scrobbles, and page continues the scan.",
 			inputSchema: z.object({
 				username: z.string().optional().describe('Last.fm username (defaults to authenticated user)'),
-				limit: z.coerce.number().min(1).max(1000).optional().default(50).describe('Number of tracks to return per page (1-1000)'),
+				limit: z.coerce
+					.number()
+					.min(1)
+					.max(1000)
+					.optional()
+					.default(50)
+					.describe('Number of tracks to return per page (1-1000). Ignored when artist is set.'),
 				page: z.coerce
 					.number()
 					.min(1)

@@ -226,7 +226,7 @@ exports[`createMcpServer registration > advertises the expected tool catalogue 1
     "required": [],
   },
   {
-    "description": "Get user's recent Last.fm listening history - REQUIRES AUTHENTICATION. Use lastfm_auth_status first to check login status.",
+    "description": "Get user's recent Last.fm listening history - REQUIRES AUTHENTICATION. Use lastfm_auth_status first to check login status. Set \`artist\` to list every scrobble by one artist in a from/to or date range: each call scans up to 5,000 scrobbles, and page continues the scan.",
     "name": "get_recent_tracks",
     "properties": [
       "artist",
