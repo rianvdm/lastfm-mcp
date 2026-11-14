@@ -298,6 +298,16 @@ describe('findRecommendations', () => {
 		expect(result.picks.map((pick) => pick.name)).toEqual(['Mojave 3', 'Chapterhouse', 'Swervedriver'])
 	})
 
+	it('should mark partial when one window fails with a server error', async () => {
+		const { client } = stubClient({ ...BASE, windows: { ...BASE.windows, '12month': new Error('HTTP 500: Internal Server Error') } })
+
+		const result = await findRecommendations(client, 'rj', { limit: 8, exclude: [] })
+
+		expect(result.partial).toBe(true)
+		expect(result.emptyHistory).toBe(false)
+		expect(result.picks.map((pick) => pick.name)).toEqual(['Mojave 3', 'Chapterhouse', 'Swervedriver'])
+	})
+
 	it('should rethrow when every window lookup fails', async () => {
 		const notFound = new Error('Last.fm API error 6: User not found')
 		const { client } = stubClient({ windows: { '7day': notFound, '1month': notFound, '12month': notFound, overall: notFound } })

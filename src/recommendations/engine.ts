@@ -3,7 +3,7 @@
 
 import type { CachedLastfmClient } from '../clients/cachedLastfm'
 import { toArray } from '../mcp/tools/formatters'
-import { RECOMMENDATION_POLICY, RequestBudgetExceeded, isRateLimited, runWithRequestPolicy } from '../utils/lastfmRequestPolicy'
+import { RECOMMENDATION_POLICY, runWithRequestPolicy } from '../utils/lastfmRequestPolicy'
 import { applyExclude, applyGenre, normaliseArtist, rankCandidates, selectSeeds } from './scoring'
 import type { Candidate, CandidateList, SeedRef, Window } from './types'
 
@@ -73,8 +73,8 @@ export interface RecommendationOptions {
  * Finds up to `limit` artists new to `username`. The whole call runs under one RECOMMENDATION_POLICY, so its Last.fm
  * requests share one budget and deadline. Candidates come from the per-user, per-genre cache or are built on a miss;
  * `exclude` and `limit` apply after, and each pick then gets a starter album and tracks. Throws only if every
- * top-artist window lookup fails; a lookup cut short by the budget, deadline or a rate limit, or a similar-artist or
- * starter lookup failing with anything but Last.fm's error 6, comes back as `partial`.
+ * top-artist window lookup fails. A failed window, or a similar-artist, tag or starter lookup failing with anything but
+ * Last.fm's error 6, comes back as `partial`, which also keeps the list out of the cache.
  */
 export async function findRecommendations(
 	client: CachedLastfmClient,
@@ -104,11 +104,6 @@ export async function findRecommendations(
 	})
 }
 
-/** True for a failure caused by this call's limits or Last.fm's rate limiting, rather than by the request itself. */
-function isCutShort(error: unknown): boolean {
-	return error instanceof RequestBudgetExceeded || isRateLimited(error)
-}
-
 /** True for Last.fm error 6, its answer to an unknown artist, user or tag. */
 function isNotFound(error: unknown): boolean {
 	return error instanceof Error && /^Last\.fm API error 6\b/.test(error.message)
@@ -120,7 +115,8 @@ async function buildCandidates(client: CachedLastfmClient, username: string, tag
 	const failures = windowResults.filter((result): result is PromiseRejectedResult => result.status === 'rejected')
 	if (failures.length === windowResults.length) throw failures[0].reason
 
-	let partial = failures.some((failure) => isCutShort(failure.reason))
+	// Any failed window, budget or 5xx alike, leaves the seeds and library short, so the list is partial and not cached
+	let partial = failures.length > 0
 	const windows: Partial<Record<Window, string[]>> = {}
 	let libraryComplete = false
 	windowResults.forEach((result, index) => {
@@ -132,7 +128,7 @@ async function buildCandidates(client: CachedLastfmClient, username: string, tag
 
 	const library = new Set(Object.values(windows).flatMap((names) => names.map(normaliseArtist)))
 	const base = { libraryComplete, libraryPageSize: LIBRARY_PAGE_SIZE }
-	// A window cut short might have held artists, so only claim an empty history when no window was
+	// A failed window might have held artists, so only claim an empty history when every window answered
 	if (library.size === 0 && !partial) return { ...base, candidates: [], partial, genreNotFound: false, emptyHistory: true }
 
 	// Ask for the tag first: without it a genre call has nothing to show, so it shouldn't queue behind the fan-out
