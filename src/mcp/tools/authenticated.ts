@@ -197,6 +197,11 @@ ${renderToolList(AUTHENTICATED_TOOL_CATALOG)}
 					effectiveFrom = bounds.from
 					effectiveTo = bounds.to
 				}
+				const artistFilter = artist?.trim()
+				// An artist scan reads several pages, each cached on its own. Without an end, new scrobbles shift rows between
+				// pages, so pin the end to now and hand it back for every later block of the same scan.
+				const pinnedTo = artistFilter && effectiveTo === undefined ? Math.floor(Date.now() / 1000) : undefined
+				if (pinnedTo !== undefined) effectiveTo = pinnedTo
 				let effectiveTimezone = timezone
 				let timezoneWarning: string | undefined
 				try {
@@ -221,7 +226,9 @@ ${renderToolList(AUTHENTICATED_TOOL_CATALOG)}
 						? `${formatTimestamp(effectiveFrom, effectiveTimezone)} – ${formatTimestamp(effectiveTo, effectiveTimezone)}`
 						: effectiveFrom
 							? `from ${formatTimestamp(effectiveFrom, effectiveTimezone)}`
-							: `most recent (server time: ${nowStr})`
+							: effectiveTo
+								? `up to ${formatTimestamp(effectiveTo, effectiveTimezone)}`
+								: `most recent (server time: ${nowStr})`
 
 				const nextStepsFor = (tracks: LastfmTrack[]) => {
 					const topTrack = tracks[0]
@@ -245,18 +252,21 @@ ${renderToolList(AUTHENTICATED_TOOL_CATALOG)}
 				}
 				const warningPrefix = timezoneWarning ? timezoneWarning + '\n\n' : ''
 
-				const artistFilter = artist?.trim()
 				if (artistFilter) {
 					const scan = await scanArtistScrobbles(client, effectiveUsername, artistFilter, { from: effectiveFrom, to: effectiveTo, page })
 					const matchList = scan.matches.length > 0 ? `\n\n${formatTrackList(scan.matches)}` : ''
+					const pinnedLine =
+						pinnedTo === undefined
+							? ''
+							: `\n📌 **Range end pinned at** \`to: ${pinnedTo}\` (the time of this call); pass the same \`to\` with every later \`page\` so each block scans the same scrobbles.`
 					return {
 						content: [
 							{
 								type: 'text',
 								text: `${warningPrefix}🎵 **Scrobbles by ${artistFilter} for ${effectiveUsername}** (times in ${effectiveTimezone})
-📅 **Queried range:** ${rangeStr}
+📅 **Queried range:** ${rangeStr}${pinnedLine}
 
-${describeArtistScan(artistFilter, scan, page)}${matchList}${nextStepsFor(scan.matches)}`,
+${describeArtistScan(artistFilter, scan, page, pinnedTo)}${matchList}${nextStepsFor(scan.matches)}`,
 							},
 						],
 					}

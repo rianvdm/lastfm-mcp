@@ -1,6 +1,6 @@
 // ABOUTME: Tests get_recent_tracks: the now-playing row in range and later-page queries, and the artist scan output.
 // ABOUTME: Drives the registered handler through a stub server and a stubbed Last.fm client.
-import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import type { z } from 'zod'
 
 import type { CachedLastfmClient } from '../../../src/clients/cachedLastfm'
@@ -63,6 +63,11 @@ describe('get_recent_tracks', () => {
 		}
 		const client = { getRecentTracks } as unknown as CachedLastfmClient
 		registerAuthenticatedTools(server as never, client, () => ({ username: 'rj', sessionKey: 'key' }))
+	})
+
+	afterEach(() => {
+		vi.restoreAllMocks()
+		vi.useRealTimers()
 	})
 
 	/** Calls the handler with arguments parsed by the tool's own schema, as the SDK does. */
@@ -134,6 +139,50 @@ describe('get_recent_tracks', () => {
 
 			expect(text).toMatch(/nothing left to scan in this range/i)
 			expect(text).not.toContain('No scrobbles by')
+		})
+
+		describe('range end', () => {
+			const NOW = 1763100000
+
+			beforeEach(() => {
+				vi.useFakeTimers({ toFake: ['Date'] })
+				vi.setSystemTime(NOW * 1000 + 400)
+			})
+
+			it('pins an open-ended range to the time of the call, for every page and the continuation', async () => {
+				getRecentTracks.mockImplementation(rangeStub(18400))
+
+				const text = await textOf({ from: FROM, artist: KITES })
+
+				expect(getRecentTracks).toHaveBeenCalledTimes(5)
+				for (const call of getRecentTracks.mock.calls) expect(call[3]).toBe(NOW)
+				expect(text).toContain(`to: ${NOW}`)
+				expect(text).toContain(`\`page: 2, to: ${NOW}\``)
+			})
+
+			it('uses the given to as is and continues with page alone', async () => {
+				getRecentTracks.mockImplementation(rangeStub(18400))
+
+				const text = await textOf({ from: FROM, to: TO, artist: KITES })
+
+				for (const call of getRecentTracks.mock.calls) expect(call[3]).toBe(TO)
+				expect(text).toContain('`page: 2`')
+			})
+
+			it('makes no completeness claim or definitive negative when the total changes between pages', async () => {
+				const before = rangeStub(1240)
+				const after = rangeStub(1241)
+				getRecentTracks.mockImplementation(async (user, limit, from, to, page) =>
+					(page === 1 ? before : after)(user, limit, from, to, page),
+				)
+
+				const text = await textOf({ artist: KITES })
+
+				expect(text).not.toContain('(complete)')
+				expect(text).not.toContain('No scrobbles by')
+				expect(text).toMatch(/changed during the scan/)
+				expect(text).toContain(`\`page: 1, to: ${NOW}\``)
+			})
 		})
 
 		it('returns a tool error, not partial matches, when a page fails mid-scan', async () => {

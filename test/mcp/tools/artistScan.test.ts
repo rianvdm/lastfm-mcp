@@ -126,6 +126,21 @@ describe('scanArtistScrobbles', () => {
 		expect(result).toMatchObject({ matches: [], scannedFrom: 0, totalInRange: 6500, complete: true, nextPage: null })
 	})
 
+	it('stops and reports an incomplete, changed scan when a later page reports a different total', async () => {
+		const before = rangeClient(6500, kitesAt).getRecentTracks
+		const after = rangeClient(6501, kitesAt).getRecentTracks
+		const getRecentTracks = vi.fn(async (user: string, limit: number, from?: number, to?: number, page = 1) =>
+			(page === 1 ? before : after)(user, limit, from, to, page),
+		)
+		const client = { getRecentTracks } as unknown as CachedLastfmClient
+
+		const result = await scanArtistScrobbles(client, 'rj', KITES, { from: FROM, to: TO, page: 1 })
+
+		expect(getRecentTracks.mock.calls.map((call) => call[4])).toEqual([1, 2])
+		expect(result).toMatchObject({ scannedFrom: 1, scannedTo: 1000, totalInRange: 6500, complete: false, historyChanged: true })
+		expect(result.matches.map((t) => t.name)).toEqual(['Track 10'])
+	})
+
 	it('rejects when a page fails partway through the scan', async () => {
 		const { client } = rangeClient(6500, kitesAt, 3)
 

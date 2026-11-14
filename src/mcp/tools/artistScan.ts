@@ -19,10 +19,15 @@ export interface ArtistScanResult {
 	scannedTo: number
 	/** Dated scrobbles in the range (Last.fm's `@attr.total`). */
 	totalInRange: number
-	/** True when this call reached the range's last Last.fm page. */
+	/** True when this call reached the range's last Last.fm page with every page agreeing on the range's size. */
 	complete: boolean
-	/** The scan block to pass as `page` next, or null when complete. */
+	/** The scan block to pass as `page` next, or null when complete or when the block needs a retry. */
 	nextPage: number | null
+	/**
+	 * True when a later page reported a different total than the first, so the pages came from different versions of
+	 * the history (new scrobbles, or a page cached before them). The scan stops there and proves nothing about the rest.
+	 */
+	historyChanged: boolean
 }
 
 /** True for the row Last.fm adds for the track playing now; it can appear even in a past range. */
@@ -33,6 +38,7 @@ export function isNowPlaying(track: LastfmTrack): boolean {
 /**
  * Scans scan block `page` of the range: Last.fm pages `(page - 1) * 5 + 1` to `page * 5`, fetched in order and
  * stopping at the range's last page. A failed fetch rejects the whole scan, so partial matches never pass as complete.
+ * Pass a fixed `to`: each page is cached on its own, and an open range lets new scrobbles shift rows between pages.
  */
 export async function scanArtistScrobbles(
 	client: CachedLastfmClient,
@@ -46,12 +52,22 @@ export async function scanArtistScrobbles(
 	const matches: LastfmTrack[] = []
 	let datedRowsScanned = 0
 	let totalInRange = 0
+	let totalPages = 0
 	let complete = false
+	let historyChanged = false
 
 	for (let lastfmPage = firstPage; lastfmPage <= lastPage; lastfmPage++) {
 		const data = await client.getRecentTracks(username, SCAN_PAGE_SIZE, opts.from, opts.to, lastfmPage)
 		const attr = data.recenttracks['@attr']
-		totalInRange = parseInt(attr.total, 10)
+		const pageTotal = parseInt(attr.total, 10)
+		const pageTotalPages = parseInt(attr.totalPages, 10)
+		if (lastfmPage === firstPage) {
+			totalInRange = pageTotal
+			totalPages = pageTotalPages
+		} else if (pageTotal !== totalInRange || pageTotalPages !== totalPages) {
+			historyChanged = true
+			break
+		}
 
 		for (const track of toArray(data.recenttracks.track)) {
 			if (isNowPlaying(track)) continue
@@ -59,7 +75,7 @@ export async function scanArtistScrobbles(
 			if (isSameArtist(track.artist['#text'], artist)) matches.push(track)
 		}
 
-		if (lastfmPage >= parseInt(attr.totalPages, 10)) {
+		if (lastfmPage >= totalPages) {
 			complete = true
 			break
 		}
@@ -68,7 +84,8 @@ export async function scanArtistScrobbles(
 	const scannedFrom = datedRowsScanned > 0 ? (firstPage - 1) * SCAN_PAGE_SIZE + 1 : 0
 	const scannedTo = datedRowsScanned > 0 ? scannedFrom + datedRowsScanned - 1 : 0
 
-	return { matches, scannedFrom, scannedTo, totalInRange, complete, nextPage: complete ? null : opts.page + 1 }
+	const nextPage = complete || historyChanged ? null : opts.page + 1
+	return { matches, scannedFrom, scannedTo, totalInRange, complete, nextPage, historyChanged }
 }
 
 const SCROBBLES_PER_CALL = SCAN_PAGE_SIZE * SCAN_PAGES_PER_CALL
@@ -77,26 +94,32 @@ const count = (n: number) => n.toLocaleString('en-US')
 
 /**
  * The header lines for an artist scan: what was scanned, whether that covers the range, and what was found.
- * Only a complete scan from block 1 may say the artist has no scrobbles in the range.
+ * Only a complete scan from block 1 may say the artist has no scrobbles in the range. `pinnedTo` is the range end the
+ * server chose for an open range; every follow-up `page` must repeat it so later blocks scan the same scrobbles.
  */
-export function describeArtistScan(artist: string, scan: ArtistScanResult, page: number): string {
+export function describeArtistScan(artist: string, scan: ArtistScanResult, page: number, pinnedTo?: number): string {
 	const total = count(scan.totalInRange)
+	const blockArgs = (block: number) => `\`page: ${block}${pinnedTo === undefined ? '' : `, to: ${pinnedTo}`}\``
 
 	if (scan.scannedFrom === 0) {
 		if (page === 1) return `🔎 No scrobbles by ${artist} in this range (it has no scrobbles).`
 		const lastBlock = Math.ceil(scan.totalInRange / SCROBBLES_PER_CALL)
-		const hint = lastBlock > 0 ? `, so the last scan block is \`page: ${lastBlock}\`` : ''
+		const hint = lastBlock > 0 ? `, so the last scan block is ${blockArgs(lastBlock)}` : ''
 		return `🔎 Nothing left to scan in this range: it has ${total} scrobbles${hint}.`
 	}
 
 	const scanned = scan.scannedFrom === 1 ? count(scan.scannedTo) : `${count(scan.scannedFrom)}–${count(scan.scannedTo)}`
 	let scanLine = `🔎 Scanned ${scanned} of ${total} scrobbles in range`
-	if (scan.complete) {
+	if (scan.historyChanged) {
+		scanLine +=
+			`, but the history changed during the scan (Last.fm's total for the range differed between pages), so scrobbles may have been missed.` +
+			` Retry with ${blockArgs(page)}; if the totals still differ, cached pages may be stale, so try again in a few minutes.`
+	} else if (scan.complete) {
 		scanLine += ' (complete).'
 	} else {
 		const remaining = scan.totalInRange - scan.scannedTo
 		const nextCount = remaining > 0 ? Math.min(remaining, SCROBBLES_PER_CALL) : SCROBBLES_PER_CALL
-		scanLine += ` (incomplete): use \`page: ${scan.nextPage}\` to scan the next ${count(nextCount)}, or narrow from/to.`
+		scanLine += ` (incomplete): use ${blockArgs(scan.nextPage ?? page + 1)} to scan the next ${count(nextCount)}, or narrow from/to.`
 	}
 
 	const coversWholeRange = scan.complete && page === 1
