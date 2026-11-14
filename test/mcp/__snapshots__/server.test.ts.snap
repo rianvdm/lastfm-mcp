@@ -315,10 +315,12 @@ exports[`createMcpServer registration > advertises the expected tool catalogue 1
     "required": [],
   },
   {
-    "description": "Get artist listening data for a specific time period - REQUIRES AUTHENTICATION. Perfect for temporal queries like "what artists was I into in 2023".",
+    "description": "Get artist listening data for a specific time period - REQUIRES AUTHENTICATION. Perfect for temporal queries like "what artists was I into in 2023". Any from/to Unix range works (a week, a month, a year). Set \`artist\` to find one artist anywhere in the chart, not just the top rows.",
     "name": "get_weekly_artist_chart",
     "properties": [
+      "artist",
       "from",
+      "limit",
       "to",
       "username",
     ],
@@ -333,10 +335,12 @@ exports[`createMcpServer registration > advertises the expected tool catalogue 1
     "required": [],
   },
   {
-    "description": "Get track listening data for a specific time period - REQUIRES AUTHENTICATION. Perfect for temporal queries like "what songs was I obsessed with in summer 2023".",
+    "description": "Get track listening data for a specific time period - REQUIRES AUTHENTICATION. Perfect for temporal queries like "what songs was I obsessed with in summer 2023". Any from/to Unix range works (a week, a month, a year). Set \`artist\` to find every track by one artist anywhere in the chart, not just the top rows.",
     "name": "get_weekly_track_chart",
     "properties": [
+      "artist",
       "from",
+      "limit",
       "to",
       "username",
     ],

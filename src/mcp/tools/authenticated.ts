@@ -7,9 +7,10 @@ import { CachedLastfmClient } from '../../clients/cachedLastfm'
 import { MAX_EXCLUDE, findRecommendations } from '../../recommendations/engine'
 import { formatRecommendations } from '../../recommendations/format'
 import { LASTFM_READ, LOCAL_READ } from './annotations'
+import { isSameArtist, suggestArtistNames } from './artistMatch'
 import { AUTHENTICATED_TOOL_CATALOG, PUBLIC_TOOL_CATALOG, renderToolList } from './catalog'
 import { toolError } from './error-handler'
-import { formatArtist } from './formatters'
+import { formatArtist, toArray } from './formatters'
 import { buildNextSteps } from '../../utils/breadcrumb'
 import { formatTimestamp, getDayBoundsUTC } from '../../utils/dateFormat'
 
@@ -25,6 +26,31 @@ export interface LastfmOAuthProps {
 // Valid time periods for Last.fm API
 const PERIOD_VALUES = ['7day', '1month', '3month', '6month', '12month', 'overall'] as const
 type Period = (typeof PERIOD_VALUES)[number]
+
+const CHART_FROM_DESCRIPTION =
+	'Start of the range (Unix timestamp). Any range works (a week, a month, a year); get_weekly_chart_list is one source of week boundaries.'
+const CHART_TO_DESCRIPTION =
+	'End of the range (Unix timestamp). Any range works (a week, a month, a year); get_weekly_chart_list is one source of week boundaries.'
+const ARTIST_FILTER_SCHEMA = z
+	.string()
+	.optional()
+	.describe('Only show this artist (case-insensitive). Searches the whole chart, not just the top rows.')
+const CHART_LIMIT_SCHEMA = z.coerce
+	.number()
+	.min(1)
+	.max(1000)
+	.optional()
+	.default(30)
+	.describe('Maximum rows to show (1-1000). Ignored when artist is set.')
+
+const formatCount = (n: number) => n.toLocaleString('en-US')
+const formatPlays = (playcount: string) => `${playcount} ${playcount === '1' ? 'play' : 'plays'}`
+
+/** Message for an artist filter with no exact match, with up to 5 near-miss chart artists. */
+function formatArtistNotFound(query: string, suggestions: string[]): string {
+	const base = `${JSON.stringify(query)} doesn't appear in this period.`
+	return suggestions.length > 0 ? `${base}\nDid you mean: ${suggestions.join(', ')}?` : base
+}
 
 /**
  * Session context for authenticated tools.
@@ -717,14 +743,16 @@ ${chartList}
 			title: 'Weekly artist chart',
 			annotations: LASTFM_READ,
 			description:
-				'Get artist listening data for a specific time period - REQUIRES AUTHENTICATION. Perfect for temporal queries like "what artists was I into in 2023".',
+				'Get artist listening data for a specific time period - REQUIRES AUTHENTICATION. Perfect for temporal queries like "what artists was I into in 2023". Any from/to Unix range works (a week, a month, a year). Set `artist` to find one artist anywhere in the chart, not just the top rows.',
 			inputSchema: z.object({
 				username: z.string().optional().describe('Last.fm username (defaults to authenticated user)'),
-				from: z.coerce.number().optional().describe('Start timestamp (Unix timestamp) - get from weekly_chart_list'),
-				to: z.coerce.number().optional().describe('End timestamp (Unix timestamp) - get from weekly_chart_list'),
+				from: z.coerce.number().optional().describe(CHART_FROM_DESCRIPTION),
+				to: z.coerce.number().optional().describe(CHART_TO_DESCRIPTION),
+				artist: ARTIST_FILTER_SCHEMA,
+				limit: CHART_LIMIT_SCHEMA,
 			}),
 		},
-		async ({ username, from, to }) => {
+		async ({ username, from, to, artist: artistFilter, limit }) => {
 			const session = getSession()
 			if (!session) {
 				return { content: [{ type: 'text', text: AUTH_REQUIRED }] }
@@ -734,13 +762,35 @@ ${chartList}
 				const effectiveUsername = username || session.username
 				const data = await client.getWeeklyArtistChart(effectiveUsername, from, to)
 
-				const artists = data.weeklyartistchart.artist
+				const artists = toArray(data.weeklyartistchart.artist)
 				const periodInfo = from && to ? `${formatTimestamp(from)} to ${formatTimestamp(to)}` : 'Most Recent Week'
 
-				const artistList = artists
-					.slice(0, 30)
-					.map((artist, index) => `${index + 1}. ${artist.name} (${artist.playcount} plays)`)
-					.join('\n')
+				let artistList: string
+				let summary: string
+				if (artistFilter) {
+					const matches = artists.flatMap((a, index) => (isSameArtist(a.name, artistFilter) ? [{ artist: a, position: index + 1 }] : []))
+					artistList =
+						matches.length > 0
+							? matches
+									.map(
+										({ artist: a, position }) => `#${position} of ${formatCount(artists.length)} · ${a.name} (${formatPlays(a.playcount)})`,
+									)
+									.join('\n')
+							: formatArtistNotFound(
+									artistFilter,
+									suggestArtistNames(
+										artists.map((a) => a.name),
+										artistFilter,
+									),
+								)
+					summary = `📊 **Total artists in this period:** ${artists.length}`
+				} else {
+					artistList = artists
+						.slice(0, limit)
+						.map((a, index) => `${index + 1}. ${a.name} (${a.playcount} plays)`)
+						.join('\n')
+					summary = `📊 **Total artists in this period:** ${artists.length}\n${artists.length > limit ? `\n📝 **Note:** Showing top ${limit} artists only` : ''}`
+				}
 
 				const topWeekArtist = artists[0]?.name
 				const nextSteps = buildNextSteps([
@@ -760,8 +810,7 @@ ${chartList}
 
 ${artistList}
 
-📊 **Total artists in this period:** ${artists.length}
-${artists.length > 30 ? '\n📝 **Note:** Showing top 30 artists only' : ''}${nextSteps}`,
+${summary}${nextSteps}`,
 						},
 					],
 				}
@@ -778,14 +827,16 @@ ${artists.length > 30 ? '\n📝 **Note:** Showing top 30 artists only' : ''}${ne
 			title: 'Weekly track chart',
 			annotations: LASTFM_READ,
 			description:
-				'Get track listening data for a specific time period - REQUIRES AUTHENTICATION. Perfect for temporal queries like "what songs was I obsessed with in summer 2023".',
+				'Get track listening data for a specific time period - REQUIRES AUTHENTICATION. Perfect for temporal queries like "what songs was I obsessed with in summer 2023". Any from/to Unix range works (a week, a month, a year). Set `artist` to find every track by one artist anywhere in the chart, not just the top rows.',
 			inputSchema: z.object({
 				username: z.string().optional().describe('Last.fm username (defaults to authenticated user)'),
-				from: z.coerce.number().optional().describe('Start timestamp (Unix timestamp) - get from weekly_chart_list'),
-				to: z.coerce.number().optional().describe('End timestamp (Unix timestamp) - get from weekly_chart_list'),
+				from: z.coerce.number().optional().describe(CHART_FROM_DESCRIPTION),
+				to: z.coerce.number().optional().describe(CHART_TO_DESCRIPTION),
+				artist: ARTIST_FILTER_SCHEMA,
+				limit: CHART_LIMIT_SCHEMA,
 			}),
 		},
-		async ({ username, from, to }) => {
+		async ({ username, from, to, artist: artistFilter, limit }) => {
 			const session = getSession()
 			if (!session) {
 				return { content: [{ type: 'text', text: AUTH_REQUIRED }] }
@@ -795,13 +846,38 @@ ${artists.length > 30 ? '\n📝 **Note:** Showing top 30 artists only' : ''}${ne
 				const effectiveUsername = username || session.username
 				const data = await client.getWeeklyTrackChart(effectiveUsername, from, to)
 
-				const tracks = data.weeklytrackchart.track
+				const tracks = toArray(data.weeklytrackchart.track)
 				const periodInfo = from && to ? `${formatTimestamp(from)} to ${formatTimestamp(to)}` : 'Most Recent Week'
 
-				const trackList = tracks
-					.slice(0, 30)
-					.map((track, index) => `${index + 1}. ${track.artist['#text']} - ${track.name} (${track.playcount} plays)`)
-					.join('\n')
+				let trackList: string
+				let summary: string
+				if (artistFilter) {
+					const matches = tracks.flatMap((t, index) =>
+						isSameArtist(t.artist['#text'], artistFilter) ? [{ track: t, position: index + 1 }] : [],
+					)
+					trackList =
+						matches.length > 0
+							? matches
+									.map(
+										({ track: t, position }) =>
+											`#${position} of ${formatCount(tracks.length)} · ${t.artist['#text']} - ${t.name} (${formatPlays(t.playcount)})`,
+									)
+									.join('\n')
+							: formatArtistNotFound(
+									artistFilter,
+									suggestArtistNames(
+										tracks.map((t) => t.artist['#text']),
+										artistFilter,
+									),
+								)
+					summary = `📊 **Total tracks in this period:** ${tracks.length}`
+				} else {
+					trackList = tracks
+						.slice(0, limit)
+						.map((t, index) => `${index + 1}. ${t.artist['#text']} - ${t.name} (${t.playcount} plays)`)
+						.join('\n')
+					summary = `📊 **Total tracks in this period:** ${tracks.length}\n${tracks.length > limit ? `\n📝 **Note:** Showing top ${limit} tracks only` : ''}`
+				}
 
 				const topWeekTrack = tracks[0]
 				const nextSteps = buildNextSteps([
@@ -829,8 +905,7 @@ ${artists.length > 30 ? '\n📝 **Note:** Showing top 30 artists only' : ''}${ne
 
 ${trackList}
 
-📊 **Total tracks in this period:** ${tracks.length}
-${tracks.length > 30 ? '\n📝 **Note:** Showing top 30 tracks only' : ''}${nextSteps}`,
+${summary}${nextSteps}`,
 						},
 					],
 				}

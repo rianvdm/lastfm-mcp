@@ -59,7 +59,7 @@ export function createMcpServer(env: Env, options: CreateMcpServerOptions = {}):
 				'- Album / track lookups: `get_album_info` / `get_track_info` → `get_similar_tracks` for "more like this".',
 				"- The user's listening history (auth required): `get_recent_tracks` for the live feed; `get_top_artists` / `get_top_albums` / `get_top_tracks` for period summaries; `get_loved_tracks` for favorites; `get_listening_stats` for shape.",
 				'- "What should I listen to?" / new music (auth required): `get_music_recommendations` returns new-to-the-user artists with reasons and starter tracks; use it instead of chaining `get_similar_artists`.',
-				'- Historical week-by-week: `get_weekly_chart_list` first to discover periods → `get_weekly_artist_chart` / `get_weekly_track_chart` with a specific `from`/`to`.',
+				'- Historical week-by-week: `get_weekly_chart_list` first to discover periods → `get_weekly_artist_chart` / `get_weekly_track_chart` with any `from`/`to` range (a week, a month, a year); set `artist` to find one artist anywhere in a chart.',
 				'- Profile and diagnostics: `get_user_info`, `lastfm_auth_status`, `server_info`, `ping`.',
 				'',
 				'Most tool responses end with a "Next steps" block listing the most likely follow-up calls and the exact argument shape — copy those verbatim when chaining.',
