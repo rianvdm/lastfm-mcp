@@ -347,8 +347,6 @@ export const CacheKeys = {
 
 	userListeningStats: (username: string, period?: string) => `${username}:${period || 'overall'}`,
 
-	userRecommendations: (username: string, limit?: number, genre?: string) => `${username}:${limit || 20}:${genre || 'all'}`,
-
 	// Ranked recommendation candidates per user and genre; the v2 prefix keeps them apart from the old recommendations shape.
 	// A supplied genre sits under `tag:` so the genre "all" can't share the no-genre entry; blank counts as no genre.
 	recommendationCandidates: (username: string, genre?: string) => {

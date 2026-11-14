@@ -219,9 +219,10 @@ exports[`createMcpServer registration > advertises the expected tool catalogue 1
     "required": [],
   },
   {
-    "description": "Get personalized music recommendations from Last.fm based on listening history - REQUIRES AUTHENTICATION",
+    "description": "Find new music for the signed-in user: artists they don't already listen to, ranked by how strongly their recent and long-term listening points to them, each with the reason from their own Last.fm data plus a starter album and tracks. Use this for "what should I listen to?", "recommend something", "find me new music" or "like X but new to me", instead of chaining get_similar_artists calls. Optional genre filter; pass exclude with earlier picks to get different ones. REQUIRES AUTHENTICATION",
     "name": "get_music_recommendations",
     "properties": [
+      "exclude",
       "genre",
       "limit",
       "username",

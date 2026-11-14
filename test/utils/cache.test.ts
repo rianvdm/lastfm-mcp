@@ -522,7 +522,7 @@ describe('CacheKeys', () => {
 				CacheKeys.userLovedTracks('user1', 50),
 				CacheKeys.userInfo('user1'),
 				CacheKeys.userListeningStats('user1', 'overall'),
-				CacheKeys.userRecommendations('user1', 20, 'all'),
+				CacheKeys.recommendationCandidates('user1'),
 				CacheKeys.trackInfo('artist1', 'track1'),
 				CacheKeys.artistInfo('artist1'),
 				CacheKeys.albumInfo('artist1', 'album1'),
