@@ -4,11 +4,12 @@ on:
     types: [published]
 jobs:
   post:
-    # Opt out per release by putting <!-- skip-elezea-post --> in the release body (invisible on GitHub).
+    # Cross-post only when the release body carries <!-- post-to-elezea --> (invisible on GitHub).
+    # A release without the marker stays on GitHub only.
     if: >-
       github.event.release.prerelease == false &&
       github.event.release.draft == false &&
-      !contains(github.event.release.body, '<!-- skip-elezea-post -->')
+      contains(github.event.release.body, '<!-- post-to-elezea -->')
     runs-on: ubuntu-latest
     steps:
       - uses: actions/github-script@v7
