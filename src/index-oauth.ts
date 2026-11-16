@@ -154,9 +154,10 @@ export default {
 			})
 		}
 
-		// Landing page, with setup addresses pointing at the origin it was fetched from
-		if (url.pathname === '/' && request.method === 'GET') {
-			return new Response(buildLandingPage(url.origin), {
+		// Landing page, with setup addresses pointing at the origin it was fetched from. HEAD is answered too, so uptime
+		// monitors and link checkers don't see a 404.
+		if (url.pathname === '/' && (request.method === 'GET' || request.method === 'HEAD')) {
+			return new Response(request.method === 'HEAD' ? null : buildLandingPage(url.origin), {
 				status: 200,
 				headers: {
 					'Content-Type': 'text/html; charset=utf-8',
