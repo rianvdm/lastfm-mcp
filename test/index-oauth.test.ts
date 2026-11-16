@@ -597,6 +597,18 @@ describe('Last.fm MCP Server (OAuth Entry Point)', () => {
 			expect(html).toContain('https://example.com/mcp')
 		})
 
+		it('should answer HEAD / with the GET headers and no body', async () => {
+			const ctx = createExecutionContext()
+			const response = await worker.fetch(new Request('https://example.com/', { method: 'HEAD' }), env, ctx)
+			await waitOnExecutionContext(ctx)
+
+			expect(response.status).toBe(200)
+			expect(response.headers.get('content-type')).toBe('text/html; charset=utf-8')
+			expect(response.headers.get('cache-control')).toBe('public, max-age=3600')
+			expect(response.headers.get('access-control-allow-origin')).toBe('*')
+			expect(response.body).toBeNull()
+		})
+
 		it('should return setup instructions for agents at GET /llms.txt', async () => {
 			const request = new Request('https://example.com/llms.txt')
 			const ctx = createExecutionContext()
