@@ -214,4 +214,4 @@ npm run build     # wrangler deploy --dry-run: catches type and binding errors
 
 ## License
 
-MIT
+MIT. Built on the [Last.fm API](https://www.last.fm/api); not affiliated with Last.fm.
