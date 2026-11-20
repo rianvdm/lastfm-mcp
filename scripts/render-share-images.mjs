@@ -1,4 +1,4 @@
-// ABOUTME: Renders the share card (og.png, 1200×630) and apple-touch-icon.png (180×180) from their HTML sources with headless Chrome.
+// ABOUTME: Renders the share card (og.png, 1200×630), apple-touch-icon.png (180×180) and the GitHub social preview (1280×640) with headless Chrome.
 // ABOUTME: Run by hand (npm run render:share) after changing src/pages/share/*.html; commit the PNGs with the change. Needs macOS (sips).
 import { execFileSync } from 'node:child_process'
 import { copyFileSync, existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs'
@@ -7,12 +7,16 @@ import { dirname, join } from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 
 const CHROME = process.env.CHROME_PATH ?? '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome'
-const SHARE_DIR = join(dirname(fileURLToPath(import.meta.url)), '..', 'src', 'pages', 'share')
+const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..')
+const SHARE_DIR = join(ROOT, 'src', 'pages', 'share')
+// The GitHub preview is uploaded by hand in the repo settings, so it lives beside the README's art, not with the served images
+const GITHUB_ASSETS_DIR = join(ROOT, '.github', 'assets')
 
 // Headless Chrome clamps --window-size below 500px, so the icon is drawn at three times its size and downscaled
 const IMAGES = [
-	{ source: 'og-card.html', output: 'og.png', renderSize: [1200, 630], size: [1200, 630] },
-	{ source: 'icon.html', output: 'apple-touch-icon.png', renderSize: [540, 540], size: [180, 180] },
+	{ source: 'og-card.html', output: 'og.png', outputDir: SHARE_DIR, renderSize: [1200, 630], size: [1200, 630] },
+	{ source: 'icon.html', output: 'apple-touch-icon.png', outputDir: SHARE_DIR, renderSize: [540, 540], size: [180, 180] },
+	{ source: 'github-preview.html', output: 'github-preview.png', outputDir: GITHUB_ASSETS_DIR, renderSize: [1280, 640], size: [1280, 640] },
 ]
 
 // Long enough for the Google Fonts stylesheet and font file to arrive before the capture
@@ -78,8 +82,8 @@ if (!existsSync(CHROME)) {
 const workDir = mkdtempSync(join(tmpdir(), 'share-images-'))
 try {
 	const finished = IMAGES.map((image) => render(image, workDir))
-	IMAGES.forEach(({ output, size }, i) => {
-		copyFileSync(finished[i], join(SHARE_DIR, output))
+	IMAGES.forEach(({ output, outputDir, size }, i) => {
+		copyFileSync(finished[i], join(outputDir, output))
 		console.log(`${output}: ${size[0]}×${size[1]}`)
 	})
 } catch (error) {

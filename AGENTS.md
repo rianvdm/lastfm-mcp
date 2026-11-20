@@ -16,7 +16,8 @@ npm run lint             # ESLint (src and dashboard/src)
 npm run format           # Prettier --write
 npm run format:check     # Prettier --check (CI)
 npm run test:multi-user  # Manual multi-user check against a running server (scripts/test-multi-user.js)
-npm run render:share     # Re-render og.png and apple-touch-icon.png from src/pages/share/*.html (macOS: headless Chrome + sips)
+npm run render:share     # Re-render og.png, apple-touch-icon.png and .github/assets/github-preview.png from src/pages/share/*.html (macOS: headless Chrome + sips; needs Google Fonts)
+npm run render:readme    # Re-write .github/assets/wave.svg, the README banner, from src/pages/share/wave.js (Node only)
 npm run cf-typegen       # Regenerate Worker type bindings (run after changing wrangler.toml; produces worker-configuration.d.ts — generated, do not edit by hand)
 npm run test:dashboard   # Dashboard Worker tests (dashboard/vitest.config.mts)
 npm run dashboard:dev    # Dashboard Worker local dev server (every page request gets a 403 without an Access JWT)
@@ -174,7 +175,7 @@ src/
     llms.md             # /llms.txt source: setup steps for agents, with {{ORIGIN}} and {{TOOLS}}
     llms-txt.ts         # buildLlmsTxt(origin) fills llms.md, generating the tool list from the tool catalogs
     template.ts         # fillPlaceholders(): fills {{UPPER_SNAKE}} tokens and throws on any left unfilled
-    share/              # og.png and apple-touch-icon.png (served at /og.png, /apple-touch-icon.png) and their HTML sources
+    share/              # og.png and apple-touch-icon.png (served at /og.png, /apple-touch-icon.png), their HTML sources, and the GitHub preview's source
   analytics/            # Anonymous tool-call events for TOOL_EVENTS: data point layout, client labels, the waitUntil writer
   auth/                 # OAuth handler (consent, Last.fm sign-in, callback), consent page, /mcp resource rewrite
   clients/              # Last.fm API client + caching decorator
@@ -188,7 +189,9 @@ Single Worker entry point configured in `wrangler.toml`: `main = "src/index-oaut
 
 Two `[[rules]]` in `wrangler.toml` bundle non-code files: `Text` imports `**/*.html` and `**/*.md` as strings, and `Data` imports `**/*.png` as `ArrayBuffer`s. Their module types are declared in `src/types/text-modules.d.ts`. Addresses a visitor copies use `{{ORIGIN}}`, so staging and localhost show their own URL; canonical, Open Graph, JSON-LD and FAQ URLs stay hardcoded to `https://lastfm-mcp.com`. When the landing page changes, update `LANDING_PAGE_UPDATED` in `src/pages/landing.ts`.
 
-The share images are committed PNGs. After editing `src/pages/share/og-card.html`, `icon.html` or `wave.js` (the wave drawing both pages load), run `npm run render:share` on macOS and commit the PNGs with the change. The HTML and `wave.js` are never bundled or served.
+The share images are committed PNGs. After editing `src/pages/share/og-card.html`, `icon.html`, `github-preview.html` or `wave.js` (the wave drawing all three pages load), run `npm run render:share` on macOS and commit the PNGs with the change. The HTML and `wave.js` are never bundled or served. `render:share` re-encodes every PNG, so restore any whose source didn't change rather than committing new bytes for the same picture.
+
+The README's art lives in `.github/assets/`. `wave.svg` is the banner, written by `npm run render:readme` from `wave.js`, so run it whenever `wave.js` changes. `github-preview.png` is the 1280×640 GitHub social preview; GitHub has no API for it, so after re-rendering it upload it by hand under **Settings → General → Social preview**.
 
 Every MCP request needs an OAuth bearer token: unauthenticated `POST /mcp` returns 401 with `WWW-Authenticate`, which starts the client's sign-in. OAuth is the only sign-in path: the manual `/login` → `?session_id=` flow was removed in #34, so Last.fm session keys are only stored inside encrypted grant `props`. The "public" tools in `src/mcp/tools/public.ts` are the ones that don't need the user's Last.fm session, not tools reachable without sign-in. `src/auth/jwt.ts` is no longer imported by any source file.
 
