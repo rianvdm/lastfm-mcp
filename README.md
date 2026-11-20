@@ -1,3 +1,5 @@
+![Five coloured bands that swell and narrow, like a stacked chart of listening over time](.github/assets/wave.svg)
+
 # Last.fm MCP Server
 
 A [Model Context Protocol](https://modelcontextprotocol.io/) (MCP) server for Last.fm. Gives AI assistants access to your listening history, music discovery, and detailed track/artist/album information.
